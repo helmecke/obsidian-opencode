@@ -21,7 +21,13 @@ export async function run() {
 			});
 			return { discovery: false, probeStatus: response.status };
 		} catch (error) {
-			return { discovery: false, probeError: error.name };
+			return {
+				discovery: false,
+				probeError: error.name,
+				probeMessage: String(error.message)
+					.replaceAll(candidate.url, '[local service]')
+					.replaceAll(registration.password || 'unused-secret-placeholder', '[redacted]'),
+			};
 		}
 	}
 	const client = OpenCode.make({
