@@ -25,11 +25,44 @@ Task 1.1 verified on Windows with Node.js 26.13.0 and pinned
 Run `npm test`, `npm run build`, and `npm run lint` from the repository root.
 The smoke bundle is evaluated in memory and is not a release artifact.
 
+## Supported OpenCode version policy
+
+The initial accepted range is **`=2.2.2`**: only the exact string `2.2.2` is
+accepted. This matches the pinned client, published registration contract, and
+successful Electron transport experiment. No support is inferred for the rest
+of `2.x`, prereleases, build-suffixed versions, or missing/malformed versions.
+Expand this policy only after testing the registration, API, and event contracts.
+Full conversation, permission, form, and startup acceptance remain pending.
+
+`src/opencode/compatibility.ts` defines the policy and a fixed, actionable error
+that does not interpolate untrusted service metadata. `service-policy.ts` gates
+service reuse and admission to a future startup adapter:
+
+- Reject an incompatible discovered service without invoking startup.
+- Reuse a compatible discovered service without invoking startup.
+- Propagate discovery errors rather than interpreting them as absence.
+- Admit the startup callback only on explicit absence; check its returned version
+  and propagate startup failures without automatic retry.
+- Never request service stop, restart, or replacement from this gate.
+
+`tests/service-policy.test.mjs` exercises the real TypeScript modules with mock
+discovery/startup. It verifies unchanged shared-service PID/version/running state
+and zero replacement callbacks across repeated attempts for older/newer,
+prerelease, build-suffixed, and malformed versions. It also verifies recovery
+guidance and exclusion of untrusted metadata from compatibility errors.
+
+Task 1.3 verification: all nine automated tests, production build, and focused
+lint on the new modules/test pass. The policy is not wired into the sample
+plugin yet. This does not prove filesystem discovery, a real startup command,
+or race-safe startup: task 2.2 must integrate the gate with the production
+adapters and test service arrival during startup. No live service was changed
+by the task 1.3 tests.
+
 ## Electron verification
 
 Node success alone does **not** establish Electron compatibility. The runtime
-probes below test the approved vault directly. A production supported-version
-policy and non-destructive startup behavior remain work for task 1.3 and later.
+probes below test the approved vault directly. The initial version policy is
+defined above; production discovery and non-destructive startup remain pending.
 
 The user approved the disposable Windows vault path
 `C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`.
@@ -90,14 +123,14 @@ through the vault-targeted CLI. Observed:
 Task 1.2's runtime experiment is complete. The selected transport for further
 implementation is in-process Node HTTP with a Web stream bridge, not an
 isolated process. This probe is not production connection code. Automatic
-startup and production discovery still require a design decision and tests.
+startup and production discovery still require implementation and tests.
 
 The pinned service helper uses the renderer's global `fetch` internally and
 does not accept the custom `fetch` option exposed by `OpenCode.make`. A Node
-HTTP transport for client requests alone does not fix that helper. Pause for
-design review before choosing an isolated Node context for service management
-or a narrow local discovery adapter. Do not silently patch the dependency,
-globally replace fetch, or switch to SDK hosting.
+HTTP transport for client requests alone does not fix that helper. The approved
+design now chooses a pinned, read-only local discovery adapter with registration
+and health validation. Do not patch the dependency, globally replace fetch,
+or switch to SDK hosting.
 
 When rerunning the probe through `require`, evict its exact entry from
 `require.cache` after rebuilding so Electron does not reuse the previous bundle.

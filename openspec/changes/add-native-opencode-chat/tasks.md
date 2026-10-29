@@ -4,7 +4,7 @@
 
 - [x] 1.1 Pin the v2 client dependency and add a lightweight automated test command; verify npm installation, client/service imports, and the existing production bundle succeed without unbundled runtime package dependencies.
 - [x] 1.2 Validate service discovery, authenticated requests, and streamed events in the target Obsidian Electron runtime using an agreed disposable test vault; record tested OpenCode/Obsidian versions and transport choice in developer documentation, and stop for design revision if the local client approach fails.
-- [ ] 1.3 Define and test a concrete supported OpenCode version range and non-destructive incompatibility handling; verify a mock incompatible shared service is never restarted or replaced.
+- [x] 1.3 Define and test a concrete supported OpenCode version range and non-destructive incompatibility handling; verify a mock incompatible shared service is never restarted or replaced.
 
 ## 2. Plugin shell and local connection
 

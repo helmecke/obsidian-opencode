@@ -2,6 +2,25 @@
 
 This is a sample plugin for Obsidian (https://obsidian.md).
 
+## OpenCode integration compatibility (in development)
+
+The upcoming integration accepts **exactly OpenCode 2.2.2** (`=2.2.2`), matching
+the pinned client and the local authenticated-streaming experiment. Older/newer
+versions, prereleases, build-suffixed versions, and missing versions are rejected
+until explicitly tested. This is an integration compatibility policy, not a
+claim that the plugin is release-ready; the sample UI is still present.
+
+An incompatible shared service must be left untouched: no automatic restart,
+replacement, or configuration changes. Use a compatible OpenCode installation
+or update the plugin, then retry. Changing the executable path does not make an
+already running incompatible service compatible; manage that service explicitly
+outside the plugin, considering other connected clients first.
+
+The compatibility gate is implemented and mock-tested separately from production
+discovery/startup, which are not implemented yet. Safe startup races remain a
+required check in task 2.2. See [runtime verification](docs/runtime-compatibility.md)
+for tested versions and remaining acceptance work.
+
 This project uses TypeScript to provide type checking and documentation.
 The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
 
