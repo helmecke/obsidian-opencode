@@ -30,8 +30,16 @@ Node success does **not** establish compatibility with Obsidian's Electron
 runtime. No Obsidian version or supported OpenCode runtime range has been
 verified yet. No service was started or stopped by these checks.
 
-Before task 1.2, agree on a disposable Windows vault path. Do not install into
-a real vault implicitly. In that vault, record Obsidian, Electron, Node, and
+The user approved the disposable Windows vault path
+`C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`.
+The directory has been prepared. The installed OpenCode executable reports
+`opencode v2.2.2`. The Electron check is currently blocked: `obsidian help`
+reports that it cannot find a running Obsidian instance. No plugin was installed
+and no Electron checks have been performed; task 1.2 remains incomplete.
+
+Open this directory as a vault in Obsidian and enable the Obsidian CLI before
+resuming. Do not install into a real vault implicitly.
+In the approved vault, record Obsidian, Electron, Node, and
 OpenCode versions; verify discovery, authenticated requests, and event
 streaming using the bundled client and service helper. Record the chosen
 transport and observed results here. Do not alter shared-service registration,
