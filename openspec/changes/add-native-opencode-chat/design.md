@@ -29,7 +29,23 @@ The v2 client documentation provides a browser-compatible Promise client and a s
 
 ### 1. Use the generated client and shared local service
 
-Bundle a pinned `@opencode/client` version. Use `OpenCode.make` for requests and `@opencode/client/service` for discovery, startup, and authentication. Initialize only when chat is opened. Deduplicate concurrent initialization within the plugin. Reuse a compatible healthy registered service; inspect compatibility before any ensure operation that might replace an incompatible instance. If compatibility cannot be established safely, report the issue rather than restarting the shared service.
+Bundle pinned `@opencode/client` 2.2.2. Use `OpenCode.make` with a plugin-local Node HTTP fetch adapter for requests and live events. Bridge Node response bodies to Web `ReadableStream` with backpressure, cancellation, and request abort handling. Do not globally override fetch, change service CORS settings, or introduce a helper process. Initialize only when chat is opened and deduplicate concurrent initialization within the plugin.
+
+Use a narrow, read-only discovery adapter instead of the renderer's `Service.discover`. Read the standard registration path supplied by the pinned client's exported `fallback()` and validate the published `Info` shape at runtime. Keep this version-specific logic isolated. Use `Service.headers` for transient Basic authentication and the generated client for authenticated health requests. Bound registration and health-response sizes and request duration. Accept only literal loopback HTTP endpoints (`127.0.0.1` or `::1`) with no embedded URL credentials, path, query, or fragment; reject redirects and other destinations before sending credentials. Bind subsequent requests to the validated service origin.
+
+Reuse only a healthy service whose reported PID and version match its registration and whose version is supported. Re-read registration after probing; changed service identity or credentials require rediscovery before admitting the connection. Distinguish an absent registration from malformed, unreadable, unauthenticated, unhealthy, incompatible, or identity-mismatched registrations. The latter are actionable errors, not permission to start or replace a service. This preserves the standard registration-file/local-user trust model; PID matching and loopback restrictions do not defend against a malicious process running as the same OS user.
+
+Do not call `Service.ensure` in the renderer: its internal probe still uses browser fetch, and its published implementation can stop and replace a service after version mismatch or repeated probe timeouts. Automatic startup remains required when the service is genuinely absent. The startup adapter must use the installed executable without changing shared registration/configuration itself, recheck discovery before startup, and verify the executable's version first. Before adopting a CLI startup path, verify its ownership/race semantics and test an incompatible service appearing during startup; a preflight absence check alone is insufficient. If a non-replacing path cannot be established, pause for design review rather than weaken the shared-service contract. Plugin cleanup must never stop the shared service.
+
+**Evidence and compatibility boundary:** In the approved disposable vault, Obsidian 1.14.5 / Electron 43.8.3 / embedded Node 24.22.0 loads the bundled client but renderer fetch fails with `TypeError: Failed to fetch`. The in-process Node HTTP probe discovers OpenCode 2.2.2 from registration, verifies PID/version, receives authenticated API responses and `server.connected`, and observes HTTP 401 without authentication. This validates the transport experiment, not automatic startup or full conversation acceptance. See `docs/runtime-compatibility.md` for reproducible probe details. The exact renderer failure cause remains unconfirmed.
+
+Web verification for this decision:
+
+- [OpenCode V2 client guide](https://opencode.ai/v2/docs/build/client): documents custom fetch injection and Node-only service management, but does not document custom fetch injection into service discovery.
+- [OpenCode V2 troubleshooting](https://opencode.ai/v2/docs/troubleshooting/#service-files): documents the registration path and warns against editing service files; changing service CORS configuration stops the service and is not this plugin's workaround.
+- [Published 2.2.2 registration types](https://unpkg.com/@opencode/client@2.2.2/dist/service.d.ts) and [probe implementation](https://unpkg.com/@opencode/client@2.2.2/dist/chunks/pty-handoff-8ye1ye6f.js): establish the pinned registration/authentication/PID/version contract. Reading that format is a version-specific integration, not a promise of compatibility with future releases.
+- [Published 2.2.2 service helper](https://unpkg.com/@opencode/client@2.2.2/dist/promise/service.js): confirms replacement behavior in `ensure`; it is not a safe renderer fallback.
+- [ChatGPT-MD Node HTTP stream adapter](https://raw.githubusercontent.com/bramses/chatgpt-md/develop/src/Services/requestStream.ts): demonstrates the in-process Node response-to-Web-stream pattern in an Obsidian plugin. It supports the transport choice, not the OpenCode-specific discovery implementation.
 
 Use the installed `opencode` command by default and offer an executable-path setting. Pass executable and arguments separately, never concatenate shell fragments. Do not add arbitrary shell-command or remote-URL settings in this change. If Windows launcher handling needs a platform-specific adapter, keep it isolated and test spaces and argument injection explicitly.
 
@@ -45,6 +61,8 @@ Proposed module boundaries:
 src/main.ts                 Plugin lifecycle and registration
 src/settings.ts             Executable path and settings UI
 src/opencode/connection.ts  Local service and authenticated transport
+src/opencode/discovery.ts   Pinned read-only registration and health validation
+src/opencode/node-fetch.ts  Origin-bound Node HTTP and Web stream bridge
 src/opencode/sessions.ts    Session operations and authoritative reload
 src/state/                 Event reduction and recovery coordination
 src/ui/chat-view.ts         ItemView composition and controls
@@ -98,13 +116,13 @@ Show tool calls as expandable entries using available IDs and lifecycle events. 
 
 ### 7. Make compatibility a release gate
 
-Before investing in the full UI, prove the pinned client and service entry point bundle and execute in Obsidian's Electron/Node environment, including local authenticated streaming. The client permits custom `fetch`; choose an in-process Node transport if the browser-origin path is unsuitable, rather than silently changing global CORS configuration or disabling authentication. If neither documented entry point works in the target runtime, stop and revise the design rather than quietly switching to SDK embedding.
+Before investing in the full UI, prove the pinned client and service entry point bundle and execute in Obsidian's Electron/Node environment, including local authenticated streaming. The initial gate demonstrated the need for the Node transport and read-only discovery adaptation described in decision 1. Automated coverage must include unsafe origins and redirects, malformed registrations, authentication failures, identity/credential changes during discovery, abort/stream cancellation, and incompatible-service non-replacement. Re-run the Electron gate against production adapters rather than assuming the disposable probe proves their correctness. If the adapted local client approach fails, stop and revise the design rather than quietly switching to SDK embedding.
 
 Use lightweight automated tests for transport abstraction, state reduction/recovery, prompt identity, link-routing decisions, and interaction payloads. Manual Obsidian checks cover renderer behavior, actual link resolution, theme changes, pane moves, and real provider/tool conversations. Select an honest `minAppVersion` based on APIs used and tested runtime; the template's 1.0.0 is not a compatibility claim.
 
 ## Risks / Trade-offs
 
-- [Electron service helper compatibility is unproven] -> Gate implementation with a minimal bundle/runtime check and isolate native transport/startup adapters.
+- [Renderer service discovery fails and registration format is version-specific] -> Use the tested Node transport and pinned read-only discovery adapter, validate registration and service identity, and reject unsupported versions. Startup safety remains a separate gate; never treat failed probing as an absent service.
 - [GUI-launched Obsidian has a different PATH] -> Configurable executable path, quoted-path tests, actionable errors; no automatic installation.
 - [Client and installed runtime evolve independently] -> Pin the client, test a concrete runtime range, and reject unsupported versions without restarting another client's service.
 - [Snapshots race with stream deltas] -> Buffered reconciliation tests, stable identities, bounded queues, and authoritative reload on uncertainty.
