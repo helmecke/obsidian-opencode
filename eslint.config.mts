@@ -21,7 +21,7 @@ export default defineConfig(
 			},
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'tests/*.mjs'],
+					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'tests/*.mjs', 'scripts/*.mjs'],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -30,9 +30,9 @@ export default defineConfig(
 	},
 	...obsidianmd.configs.recommended,
 	{
-		files: ['tests/*.mjs'],
+		files: ['tests/*.mjs', 'scripts/*.mjs'],
 		languageOptions: { globals: globals.node },
-		// These run in Node's test runner, not inside the mobile plugin.
+		// Node test/developer tooling is not part of a mobile plugin.
 		rules: { 'obsidianmd/no-nodejs-modules': 'off' },
 	},
 );

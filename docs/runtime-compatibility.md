@@ -32,17 +32,53 @@ verified yet. No service was started or stopped by these checks.
 
 The user approved the disposable Windows vault path
 `C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`.
-The directory has been prepared. The installed OpenCode executable reports
-`opencode v2.2.2`. The Electron check is currently blocked: `obsidian help`
-reports that it cannot find a running Obsidian instance. No plugin was installed
-and no Electron checks have been performed; task 1.2 remains incomplete.
+The installed OpenCode executable reports `opencode v2.2.2`.
 
-Open this directory as a vault in Obsidian and enable the Obsidian CLI before
-resuming. Do not install into a real vault implicitly.
-In the approved vault, record Obsidian, Electron, Node, and
-OpenCode versions; verify discovery, authenticated requests, and event
-streaming using the bundled client and service helper. Record the chosen
-transport and observed results here. Do not alter shared-service registration,
+### Electron probe results
+
+The approved vault is open and the CLI is working. Observed versions:
+
+| Component | Version |
+| --- | --- |
+| Obsidian / installer | 1.14.5 / 1.14.5 |
+| Electron | 43.8.3 |
+| Embedded Node | 24.22.0 |
+| Chromium | 150.0.7871.250 |
+| Installed OpenCode / pinned client | 2.2.2 / 2.2.2 |
+
+Bundled `scripts/runtime-probe.mjs` as ES2021 CommonJS with Node built-ins
+external, placed the output at `.obsidian/runtime-probe.cjs` in the approved
+vault, and invoked its `run()` through the vault-targeted Obsidian CLI.
+This is a standalone developer probe, not an installed/enabled plugin.
+
+- Both client entrypoints import and execute in Electron.
+- `Service.discover({ version: '2.2.2' })` returns no endpoint in the renderer.
+- The same call in host Node discovers an authenticated service successfully.
+- The host Node probe also completes `client.server.info` with version 2.2.2
+  and receives `server.connected` through the generated event subscription.
+  This is a control check, not proof of Electron transport compatibility.
+- A direct authenticated `/api/info` request using renderer `fetch` and the
+  existing registration fails with `TypeError`. The renderer origin is
+  `app://obsidian.md`. No credentials or registration contents were printed.
+- Therefore renderer fetch is **not a validated transport** in this runtime.
+  Authenticated requests and streaming have not passed the Electron gate.
+  Task 1.2 remains incomplete; no supported runtime range is claimed.
+- No service ensure/start/stop operation, conversation creation, model request,
+  service-registration write, global fetch override, or CORS change was made.
+
+The pinned service helper uses the renderer's global `fetch` internally and
+does not accept the custom `fetch` option exposed by `OpenCode.make`. A Node
+HTTP transport for client requests alone would not fix discovery. Pause for
+design review before choosing an isolated Node context for service management
+or a narrow local discovery adapter. Do not silently patch the dependency,
+globally replace fetch, or switch to SDK hosting.
+
+When rerunning the probe through `require`, evict its exact entry from
+`require.cache` after rebuilding so Electron does not reuse the previous bundle.
+
+After agreeing on the service-discovery approach, verify authenticated requests
+and event streaming in Electron and record the final transport here.
+Do not alter shared-service registration,
 restart an incompatible service, weaken authentication, or change global CORS
 configuration. If the documented client approach fails, pause for design
 revision before building the full UI.
