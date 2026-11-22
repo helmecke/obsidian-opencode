@@ -118,6 +118,8 @@ test('markdown renders are batched during streaming and immediate on final text'
 	const root = document.createElement('div');
 	const host = { app: {}, component: parent, sourcePath: '' };
 	const block = new MarkdownBlock(host, root, clock.timer);
+	const container = root.querySelector('.opencode-markdown');
+	assert.ok(container.classList.contains('markdown-rendered'), 'Answers use the native markdown presentation');
 	block.set('[[No');
 	const pending = [...clock.jobs.keys()][0];
 	block.set('[[Note]]');

@@ -132,7 +132,7 @@ test('native view renders the conversation shell and clears its content on close
 	assert.ok(view.contentEl.classList.contains('opencode-chat'));
 	assert.match(view.statusEl.textContent, /Connected · Shared service/);
 	assert.equal(view.retryButton.getAttribute('aria-label'), 'Retry discovery');
-	assert.match(view.retryButton.title, /Retry discovery/);
+	assert.ok(view.retryButton.classList.contains('clickable-icon'), 'Retry discovery uses the native icon-button surface');
 	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
 	assert.ok(view.messagesEl);
 	assert.ok(view.composer);
@@ -157,20 +157,24 @@ test('native view renders the conversation shell and clears its content on close
 	assert.equal(view.conversationSelect.title, 'Conversation');
 	assert.equal(meta.querySelector('.opencode-chat-select-label'), null, 'The conversation select has no visible label');
 	assert.equal(view.newButton.getAttribute('aria-label'), 'New conversation');
-	assert.equal(view.newButton.title, 'New conversation');
+	assert.ok(view.newButton.classList.contains('clickable-icon'), 'New conversation uses the native icon-button surface');
 	assert.ok(view.newButton.querySelector('.lucide-message-square-plus'), 'New conversation uses the message-square-plus icon');
 	assert.equal(view.retryButton.getAttribute('aria-label'), 'Retry discovery');
-	assert.equal(view.retryButton.title, 'Retry discovery');
+	assert.ok(view.retryButton.classList.contains('clickable-icon'), 'Retry discovery uses the native icon-button surface');
 	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
 	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0,
 		'The transcript is not preceded by separate header rows');
 	assert.equal(view.sendButton.getAttribute('aria-label'), 'Send message');
-	assert.match(view.sendButton.title, /Ctrl\/Cmd\+Enter/);
+	assert.ok(view.sendButton.classList.contains('clickable-icon'), 'Send uses the native icon-button surface');
 	assert.ok(view.sendButton.querySelector('.lucide-arrow-up'), 'Send uses the arrow-up icon');
+	assert.equal(view.sendButton.disabled, true, 'Empty input disables send');
+	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'true');
 	assert.equal(view.stopButton.getAttribute('aria-label'), 'Stop execution');
-	assert.match(view.stopButton.title, /interrupt/i);
+	assert.ok(view.stopButton.classList.contains('clickable-icon'), 'Stop uses the native icon-button surface');
 	assert.ok(view.stopButton.querySelector('.lucide-square'), 'Stop uses the square icon');
 	assert.equal(view.stopButton.hidden, true, 'Stop is absent while idle');
+	assert.equal(view.stopButton.disabled, true);
+	assert.equal(view.stopButton.getAttribute('aria-disabled'), 'true');
 	assert.ok(view.agentSelect.getAttribute('aria-label'));
 	assert.ok(view.modelSelect.getAttribute('aria-label'));
 	assert.match(view.composer.placeholder, /^Plan, build, or ask\./);
@@ -209,11 +213,14 @@ test('view exposes explicit discovery retry and never displays unknown diagnosti
 	assert.match(view.statusEl.textContent, /Retrying in 500 ms/);
 	assert.doesNotMatch(view.statusEl.textContent, /private password/);
 	assert.equal(view.retryButton.disabled, true);
+	assert.equal(view.retryButton.getAttribute('aria-disabled'), 'true');
 	// Let the scheduled backoff run, or use the explicit retry after exhaustion.
 	const pending = view.synchronization.retry();
 	await pending;
 	assert.equal(calls, 2);
 	assert.match(view.statusEl.textContent, /Connected · Shared service/);
+	assert.equal(view.retryButton.disabled, false);
+	assert.equal(view.retryButton.getAttribute('aria-disabled'), 'false');
 	plugin.unload();
 });
 
@@ -442,6 +449,7 @@ test('empty and unavailable selection still allow choosing or creating a convers
 	assert.equal(fixture.created, 1);
 	assert.equal(view.sessions.state.selected.id, 'created-1');
 	assert.equal(view.sendButton.disabled, true, 'Empty input is not sent automatically');
+	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'true');
 	plugin.unload();
 });
 
@@ -474,12 +482,15 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	view.composer.value = 'hello';
 	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(view.sendButton.disabled, false);
+	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'false');
 	view.composer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
 	await wait();
 	const prompt = fixture.calls.find((call) => call[0] === 'prompt')[1];
 	assert.match(prompt.id, /^msg_[0-9a-f-]{36}$/);
 	assert.equal(prompt.text, 'hello');
 	assert.equal(view.composer.value, '');
+	assert.equal(view.sendButton.disabled, true, 'Empty input disables send again');
+	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'true');
 
 	view.conversationSelect.value = 'new';
 	view.conversationSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -495,6 +506,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	await wait();
 	assert.equal(view.stopButton.hidden, false, 'Stop is present while execution is running');
 	assert.equal(view.stopButton.disabled, false);
+	assert.equal(view.stopButton.getAttribute('aria-disabled'), 'false');
 	const interrupts = fixture.calls.filter((call) => call[0] === 'interrupt').length;
 	click(view.stopButton);
 	await wait();

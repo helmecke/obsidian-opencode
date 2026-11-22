@@ -1,4 +1,4 @@
-import { Component, Notice, setIcon } from 'obsidian';
+import { Component, Notice } from 'obsidian';
 import type { App, Scope } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
@@ -10,6 +10,7 @@ import type { FormValue } from './form-card';
 import type { PermissionDecision } from './permission-card';
 import { ChatComposer } from './chat-composer';
 import { ChatInteractionsPanel } from './chat-interactions-panel';
+import { createIconButton, setNativeDisabled } from './native-controls';
 import { NoteLinkSuggest } from './note-link-suggest';
 
 const VAULT_ROOT_SOURCE = '';
@@ -102,7 +103,7 @@ export class ChatRenderer {
 	}
 
 	setRetryDisabled(disabled: boolean): void {
-		if (this.retryButton) this.retryButton.disabled = disabled;
+		if (this.retryButton) setNativeDisabled(this.retryButton, disabled);
 	}
 
 	composerText(): string {
@@ -142,21 +143,19 @@ export class ChatRenderer {
 			cls: 'opencode-chat-select',
 			attr: { 'aria-label': 'Conversation', title: 'Conversation' },
 		});
-		this.newButton = meta.createEl('button', {
-			cls: 'opencode-composer-icon',
-			attr: { 'aria-label': 'New conversation', title: 'New conversation' },
+		this.newButton = createIconButton(meta, {
+			icon: 'message-square-plus',
+			label: 'New conversation',
 		});
-		setIcon(this.newButton, 'message-square-plus');
 		this.statusEl = meta.createDiv({
 			cls: 'opencode-chat-status', text: 'Connecting…',
 			attr: { role: 'status', 'aria-live': 'polite' },
 		});
-		this.retryButton = meta.createEl('button', {
-			cls: 'opencode-composer-icon opencode-retry',
-			attr: { 'aria-label': 'Retry discovery', title: 'Retry discovery' },
+		this.retryButton = createIconButton(meta, {
+			icon: 'refresh-cw',
+			label: 'Retry discovery',
 		});
-		setIcon(this.retryButton, 'refresh-cw');
-		this.retryButton.disabled = true;
+		setNativeDisabled(this.retryButton, true);
 	}
 
 	private attachRendering(opening: Component): void {
@@ -203,39 +202,39 @@ export class ChatRenderer {
 			case 'ready': {
 				if (state.connection?.phase === 'starting') {
 					this.statusEl.setText(state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…');
-					this.retryButton.disabled = true;
+					setNativeDisabled(this.retryButton, true);
 					break;
 				}
 				if (state.connection?.phase === 'failed' && state.connection.error) {
 					this.statusEl.setText(state.connection.error);
-					this.retryButton.disabled = false;
+					setNativeDisabled(this.retryButton, false);
 					break;
 				}
 				this.statusEl.setText(`Connected${this.connectionLabel(state)}${execution && execution !== 'unknown' ? ` · ${this.executionLabel(execution)}` : ''}`);
-				this.retryButton.disabled = false;
+				setNativeDisabled(this.retryButton, false);
 				break;
 			}
 			case 'synchronizing':
 				this.statusEl.setText(state.connection?.phase === 'starting'
 					? (state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…')
 					: state.snapshot ? 'Reconnecting…' : 'Synchronizing conversation…');
-				this.retryButton.disabled = true;
+				setNativeDisabled(this.retryButton, true);
 				break;
 			case 'retrying':
 				this.statusEl.setText(`${state.error ?? 'Connection lost.'} Retrying in ${state.delay ?? 0} ms…`);
-				this.retryButton.disabled = true;
+				setNativeDisabled(this.retryButton, true);
 				break;
 			case 'exhausted':
 				this.statusEl.setText(state.error ?? 'Unable to synchronize. Retry discovery.');
-				this.retryButton.disabled = false;
+				setNativeDisabled(this.retryButton, false);
 				break;
 			case 'disposed':
 				this.statusEl.setText('Plugin disabled.');
-				this.retryButton.disabled = true;
+				setNativeDisabled(this.retryButton, true);
 				break;
 			default:
 				this.statusEl.setText('Connecting…');
-				this.retryButton.disabled = false;
+				setNativeDisabled(this.retryButton, false);
 		}
 	}
 
@@ -274,7 +273,7 @@ export class ChatRenderer {
 			this.conversationSelect.value = selected;
 		}
 		this.conversationSelect.disabled = state.phase !== 'ready' || sessions.length === 0;
-		this.newButton.disabled = state.phase !== 'ready';
+		setNativeDisabled(this.newButton, state.phase !== 'ready');
 	}
 
 	private updateMessages(): void {

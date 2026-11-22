@@ -146,6 +146,11 @@ export function createObsidian(app, notices = [], extra = {}) {
 			svg.setAttribute('aria-hidden', 'true');
 			element.appendChild(svg);
 		},
+		setTooltip(element, tooltip, options = {}) {
+			element.setAttribute('aria-label', tooltip);
+			if (options.placement) element.setAttribute('data-tooltip-position', options.placement);
+			if (options.classes) element.addClass(...options.classes);
+		},
 		MarkdownRenderer: {
 			async render(_app, markdown, el) {
 				const text = document.createElement('p');

@@ -3,13 +3,15 @@ import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
 import test from 'node:test';
 import { build } from 'esbuild';
-import { click, installDom } from './dom-helper.mjs';
+import { click, createObsidian, installDom } from './dom-helper.mjs';
 
 installDom();
 const bundle = await build({ entryPoints: ['src/ui/interactions.ts'], bundle: true,
-	format: 'cjs', platform: 'node', write: false });
+	format: 'cjs', platform: 'node', external: ['obsidian'], write: false });
 const module = { exports: {} };
-compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(createRequire(import.meta.url), module, module.exports);
+const obsidian = createObsidian({});
+compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
+	(name) => name === 'obsidian' ? obsidian : createRequire(import.meta.url)(name), module, module.exports);
 const { defaultValues, isFieldVisible, validateForm, safeExternalUrl, renderPermissionCard, FormCard, ToolEntryView,
 	toolStatus } = module.exports;
 
@@ -84,18 +86,27 @@ test('permission card exposes explicit once/always/reject with persistent scope'
 	const root = container();
 	renderPermissionCard(root, { id: 'p', sessionID: 's', action: 'Run shell', resources: ['C:\\vault'],
 		save: ['C:\\vault'], message: 'Review the command.' }, { decide: (decision) => decisions.push(decision) });
-	assert.match(root.textContent, /Run shell/);
-	assert.match(root.textContent, /Persistent approval/);
-	const buttons = [...root.querySelectorAll('button')];
+	const callout = root.querySelector('.callout');
+	assert.ok(callout, 'The permission request uses native callout markup');
+	assert.equal(callout.getAttribute('data-callout'), 'warning');
+	assert.ok(callout.querySelector('.callout-title .callout-icon .lucide-alert-triangle'));
+	assert.equal(callout.querySelector('.callout-title-inner').textContent, 'Permission required');
+	const content = callout.querySelector('.callout-content');
+	assert.ok(content.querySelector('.opencode-permission-action').textContent.includes('Run shell'));
+	assert.match(content.textContent, /Review the command\./);
+	assert.match(content.textContent, /Persistent approval would save access for: C:\\vault/);
+	const buttons = [...content.querySelectorAll('button')];
 	assert.deepEqual(buttons.map((button) => button.textContent), ['Allow once', 'Always allow', 'Reject']);
+	assert.deepEqual(buttons.map((button) => button.disabled), [false, false, false]);
 	click(buttons[0]); click(buttons[1]); click(buttons[2]);
 	assert.deepEqual(decisions, ['once', 'always', 'reject']);
 
 	const noSave = container();
 	renderPermissionCard(noSave, { id: 'p', sessionID: 's', action: 'Read', resources: [] },
 		{ decide: () => assert.fail('No decision expected') });
-	assert.equal(noSave.querySelector('button:nth-child(2)').disabled, true);
-	click(noSave.querySelector('button:nth-child(2)'));
+	const always = noSave.querySelector('.callout-content button:nth-child(2)');
+	assert.equal(always.disabled, true, 'Always allow is disabled without a persistent scope');
+	click(always);
 });
 
 test('form card renders choices, text, toggles, multiselect, and external link without auto-opening', () => {
@@ -119,9 +130,27 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 		openExternal: (url) => opened.push(url),
 	});
 	card.update(form, false);
+	const rows = [...root.querySelectorAll('.setting-item')];
+	assert.deepEqual(rows.map((row) => row.querySelector('.setting-item-name').textContent),
+		['choice *', 'text *', 'more *', 'enabled', 'many', 'Docs'], 'Fields keep their order in native rows');
+	for (const row of rows) {
+		assert.ok(row.querySelector('.setting-item-info'));
+		assert.ok(row.querySelector('.setting-item-control'));
+		assert.equal(row.querySelectorAll('.setting-item-error').length, 1);
+	}
+	assert.equal(rows[2].hidden, true, 'Conditional rows start hidden');
+	assert.equal(rows[2].classList.contains('is-invalid'), false);
+	click(root.querySelector('.opencode-form-actions button'));
+	assert.equal(rows[0].classList.contains('is-invalid'), true, 'Required rows report field errors natively');
+	assert.equal(rows[0].querySelector('.setting-item-error').textContent, 'This field is required.');
+	assert.equal(rows[1].querySelector('.setting-item-error').textContent, 'This field is required.');
 	const select = root.querySelector('select');
 	input(select, 'b', 'change');
+	assert.equal(rows[2].hidden, false, 'Conditional rows appear when their condition matches');
+	assert.equal(rows[0].classList.contains('is-invalid'), false, 'Correcting a field clears its invalid state');
 	const inputs = root.querySelectorAll('input[type="text"]');
+	assert.equal(inputs[0].closest('.setting-item'), rows[1], 'Text inputs stay inside their field rows');
+	assert.equal(inputs[1].closest('.setting-item'), rows[2]);
 	input(inputs[0], 'value');
 	input(inputs[1], 'conditional');
 	const checkbox = root.querySelector('input[type="checkbox"]');
@@ -137,6 +166,12 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	assert.deepEqual(opened, ['https://example.com/docs']);
 	click([...root.querySelectorAll('.opencode-form-actions button')][1]);
 	assert.equal(cancelled, 1);
+	card.update(form, true);
+	assert.equal(root.querySelector('.opencode-form-actions button').disabled, true, 'Submit is disabled while busy');
+	assert.equal([...root.querySelectorAll('.opencode-form-actions button')][1].disabled, true);
+	card.update(form, false);
+	assert.equal(root.querySelector('.opencode-form-actions button').disabled, false);
+	assert.equal([...root.querySelectorAll('.opencode-form-actions button')][1].disabled, false);
 });
 
 test('form card keeps hidden required fields from blocking and reports unsupported fields', () => {
@@ -147,8 +182,12 @@ test('form card keeps hidden required fields from blocking and reports unsupport
 	] };
 	const answers = [];
 	new FormCard(root, form, { submit: (answer) => answers.push(answer), cancel: () => {}, openExternal: () => {} });
+	const rows = [...root.querySelectorAll('.setting-item')];
+	assert.equal(rows[1].hidden, true, 'Hidden fields hide their whole native row');
+	assert.equal(rows[1].querySelector('.setting-item-error').textContent, '');
 	click(root.querySelector('.opencode-form-actions button'));
 	assert.deepEqual(answers, [{}], 'Hidden required fields do not block an otherwise empty form');
+	assert.equal(rows[1].classList.contains('is-invalid'), false, 'Hidden required fields show no field error');
 
 	const unsupportedRoot = container();
 	const unsupported = { id: 'u', sessionID: 's', title: 'Future', fields: [field('rating', 'rating')] };

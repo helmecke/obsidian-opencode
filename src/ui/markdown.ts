@@ -28,7 +28,7 @@ export class MarkdownBlock {
 	private disposed = false;
 	constructor(private readonly host: MarkdownHost, container: HTMLElement,
 		private readonly timer: Timer = clock) {
-		this.el = container.createDiv({ cls: 'opencode-markdown' });
+		this.el = container.createDiv({ cls: 'opencode-markdown markdown-rendered' });
 	}
 
 	set(text: string, final = false): void {

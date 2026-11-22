@@ -137,6 +137,17 @@ Follow Obsidian's **Developer Policies** and **Plugin Guidelines**. In particula
 - Avoid Node/Electron APIs if you want mobile compatibility; set `isDesktopOnly` accordingly.
 - Prefer `async/await` over promise chains; handle errors gracefully.
 
+### Styling
+
+Practice **native first**: build the interface from Obsidian's own theme and components, and verify the host really provides what you reach for.
+
+- Use theme variables (`--background-primary`, `--text-muted`, `--size-4-*`) for colors, spacing, and type.
+- Use existing app classes for standard surfaces: `clickable-icon`, native `button`/`select`/`input` (with `mod-cta` and `mod-warning` for variants), `setting-item*`, `callout*`, and `markdown-rendered`.
+- Use public APIs where they fit: `setIcon`, `setTooltip`, `MarkdownRenderer`, and `Setting` for settings rows.
+- Verify a class against the installed `app.css` and an API against `obsidian.d.ts` before depending on it; utility classes such as `.text-muted` and internal component classes are not stable.
+- Choose a native equivalent only when it preserves the element's semantics and layout. Keep a small custom structure for chat- and plugin-specific parts (message bubbles, tool entries, composer layout), and document in `styles.css` which native surfaces it relies on.
+- Compose from the native pieces rather than copying declarations out of `app.css`, so theme and accessibility updates flow through.
+
 ## Mobile
 
 - Where feasible, test on iOS and Android.

@@ -533,6 +533,37 @@ Live acceptance in the approved disposable vault (Obsidian 1.15.1, Electron
 - `npm test` passed 161 tests, `npm run build` succeeded, `npm run lint`
   reported no errors, and reloading the plugin produced no captured errors.
 
+## Native Obsidian UI styles (2026-11-22)
+
+The plugin's presentation now reuses verified Obsidian surfaces instead of
+reimplementing them. Chat behavior, protocol, persistence, and settings are
+unchanged.
+
+- New conversation, Retry discovery, Stop, and Send are real `<button>` elements
+  with `clickable-icon`, `setIcon`, and `setTooltip`; `disabled` and
+  `aria-disabled` are synchronized. Send keeps the plugin accent circle.
+- Selectors use native global `select` styling, with only width and truncation
+  constraints retained for the toolbar and narrow sidebar.
+- Agent forms use native `setting-item` rows with native controls, grouped
+  checkboxes, `setting-item-error` + `is-invalid` for errors, and `hidden` for
+  conditional rows. Permission required uses warning-callout markup with every
+  decision and the persistent-scope warning inside its content.
+- Rendered answers carry `markdown-rendered`, and the duplicated margin rules
+  are removed. Chat-specific structures (composer card, message bubbles, tool
+  entries, reasoning disclosure, suggestions) stay plugin-owned with theme
+  variables, and `styles.css` documents the native surfaces it relies on.
+- Accepted visual deviations from the previous composer: square native icon
+  buttons, host-styled selects, settings-style form rows, and a warning-callout
+  permission surface replace the former custom chrome. The Send accent, all
+  accessible names and tooltips, disabled states, and keyboard paths remain.
+
+Automated verification: `npm test` passed **163 tests**, `npm run build`
+succeeded, and `npm run lint` reported 0 errors and 2 pre-existing warnings
+(declarative settings API; sentence case for **OpenCode 2 executable path**).
+The manual light/dark, narrow-sidebar, keyboard, and form pass is recorded in
+task 5.3 of the change.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-22 | `reuse-obsidian-ui-styles` | 14/14 | 163 passing | pass | `openspec/changes/archive/2026-11-22-reuse-obsidian-ui-styles` |
 | 2026-11-22 | `add-composer-note-linking` | 9/9 | 161 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-note-linking` |

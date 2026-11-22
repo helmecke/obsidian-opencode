@@ -1,3 +1,18 @@
+/*
+ * Native Obsidian surfaces reused by this plugin:
+ * - `clickable-icon` icon buttons (hover, focus, disabled via aria-disabled)
+ * - global native `button`, `select`, `input`, and `textarea` controls
+ * - `setting-item` rows (info/name/description/control/error, is-invalid)
+ * - `callout` containers (title/icon/title-inner/content, data-callout)
+ * - `markdown-rendered` for rendered answers
+ *
+ * The `.opencode-*` rules below are chat-specific structures: composer card and
+ * borderless textarea, message bubbles and roles, status/prompt strips, tool
+ * disclosures, reasoning disclosure, note suggestions, and truncation. Keep the
+ * plugin-owned semantic classes (`opencode-muted`, `opencode-uncertain`)
+ * because Obsidian exposes the color variables, not utility classes.
+ */
+
 .opencode-chat {
 	display: flex;
 	flex-direction: column;
@@ -32,29 +47,7 @@
 	flex: 0 1 auto;
 	min-width: 0;
 	max-width: 13em;
-	height: 1.9em;
-	padding: 0 var(--size-4-1);
-	border: 1px solid transparent;
-	border-radius: var(--radius-l);
-	background-color: var(--background-secondary);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	cursor: pointer;
-}
-
-.opencode-chat-select:hover {
-	background-color: var(--background-secondary-alt);
-	color: var(--text-normal);
-}
-
-.opencode-chat-select:focus-visible {
-	border-color: var(--interactive-accent);
-	outline: none;
-}
-
-.opencode-chat-select:disabled {
-	cursor: default;
-	opacity: 0.6;
+	text-overflow: ellipsis;
 }
 
 .opencode-chat-errors {
@@ -111,14 +104,6 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.opencode-markdown > :first-child {
-	margin-top: 0;
-}
-
-.opencode-markdown > :last-child {
-	margin-bottom: 0;
-}
-
 .opencode-markdown pre {
 	overflow-x: auto;
 }
@@ -156,27 +141,6 @@
 	border-top: 1px solid var(--background-modifier-border);
 }
 
-.opencode-permission,
-.opencode-form {
-	padding: var(--size-4-2) var(--size-4-3);
-	border: 1px solid var(--background-modifier-border);
-	border-left: 3px solid var(--interactive-accent);
-	border-radius: var(--radius-s);
-	background-color: var(--background-secondary);
-}
-
-.opencode-permission h3,
-.opencode-form h3 {
-	margin: 0 0 var(--size-4-1);
-	font-size: var(--font-ui-medium);
-}
-
-.opencode-permission-resources {
-	margin: var(--size-4-1) 0;
-	padding-inline-start: var(--size-4-4);
-	font-size: var(--font-ui-small);
-}
-
 .opencode-permission-scope {
 	color: var(--text-warning);
 	font-size: var(--font-ui-small);
@@ -190,27 +154,11 @@
 	margin-top: var(--size-4-2);
 }
 
-.opencode-form-fields {
-	display: flex;
-	flex-direction: column;
-	gap: var(--size-4-2);
-}
-
-.opencode-form-field {
+/* Composite form controls: grouped checkboxes and a custom value input. */
+.opencode-form-options {
 	display: flex;
 	flex-direction: column;
 	gap: var(--size-4-1);
-}
-
-.opencode-form-label {
-	font-weight: var(--font-medium);
-}
-
-.opencode-form-field input[type='text'],
-.opencode-form-field input[type='number'],
-.opencode-form-field select,
-.opencode-form-field textarea {
-	width: 100%;
 }
 
 .opencode-form-checkbox {
@@ -219,20 +167,14 @@
 	gap: var(--size-4-1);
 }
 
-.opencode-form-options {
-	display: flex;
-	flex-direction: column;
-	gap: var(--size-4-1);
+/* Native rows are flex, so the hidden attribute needs an explicit rule. */
+.opencode-form-field[hidden] {
+	display: none;
 }
 
-.opencode-field-error,
 .opencode-form-error {
 	color: var(--text-error);
 	font-size: var(--font-ui-smaller);
-}
-
-.opencode-form.is-unsupported {
-	border-left-color: var(--text-error);
 }
 
 .opencode-tool {
@@ -383,29 +325,7 @@
 .opencode-composer-select select {
 	min-width: 0;
 	max-width: 13em;
-	height: 1.9em;
-	padding: 0 var(--size-4-1);
-	border: 1px solid transparent;
-	border-radius: var(--radius-l);
-	background-color: var(--background-secondary);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	cursor: pointer;
-}
-
-.opencode-composer-select select:hover {
-	background-color: var(--background-secondary-alt);
-	color: var(--text-normal);
-}
-
-.opencode-composer-select select:focus-visible {
-	border-color: var(--interactive-accent);
-	outline: none;
-}
-
-.opencode-composer-select select:disabled {
-	cursor: default;
-	opacity: 0.6;
+	text-overflow: ellipsis;
 }
 
 .opencode-composer-icon {
@@ -415,40 +335,15 @@
 	flex: 0 0 auto;
 	width: 2.25rem;
 	height: 2.25rem;
-	padding: 0;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 999px;
-	background-color: var(--background-secondary);
-	color: var(--text-muted);
-	cursor: pointer;
-}
-
-.opencode-composer-icon:hover {
-	background-color: var(--background-secondary-alt);
-	color: var(--text-normal);
-}
-
-.opencode-composer-icon:focus-visible {
-	outline: 2px solid var(--interactive-accent);
-	outline-offset: 2px;
-}
-
-.opencode-composer-icon:disabled {
-	cursor: default;
-	opacity: 0.5;
 }
 
 .opencode-composer-icon[hidden] {
 	display: none;
 }
 
-.opencode-composer-stop {
-	border-color: var(--background-modifier-border);
-	color: var(--text-muted);
-}
-
 .opencode-composer-send {
-	border-color: var(--interactive-accent);
+	border: 1px solid var(--interactive-accent);
+	border-radius: 999px;
 	background-color: var(--interactive-accent);
 	color: var(--text-on-accent);
 }
