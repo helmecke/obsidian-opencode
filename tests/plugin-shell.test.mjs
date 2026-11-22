@@ -167,6 +167,7 @@ test('native view renders the conversation shell and clears its content on close
 	assert.equal(view.sendButton.getAttribute('aria-label'), 'Send message');
 	assert.ok(view.sendButton.classList.contains('clickable-icon'), 'Send uses the native icon-button surface');
 	assert.ok(view.sendButton.querySelector('.lucide-arrow-up'), 'Send uses the arrow-up icon');
+	assert.equal(view.sendButton.hidden, false, 'Send is present while idle');
 	assert.equal(view.sendButton.disabled, true, 'Empty input disables send');
 	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'true');
 	assert.equal(view.stopButton.getAttribute('aria-label'), 'Stop execution');
@@ -505,6 +506,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 
 	await wait();
 	assert.equal(view.stopButton.hidden, false, 'Stop is present while execution is running');
+	assert.equal(view.sendButton.hidden, true, 'Stop replaces Send while execution is running');
 	assert.equal(view.stopButton.disabled, false);
 	assert.equal(view.stopButton.getAttribute('aria-disabled'), 'false');
 	const interrupts = fixture.calls.filter((call) => call[0] === 'interrupt').length;

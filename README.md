@@ -178,11 +178,11 @@ read-only workarounds.
   plain prompt text and is not attached as a file. Brackets pair automatically,
   a typed `]` skips an existing closer, and Backspace removes an empty pair.
   Ctrl/Cmd+Enter still sends while the list is open.
-- While execution is running, the composer's toolbar also shows a square
-  **Stop** button. It requests server-side interruption, refreshes the reported
-  state, and disappears when execution finishes. Closing, moving, or disabling
-  the UI is not a stop action: execution continues and reopening chat recovers
-  its current state.
+- While execution is running, a square **Stop** button replaces the **Send**
+  button in the same toolbar position. It requests server-side interruption,
+  refreshes the reported state, and gives way to **Send** when execution
+  finishes. Closing, moving, or disabling the UI is not a stop action: execution
+  continues and reopening chat recovers its current state.
 - The **Agent** and **Model** selectors are compact pills in the composer's
   toolbar. They list server-provided options for the current location; a
   long selected model name is available in the selector's tooltip. A change is

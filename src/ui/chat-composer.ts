@@ -39,13 +39,6 @@ export class ChatComposer {
 		});
 		const toolbar = this.card.createDiv({ cls: 'opencode-composer-toolbar' });
 		const start = toolbar.createDiv({ cls: 'opencode-composer-toolbar-start' });
-		this.stopButtonEl = createIconButton(start, {
-			icon: 'square',
-			label: 'Stop execution',
-			className: 'opencode-composer-stop',
-		});
-		this.stopButtonEl.hidden = true;
-		setNativeDisabled(this.stopButtonEl, true);
 		this.metaEl = start.createDiv({ cls: 'opencode-composer-meta' });
 
 		const end = toolbar.createDiv({ cls: 'opencode-composer-toolbar-end' });
@@ -56,6 +49,13 @@ export class ChatComposer {
 			label: 'Send message',
 			className: 'opencode-composer-send',
 		});
+		this.stopButtonEl = createIconButton(end, {
+			icon: 'square',
+			label: 'Stop execution',
+			className: 'opencode-composer-stop',
+		});
+		this.stopButtonEl.hidden = true;
+		setNativeDisabled(this.stopButtonEl, true);
 		this.promptActions = this.card.createDiv({ cls: 'opencode-chat-prompt-actions' });
 
 		this.sendButtonEl.addEventListener('click', () => this.handlers.send());
@@ -109,6 +109,7 @@ export class ChatComposer {
 		const running = state.conversation?.execution === 'running';
 		this.composer.disabled = state.phase === 'disposed';
 		this.stopButtonEl.hidden = !running;
+		this.sendButtonEl.hidden = running;
 		setNativeDisabled(this.stopButtonEl, state.phase !== 'ready' || !running);
 		setNativeDisabled(this.sendButtonEl, state.phase !== 'ready' || !state.snapshot?.selected
 			|| state.interactionBusy !== undefined
