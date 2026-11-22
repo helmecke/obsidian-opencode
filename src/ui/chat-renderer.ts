@@ -8,7 +8,6 @@ import { attachLinkRouter, MarkdownBlock } from './markdown';
 import type { LinkEnvironment } from './markdown';
 import type { FormValue } from './form-card';
 import type { PermissionDecision } from './permission-card';
-import { fillAgentOptions, fillModelOptions, modelValue } from './chat-options';
 import { ChatComposer } from './chat-composer';
 import { ChatInteractionsPanel } from './chat-interactions-panel';
 
@@ -41,15 +40,12 @@ export class ChatRenderer {
 	private errorEl?: HTMLElement;
 	private conversationSelect?: HTMLSelectElement;
 	private newButton?: HTMLButtonElement;
-	private agentSelect?: HTMLSelectElement;
-	private modelSelect?: HTMLSelectElement;
-	private stopButton?: HTMLButtonElement;
 	private messagesEl?: HTMLElement;
 	private interactions?: ChatInteractionsPanel;
 	private composer?: ChatComposer;
 	private retryButton?: HTMLButtonElement;
 	private conversation?: ConversationRenderer;
-	private signatures = { sessions: '', agents: '', models: '', errors: '' };
+	private signatures = { sessions: '', errors: '' };
 
 	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers) {}
 
@@ -58,10 +54,10 @@ export class ChatRenderer {
 	get messagesElement(): HTMLElement | undefined { return this.messagesEl; }
 	get interactionsElement(): HTMLElement | undefined { return this.interactions?.element; }
 	get conversationSelectElement(): HTMLSelectElement | undefined { return this.conversationSelect; }
-	get agentSelectElement(): HTMLSelectElement | undefined { return this.agentSelect; }
-	get modelSelectElement(): HTMLSelectElement | undefined { return this.modelSelect; }
+	get agentSelectElement(): HTMLSelectElement | undefined { return this.composer?.agentSelect; }
+	get modelSelectElement(): HTMLSelectElement | undefined { return this.composer?.modelSelect; }
 	get newButtonElement(): HTMLButtonElement | undefined { return this.newButton; }
-	get stopButtonElement(): HTMLButtonElement | undefined { return this.stopButton; }
+	get stopButtonElement(): HTMLButtonElement | undefined { return this.composer?.stopButton; }
 	get sendButtonElement(): HTMLButtonElement | undefined { return this.composer?.sendButton; }
 	get composerElement(): HTMLTextAreaElement | undefined { return this.composer?.element; }
 
@@ -79,7 +75,6 @@ export class ChatRenderer {
 		this.viewError = viewError;
 		this.updateStatus();
 		this.updateConversations();
-		this.updateSelectors();
 		this.updateMessages();
 		this.interactions?.update(state);
 		this.composer?.update(state);
@@ -91,7 +86,7 @@ export class ChatRenderer {
 		this.conversation = undefined;
 		this.interactions?.dispose();
 		this.interactions = undefined;
-		this.signatures = { sessions: '', agents: '', models: '', errors: '' };
+		this.signatures = { sessions: '', errors: '' };
 		this.contentEl = undefined;
 		this.opening = undefined;
 		this.scope = undefined;
@@ -100,9 +95,6 @@ export class ChatRenderer {
 		this.errorEl = undefined;
 		this.conversationSelect = undefined;
 		this.newButton = undefined;
-		this.agentSelect = undefined;
-		this.modelSelect = undefined;
-		this.stopButton = undefined;
 		this.messagesEl = undefined;
 		this.composer = undefined;
 		this.retryButton = undefined;
@@ -136,12 +128,6 @@ export class ChatRenderer {
 		this.statusEl = heading.createDiv({ cls: 'opencode-chat-status', text: 'Connecting…' });
 		this.retryButton = heading.createEl('button', { text: 'Retry discovery', cls: 'opencode-retry' });
 		this.retryButton.disabled = true;
-		const selectors = header.createDiv({ cls: 'opencode-chat-selectors' });
-		this.agentSelect = this.createSelect(selectors, 'Agent');
-		this.modelSelect = this.createSelect(selectors, 'Model');
-		this.stopButton = selectors.createEl('button', { text: 'Stop', cls: 'mod-warning' });
-		this.stopButton.disabled = true;
-		this.stopButton.title = 'Interrupt the active OpenCode execution';
 
 		const conversations = this.contentEl.createDiv({ cls: 'opencode-chat-conversations' });
 		this.conversationSelect = this.createSelect(conversations, 'Conversation');
@@ -156,6 +142,9 @@ export class ChatRenderer {
 			send: () => this.handlers.send(),
 			retryPrompt: () => this.handlers.retryPrompt(),
 			dismissPrompt: () => this.handlers.dismissPrompt(),
+			setAgent: (agent) => this.handlers.setAgent(agent),
+			setModel: (model) => this.handlers.setModel(model),
+			stop: () => this.handlers.stop(),
 		});
 	}
 
@@ -177,7 +166,7 @@ export class ChatRenderer {
 			notify: (message) => { new Notice(message); },
 		};
 		attachLinkRouter(this.messagesEl, VAULT_ROOT_SOURCE, environment, opening);
-		if (!this.retryButton || !this.newButton || !this.stopButton || !this.composer) return;
+		if (!this.retryButton || !this.newButton || !this.composer) return;
 		// Obsidian's keymap handles trusted shortcuts before DOM bubbling.
 		// A view-local scope takes priority without registering a global hotkey.
 		const scope = this.scope;
@@ -192,17 +181,8 @@ export class ChatRenderer {
 		}
 		opening.registerDomEvent(this.retryButton, 'click', () => this.handlers.retryConnection());
 		opening.registerDomEvent(this.newButton, 'click', () => this.handlers.newConversation());
-		opening.registerDomEvent(this.stopButton, 'click', () => this.handlers.stop());
 		opening.registerDomEvent(this.conversationSelect!, 'change', () => {
 			this.handlers.chooseConversation(this.conversationSelect!.value);
-		});
-		opening.registerDomEvent(this.agentSelect!, 'change', () => {
-			const agent = this.agentSelect!.value;
-			if (agent) this.handlers.setAgent(agent);
-		});
-		opening.registerDomEvent(this.modelSelect!, 'change', () => {
-			const model = modelValue(this.modelSelect!.value);
-			if (model) this.handlers.setModel(model);
 		});
 	}
 
@@ -235,7 +215,6 @@ export class ChatRenderer {
 				this.statusEl.setText('Connecting…');
 				this.retryButton.disabled = false;
 		}
-		if (this.stopButton) this.stopButton.disabled = state.phase !== 'ready' || execution !== 'running';
 	}
 
 	private executionLabel(execution: string): string {
@@ -269,28 +248,6 @@ export class ChatRenderer {
 		}
 		this.conversationSelect.disabled = state.phase !== 'ready' || sessions.length === 0;
 		this.newButton.disabled = state.phase !== 'ready';
-	}
-
-	private updateSelectors(): void {
-		const state = this.state;
-		if (!state || !this.agentSelect || !this.modelSelect) return;
-		const agents = state.agents ?? [];
-		const selectedAgent = state.snapshot?.selected?.agent ?? '';
-		const agentSignature = JSON.stringify([agents.map((agent) => [agent.id, agent.name]), selectedAgent, state.phase]);
-		if (agentSignature !== this.signatures.agents) {
-			this.signatures.agents = agentSignature;
-			fillAgentOptions(this.agentSelect, agents, selectedAgent);
-		}
-		this.agentSelect.disabled = state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
-		const models = state.models ?? [];
-		const selectedModel = state.snapshot?.selected?.model;
-		const modelSignature = JSON.stringify([models.map((model) => [model.providerID, model.modelID, model.name]),
-			selectedModel, state.phase]);
-		if (modelSignature !== this.signatures.models) {
-			this.signatures.models = modelSignature;
-			fillModelOptions(this.modelSelect, models, selectedModel);
-		}
-		this.modelSelect.disabled = state.phase !== 'ready' || models.length === 0 || Boolean(state.interactionBusy);
 	}
 
 	private updateMessages(): void {

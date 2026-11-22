@@ -140,19 +140,26 @@ read-only workarounds.
 
 ### Messages and execution
 
-- Type in the composer; **Ctrl/Cmd+Enter** sends and **Shift+Enter** inserts a
-  newline. The **Send** button is an alternative.
+- The composer is one card. The message field sits above a control row that
+  holds the **Agent** and **Model** selectors and the round arrow-up **Send**
+  button; the agent and model controls are no longer in the view header.
+- Type in the message field; **Ctrl/Cmd+Enter** sends and **Shift+Enter** inserts
+  a newline. The **Send** button is an alternative. The field grows with the
+  message up to 40% of the window height and then scrolls.
+- While execution is running, the composer's control row also shows a square
+  **Stop** button. It requests server-side interruption, refreshes the reported
+  state, and disappears when execution finishes. Closing, moving, or disabling
+  the UI is not a stop action: execution continues and reopening chat recovers
+  its current state.
+- The **Agent** and **Model** selectors are compact pills in the composer's
+  control row. They list server-provided options for the current location; a
+  long selected model name is available in the selector's tooltip. A change is
+  applied on the server and the confirmed selection is refreshed. A failed
+  change leaves the previous confirmed selection in place and displays an
+  error.
 - Submitted text appears immediately, followed by incremental Markdown and the
   final execution state. Connection, synchronization, and execution failures
   appear in the view rather than as repeated global notifications.
-- **Stop** requests server-side interruption of the active execution and
-  refreshes the reported state. Closing, moving, or disabling the UI is not a
-  stop action: execution continues and reopening chat recovers its current
-  state.
-- The **Agent** and **Model** selectors list server-provided options for the
-  current location. A change is applied on the server and the confirmed
-  selection is refreshed. A failed change leaves the previous confirmed
-  selection in place and displays an error.
 - **Retry discovery** is available after connection failure or exhaustion. It
   is disabled while an automatic bounded-backoff attempt is running.
 
@@ -174,9 +181,10 @@ execution.
 
 Sending uses a stable prompt identity. If the connection fails before admission
 is confirmed, the draft is retained and the message is shown as **Not
-confirmed**. The plugin reconciles server state before any retry and reuses the
-same identity, so an already-admitted message is not duplicated. Use
-**Reconcile and retry**, or **Return text to editor** to edit the retained text.
+confirmed** in the composer card. The plugin reconciles server state before any
+retry and reuses the same identity, so an already-admitted message is not
+duplicated. Use **Reconcile and retry**, or **Return text to editor** to edit the
+retained text.
 
 ## Markdown and vault links
 

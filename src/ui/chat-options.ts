@@ -46,8 +46,13 @@ export function fillModelOptions(select: HTMLSelectElement, models: readonly Mod
 	}
 	const value = selected ? modelKey(selected) : '';
 	if (selected && !models.some((model) => modelKey(model) === value)) {
+		// A session can carry a variant the current list does not expose; keep the
+		// full selected value while still showing the model's display name.
+		const match = models.find((model) => model.providerID === selected.providerID
+			&& (model.modelID ?? model.id) === selected.id);
+		const label = match ? `${match.providerID} · ${match.name}` : `${selected.providerID} · ${selected.id}`;
 		select.createEl('option', {
-			text: `${selected.providerID} · ${selected.id}`, value,
+			text: selected.variant ? `${label} / ${selected.variant}` : label, value,
 		});
 	}
 	select.value = value;

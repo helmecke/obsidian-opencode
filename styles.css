@@ -35,15 +35,11 @@
 	color: var(--text-muted);
 }
 
-.opencode-chat-selectors,
 .opencode-chat-conversations {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-2);
 	flex-wrap: wrap;
-}
-
-.opencode-chat-conversations {
 	padding: var(--size-4-2) var(--size-4-4);
 	border-bottom: 1px solid var(--background-modifier-border);
 }
@@ -298,28 +294,182 @@
 }
 
 .opencode-chat-composer {
+	flex: 0 0 auto;
+	padding: var(--size-4-2) var(--size-4-3);
+	background-color: transparent;
+}
+
+.opencode-composer-card {
 	display: flex;
 	flex-direction: column;
 	gap: var(--size-4-1);
-	padding: var(--size-4-3) var(--size-4-4);
-	border-top: 1px solid var(--background-modifier-border);
-	background-color: var(--background-secondary);
+	padding: var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background-color: var(--background-primary);
+	transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.opencode-chat-input {
+.opencode-composer-card:focus-within {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.opencode-composer-card .opencode-chat-input {
 	width: 100%;
-	resize: vertical;
-	min-height: 4.5em;
+	height: var(--opencode-composer-input-height, auto);
+	min-height: 3.25em;
+	max-height: 40vh;
+	padding: var(--size-4-1) var(--size-4-2);
+	border: none;
+	border-radius: var(--radius-s);
+	background-color: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	resize: none;
+	overflow-y: hidden;
 	font-family: var(--font-interface);
+	font-size: var(--font-ui-medium);
+	line-height: var(--line-height-normal);
 }
 
-.opencode-chat-composer-actions {
+.opencode-composer-card .opencode-chat-input:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.opencode-composer-card .opencode-chat-input.is-scrollable {
+	overflow-y: auto;
+}
+
+.opencode-composer-toolbar {
 	display: flex;
-	justify-content: flex-end;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-1);
+	flex-wrap: wrap;
+	padding-top: var(--size-4-1);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
-.opencode-chat-prompt-actions:empty {
+.opencode-composer-toolbar-start {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: var(--size-4-1);
+	/* Reserve the stop slot so execution state changes never shift the field or selectors. */
+	min-width: 2.25rem;
+	min-height: 2.25rem;
+}
+
+.opencode-composer-toolbar-end {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--size-4-1);
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	min-width: 0;
+	margin-inline-start: auto;
+}
+
+.opencode-composer-select {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	min-width: 0;
+	max-width: 15em;
+}
+
+.opencode-composer-select-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-composer-select select {
+	min-width: 0;
+	max-width: 13em;
+	height: 1.9em;
+	padding: 0 var(--size-4-1);
+	border: 1px solid transparent;
+	border-radius: var(--radius-l);
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+.opencode-composer-select select:hover {
+	background-color: var(--background-secondary-alt);
+	color: var(--text-normal);
+}
+
+.opencode-composer-select select:focus-visible {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.opencode-composer-select select:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+
+.opencode-composer-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.opencode-composer-icon:hover {
+	background-color: var(--background-secondary-alt);
+	color: var(--text-normal);
+}
+
+.opencode-composer-icon:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.opencode-composer-icon:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+
+.opencode-composer-icon[hidden] {
 	display: none;
+}
+
+.opencode-composer-stop {
+	border-color: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.opencode-composer-send {
+	border-color: var(--interactive-accent);
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.opencode-composer-send:hover {
+	border-color: var(--interactive-accent-hover);
+	background-color: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+
+.opencode-composer-send:disabled {
+	border-color: var(--background-modifier-border);
+	background-color: var(--background-secondary);
+	color: var(--text-faint);
+	opacity: 1;
 }
 
 .opencode-chat-prompt-actions {
@@ -327,8 +477,14 @@
 	align-items: center;
 	gap: var(--size-4-2);
 	flex-wrap: wrap;
+	padding-top: var(--size-4-1);
+	border-top: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.opencode-chat-prompt-actions:empty {
+	display: none;
 }
 
 .opencode-muted {

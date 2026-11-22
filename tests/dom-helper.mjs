@@ -30,6 +30,9 @@ export function installDom() {
 	element.toggleClass = function toggleClass(name, value) { this.classList.toggle(name, value); };
 	element.setText = function setText(text) { this.textContent = String(text); };
 	element.setAttr = function setAttr(name, value) { this.setAttribute(name, String(value)); };
+	element.setCssProps = function setCssProps(props) {
+		for (const [name, value] of Object.entries(props)) this.style.setProperty(name, value);
+	};
 	const notices = [];
 	class Component {
 		events = [];
@@ -90,6 +93,13 @@ export function createObsidian(app, notices = [], extra = {}) {
 			unregister(handler) { this.handlers.delete(handler); }
 		},
 		Notice: class { constructor(message) { notices.push(message); } },
+		setIcon(element, icon) {
+			element.empty();
+			const svg = element.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+			svg.setAttribute('class', `svg-icon lucide-${icon}`);
+			svg.setAttribute('aria-hidden', 'true');
+			element.appendChild(svg);
+		},
 		MarkdownRenderer: {
 			async render(_app, markdown, el) {
 				const text = document.createElement('p');

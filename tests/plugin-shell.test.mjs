@@ -129,6 +129,29 @@ test('native view renders the conversation shell and clears its content on close
 	assert.ok(view.messagesEl);
 	assert.ok(view.composer);
 	assert.ok(view.interactionsEl);
+	const card = view.contentEl.querySelector('.opencode-composer-card');
+	assert.ok(card, 'The composer renders as one card');
+	assert.equal(card.parentElement.classList.contains('opencode-chat-composer'), true);
+	assert.ok(card.querySelector('.opencode-chat-input') === view.composer);
+	assert.ok(card.querySelector('.opencode-composer-toolbar-start'));
+	assert.ok(card.querySelector('.opencode-composer-toolbar-end'));
+	assert.ok(card.querySelector('.opencode-chat-prompt-actions'));
+	assert.equal(view.sendButton.getAttribute('aria-label'), 'Send message');
+	assert.match(view.sendButton.title, /Ctrl\/Cmd\+Enter/);
+	assert.ok(view.sendButton.querySelector('.lucide-arrow-up'), 'Send uses the arrow-up icon');
+	assert.equal(view.stopButton.getAttribute('aria-label'), 'Stop execution');
+	assert.match(view.stopButton.title, /interrupt/i);
+	assert.ok(view.stopButton.querySelector('.lucide-square'), 'Stop uses the square icon');
+	assert.equal(view.stopButton.hidden, true, 'Stop is absent while idle');
+	assert.ok(view.agentSelect.getAttribute('aria-label'));
+	assert.ok(view.modelSelect.getAttribute('aria-label'));
+	assert.match(view.composer.placeholder, /^Plan, build, or ask\./);
+	assert.equal(view.composer.getAttribute('aria-label'), 'Message OpenCode');
+	const labels = [...card.querySelectorAll('[aria-label]')].map((element) => element.getAttribute('aria-label').toLowerCase());
+	assert.deepEqual(labels.filter((label) => /attach|voice|microphone|shield|command|skill/.test(label)), [],
+		'The card exposes no unsupported controls');
+	const classes = [...card.querySelectorAll('*')].flatMap((element) => [...element.classList]);
+	assert.deepEqual(classes.filter((name) => /attach|voice|microphone|shield|command|skill/.test(name)), []);
 	await view.onOpen();
 	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header').length, 1);
 	await view.onClose();
@@ -374,6 +397,9 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	assert.deepEqual(options, [['old', 'Old'], ['new', 'New']]);
 	assert.deepEqual([...view.agentSelect.options].map((option) => option.value), ['plan', 'build']);
 	assert.deepEqual([...view.modelSelect.options].map((option) => option.value).length, 2);
+	assert.equal(view.agentSelect.getAttribute('aria-label'), 'Agent: Plan');
+	assert.equal(view.modelSelect.getAttribute('aria-label'), 'Model: p · One');
+	assert.equal(view.modelSelect.title, 'Model: p · One', 'The full selected value is available as a tooltip');
 
 	view.agentSelect.value = 'build';
 	view.agentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -408,6 +434,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	assert.equal(view.sessions.state.selected.id, 'created-1');
 
 	await wait();
+	assert.equal(view.stopButton.hidden, false, 'Stop is present while execution is running');
 	assert.equal(view.stopButton.disabled, false);
 	const interrupts = fixture.calls.filter((call) => call[0] === 'interrupt').length;
 	click(view.stopButton);
@@ -417,6 +444,28 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	await wait();
 	assert.equal(fixture.calls.filter((call) => call[0] === 'interrupt').length, interrupts + 1,
 		'Closing the view must not interrupt execution');
+	plugin.unload();
+});
+
+test('composer grows with its text up to 40vh and scrolls internally beyond the cap', async () => {
+	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+	const view = registrations.views.get('opencode-chat')({});
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	const composer = view.composer;
+	const setScrollHeight = (value) => Object.defineProperty(composer, 'scrollHeight', { configurable: true, get: () => value });
+	setScrollHeight(72);
+	composer.value = 'one\ntwo';
+	composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	assert.equal(composer.style.getPropertyValue('--opencode-composer-input-height'), '72px', 'The field resets to its content height');
+	assert.equal(composer.classList.contains('is-scrollable'), false);
+	setScrollHeight(5000);
+	composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	const height = parseFloat(composer.style.getPropertyValue('--opencode-composer-input-height'));
+	assert.ok(Math.abs(height - window.innerHeight * 0.4) < 0.5, 'Growth stops at 40vh');
+	assert.equal(composer.classList.contains('is-scrollable'), true, 'Longer text scrolls inside the field');
 	plugin.unload();
 });
 

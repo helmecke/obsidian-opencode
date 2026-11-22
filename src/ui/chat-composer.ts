@@ -1,49 +1,162 @@
+import { setIcon } from 'obsidian';
+import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
+import { fillAgentOptions, fillModelOptions, modelValue } from './chat-options';
 
 export interface ComposerHandlers {
 	send(): void;
 	retryPrompt(): void;
 	dismissPrompt(): void;
+	setAgent(agent: string): void;
+	setModel(model: ModelRef): void;
+	stop(): void;
 }
 
-/** Multiline composer, send control, and recoverable uncertain-send actions. */
+/** Unified message card: textarea, agent/model controls, stop/send, and uncertain-send recovery. */
 export class ChatComposer {
+	private readonly card: HTMLElement;
 	private readonly composer: HTMLTextAreaElement;
 	private readonly sendButtonEl: HTMLButtonElement;
+	private readonly stopButtonEl: HTMLButtonElement;
+	private readonly agentSelectEl: HTMLSelectElement;
+	private readonly modelSelectEl: HTMLSelectElement;
 	private readonly promptActions: HTMLElement;
+	private signatures = { agents: '', models: '' };
+	private lastState?: SynchronizationState;
 
 	constructor(container: HTMLElement, private readonly handlers: ComposerHandlers) {
-		this.composer = container.createEl('textarea', {
+		this.card = container.createDiv({ cls: 'opencode-composer-card' });
+		this.composer = this.card.createEl('textarea', {
 			cls: 'opencode-chat-input',
-			attr: { rows: '3', placeholder: 'Message OpenCode. Ctrl/Cmd+Enter sends; Shift+Enter adds a line.', 'aria-label': 'Message OpenCode' },
+			attr: {
+				rows: '2',
+				placeholder: 'Plan, build, or ask. Ctrl/Cmd+Enter sends; Shift+Enter adds a line.',
+				'aria-label': 'Message OpenCode',
+			},
 		});
-		const actions = container.createDiv({ cls: 'opencode-chat-composer-actions' });
-		this.sendButtonEl = actions.createEl('button', { text: 'Send', cls: 'mod-cta' });
-		this.promptActions = container.createDiv({ cls: 'opencode-chat-prompt-actions' });
+		const toolbar = this.card.createDiv({ cls: 'opencode-composer-toolbar' });
+		const start = toolbar.createDiv({ cls: 'opencode-composer-toolbar-start' });
+		this.stopButtonEl = start.createEl('button', {
+			cls: 'opencode-composer-icon opencode-composer-stop',
+			attr: {
+				'aria-label': 'Stop execution',
+				title: 'Stop execution and interrupt the active OpenCode run',
+			},
+		});
+		setIcon(this.stopButtonEl, 'square');
+		this.stopButtonEl.hidden = true;
+		this.stopButtonEl.disabled = true;
+
+		const end = toolbar.createDiv({ cls: 'opencode-composer-toolbar-end' });
+		this.agentSelectEl = this.createSelect(end, 'Agent');
+		this.modelSelectEl = this.createSelect(end, 'Model');
+		this.sendButtonEl = end.createEl('button', {
+			cls: 'opencode-composer-icon opencode-composer-send',
+			attr: {
+				'aria-label': 'Send message',
+				title: 'Send message (Ctrl/Cmd+Enter)',
+			},
+		});
+		setIcon(this.sendButtonEl, 'arrow-up');
+		this.promptActions = this.card.createDiv({ cls: 'opencode-chat-prompt-actions' });
+
 		this.sendButtonEl.addEventListener('click', () => this.handlers.send());
+		this.stopButtonEl.addEventListener('click', () => this.handlers.stop());
+		this.agentSelectEl.addEventListener('change', () => {
+			const agent = this.agentSelectEl.value;
+			if (agent) this.handlers.setAgent(agent);
+		});
+		this.modelSelectEl.addEventListener('change', () => {
+			const model = modelValue(this.modelSelectEl.value);
+			if (model) this.handlers.setModel(model);
+		});
 		this.composer.addEventListener('keydown', (event) => {
 			if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) return;
 			event.preventDefault();
 			this.handlers.send();
 		});
-		this.composer.addEventListener('input', () => this.updateInput());
+		this.composer.addEventListener('input', () => {
+			this.resize();
+			this.updateInput();
+		});
 	}
 
 	get element(): HTMLTextAreaElement { return this.composer; }
 	get sendButton(): HTMLButtonElement { return this.sendButtonEl; }
+	get stopButton(): HTMLButtonElement { return this.stopButtonEl; }
+	get agentSelect(): HTMLSelectElement { return this.agentSelectEl; }
+	get modelSelect(): HTMLSelectElement { return this.modelSelectEl; }
 	get text(): string { return this.composer.value; }
 
-	setText(text: string): void { this.composer.value = text; }
-	clearIf(text: string): void { if (this.composer.value === text) this.composer.value = ''; }
+	setText(text: string): void {
+		this.composer.value = text;
+		this.resize();
+	}
+
+	clearIf(text: string): void {
+		if (this.composer.value !== text) return;
+		this.composer.value = '';
+		this.resize();
+	}
+
 	focus(): void { this.composer.focus(); }
 
 	update(state: SynchronizationState): void {
 		this.lastState = state;
 		const pending = state.pendingPrompt;
+		const running = state.conversation?.execution === 'running';
 		this.composer.disabled = state.phase === 'disposed';
+		this.stopButtonEl.hidden = !running;
+		this.stopButtonEl.disabled = state.phase !== 'ready' || !running;
 		this.sendButtonEl.disabled = state.phase !== 'ready' || !state.snapshot?.selected
 			|| state.interactionBusy !== undefined
 			|| (pending !== undefined && pending.phase !== 'admitted') || this.composer.value.trim().length === 0;
+		this.updateAgentOptions(state);
+		this.updateModelOptions(state);
+		this.renderPromptActions(state);
+	}
+
+	private createSelect(parent: HTMLElement, label: string): HTMLSelectElement {
+		const wrapper = parent.createDiv({ cls: 'opencode-composer-select' });
+		wrapper.createSpan({ text: label, cls: 'opencode-composer-select-label' });
+		return wrapper.createEl('select', { attr: { 'aria-label': label, title: label } });
+	}
+
+	private updateAgentOptions(state: SynchronizationState): void {
+		const agents = state.agents ?? [];
+		const selected = state.snapshot?.selected?.agent ?? '';
+		const signature = JSON.stringify([agents.map((agent) => [agent.id, agent.name]), selected, state.phase]);
+		if (signature !== this.signatures.agents) {
+			this.signatures.agents = signature;
+			fillAgentOptions(this.agentSelectEl, agents, selected);
+		}
+		this.agentSelectEl.disabled = state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
+		this.describeSelect(this.agentSelectEl, 'Agent');
+	}
+
+	private updateModelOptions(state: SynchronizationState): void {
+		const models = state.models ?? [];
+		const selected = state.snapshot?.selected?.model;
+		const signature = JSON.stringify([models.map((model) => [model.providerID, model.modelID, model.name]),
+			selected, state.phase]);
+		if (signature !== this.signatures.models) {
+			this.signatures.models = signature;
+			fillModelOptions(this.modelSelectEl, models, selected);
+		}
+		this.modelSelectEl.disabled = state.phase !== 'ready' || models.length === 0 || Boolean(state.interactionBusy);
+		this.describeSelect(this.modelSelectEl, 'Model');
+	}
+
+	private describeSelect(select: HTMLSelectElement, label: string): void {
+		const option = select.options[select.selectedIndex];
+		const selected = option?.textContent?.trim() ?? '';
+		const description = selected ? `${label}: ${selected}` : label;
+		select.setAttribute('aria-label', description);
+		select.title = description;
+	}
+
+	private renderPromptActions(state: SynchronizationState): void {
+		const pending = state.pendingPrompt;
 		this.promptActions.empty();
 		if (pending?.phase === 'uncertain') {
 			this.promptActions.createSpan({ text: 'Message not confirmed. Reconcile before retrying.', cls: 'opencode-uncertain' });
@@ -57,10 +170,20 @@ export class ChatComposer {
 		}
 	}
 
+	private resize(): void {
+		this.composer.setCssProps({ '--opencode-composer-input-height': 'auto' });
+		const scrollHeight = this.composer.scrollHeight;
+		// Hidden or unmounted views report zero and must keep the CSS-defined height.
+		if (!scrollHeight) return;
+		const viewport = this.composer.ownerDocument.defaultView?.innerHeight ?? 0;
+		const maxHeight = viewport > 0 ? viewport * 0.4 : scrollHeight;
+		const height = Math.min(scrollHeight, maxHeight);
+		this.composer.setCssProps({ '--opencode-composer-input-height': `${height}px` });
+		this.composer.toggleClass('is-scrollable', scrollHeight > height);
+	}
+
 	private updateInput(): void {
 		const state = this.lastState;
 		if (state) this.update(state);
 	}
-
-	private lastState?: SynchronizationState;
 }
