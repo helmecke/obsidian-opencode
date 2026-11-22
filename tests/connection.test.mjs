@@ -32,6 +32,16 @@ compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 						onChange: (change) => { this.change = change; } });
 					return this;
 				}
+				addToggle(callback) {
+					const control = {
+						value: undefined,
+						setValue(value) { control.value = value; return control; },
+						onChange(change) { control.change = change; },
+					};
+					callback(control);
+					this.toggle = control;
+					return this;
+				}
 			},
 		};
 		if (name === 'node:child_process' || name === 'child_process') {
@@ -97,9 +107,8 @@ test('true registration absence explains external startup; explicit retry reuses
 	for (let i = 0; i < 2; i++) {
 		await assert.rejects(coordinator.connect(), (error) => {
 			assert.equal(error.code, 'absent');
-			assert.match(error.message, /Start a compatible OpenCode installation outside Obsidian/);
-			assert.match(error.message, /Automatic startup is unavailable/);
-			assert.match(error.message, /No process was launched/);
+			assert.match(error.message, /Enable Start OpenCode automatically/);
+			assert.match(error.message, /start a compatible OpenCode 2 installation outside Obsidian/);
 			return true;
 		});
 	}
@@ -161,7 +170,7 @@ test('health failures, identity mismatch, and changed credentials reject reuse',
 	await assert.rejects(discoverConnection(async () => reads++ ? undefined : registration(url)), { code: 'identity' });
 	for (const status of [401, 403, 500]) {
 		const bad = await server(t, (_req, res) => { res.writeHead(status); res.end(secret); });
-		await assert.rejects(discoverConnection(async () => registration(bad)), (error) => {
+		await assert.rejects(discoverConnection(async () => registration(bad), undefined, () => true), (error) => {
 			assert.ok(['authentication', 'transport'].includes(error.code));
 			assert.ok(!error.stack.includes(secret));
 			return true;
@@ -169,10 +178,19 @@ test('health failures, identity mismatch, and changed credentials reject reuse',
 	}
 });
 
+test('a registration whose process is gone is stale, while a reachable service is never launch permission', async (t) => {
+	const instance = createServer(health);
+	await new Promise((resolve) => instance.listen(0, '127.0.0.1', resolve));
+	const url = `http://127.0.0.1:${instance.address().port}`;
+	instance.close();
+	await assert.rejects(discoverConnection(async () => registration(url), undefined, () => false), { code: 'stale' });
+	await assert.rejects(discoverConnection(async () => registration(url), undefined, () => true), { code: 'transport' });
+});
+
 test('malformed health data fails closed without exposing response data', async (t) => {
 	for (const body of ['null', '{}', JSON.stringify({ pid: 42, version: secret }), secret]) {
 		const url = await server(t, (_req, res) => { res.setHeader('content-type', 'application/json'); res.end(body); });
-		await assert.rejects(discoverConnection(async () => registration(url)), (error) => {
+		await assert.rejects(discoverConnection(async () => registration(url), undefined, () => true), (error) => {
 			assert.ok(['identity', 'transport'].includes(error.code));
 			assert.ok(!error.stack.includes(secret));
 			return true;
@@ -185,7 +203,7 @@ test('origin binding, redirects, and oversized health responses fail closed', as
 	const destination = await server(t, (_req, res) => { hits++; res.end('unexpected'); });
 	const redirect = await server(t, (_req, res) => { res.writeHead(302, { location: destination }); res.end(); });
 	await assert.rejects(createNodeFetch(redirect)(destination));
-	await assert.rejects(discoverConnection(async () => registration(redirect)), { code: 'transport' });
+	await assert.rejects(discoverConnection(async () => registration(redirect), undefined, () => true), { code: 'transport' });
 	assert.equal(hits, 0);
 	const large = await server(t, (_req, res) => { res.end('x'.repeat(65_537)); });
 	await assert.rejects(discoverConnection(async () => registration(large)), { code: 'transport' });
@@ -221,30 +239,43 @@ test('bounded registration reads distinguish missing, malformed size, and non-fi
 
 test('settings retain executable paths with spaces as data and discard credentials', () => {
 	const path = 'C:\\Program Files\\OpenCode\\opencode.exe';
-	assert.deepEqual(loadSettings({ executablePath: path, password: secret, url: 'http://example.com' }), { executablePath: path });
+	assert.deepEqual(loadSettings({ executablePath: path, password: secret, url: 'http://example.com' }),
+		{ executablePath: path, autoStart: true });
 	for (const executablePath of ['bad\npath', 'bad\rpath', 'bad\0path', 42, null, {}]) {
-		assert.deepEqual(loadSettings({ executablePath }), { executablePath: '' });
+		assert.deepEqual(loadSettings({ executablePath }), { executablePath: '', autoStart: true });
 	}
-	assert.deepEqual(loadSettings(undefined), { executablePath: '' });
-	assert.deepEqual(loadSettings({ executablePath: 'opencode.exe & other.exe' }), { executablePath: 'opencode.exe & other.exe' });
+	assert.deepEqual(loadSettings(undefined), { executablePath: '', autoStart: true });
+	assert.deepEqual(loadSettings({ executablePath: 'opencode.exe & other.exe' }),
+		{ executablePath: 'opencode.exe & other.exe', autoStart: true });
+	assert.deepEqual(loadSettings({ autoStart: false }), { executablePath: '', autoStart: false });
+	assert.deepEqual(loadSettings({ autoStart: true }), { executablePath: '', autoStart: true });
+	assert.deepEqual(loadSettings({ autoStart: 'no' }), { executablePath: '', autoStart: true });
 });
 
-test('inactive executable setting discloses its limits and saves valid path data only', async () => {
+test('settings tab activates the OpenCode 2 path and automatic startup and saves valid data only', async () => {
 	const settings = loadSettings(undefined);
 	const saved = [];
 	const tab = new OpenCodeSettingTab({}, {}, settings, async () => { saved.push({ ...settings }); });
 	tab.containerEl = { empty() {} };
 	tab.display();
-	const control = settingControls.at(-1);
-	assert.match(control.description, /future use only; no executable lookup, validation, or launch/);
-	assert.match(control.description, /Start OpenCode externally/);
+	const pathControl = settingControls.at(-2);
+	assert.equal(pathControl.name, 'OpenCode 2 executable path');
+	assert.match(pathControl.description, /Full path to the OpenCode 2 executable/);
+	assert.match(pathControl.description, /never run through a shell/);
 	const path = 'C:\\Program Files\\OpenCode\\opencode.exe';
-	await control.change(path);
-	for (const invalid of ['bad\0path', 'bad\rpath', 'bad\npath']) await control.change(invalid);
-	assert.deepEqual(settings, { executablePath: path });
-	assert.deepEqual(saved, [{ executablePath: path }]);
-	await control.change('');
-	assert.deepEqual(saved.at(-1), { executablePath: '' });
+	await pathControl.change(path);
+	for (const invalid of ['bad\0path', 'bad\rpath', 'bad\npath']) await pathControl.change(invalid);
+	assert.deepEqual(settings, { executablePath: path, autoStart: true });
+	assert.deepEqual(saved, [{ executablePath: path, autoStart: true }]);
+	const toggle = settingControls.at(-1).toggle;
+	assert.equal(settingControls.at(-1).name, 'Start OpenCode automatically');
+	assert.match(settingControls.at(-1).description, /plugin-owned OpenCode 2 process/);
+	assert.equal(toggle.value, true);
+	await toggle.change(false);
+	assert.deepEqual(settings, { executablePath: path, autoStart: false });
+	assert.deepEqual(saved.at(-1), { executablePath: path, autoStart: false });
+	await pathControl.change('');
+	assert.deepEqual(saved.at(-1), { executablePath: '', autoStart: false });
 });
 
 test('disposing before queued discovery prevents discovery and is idempotent', async () => {

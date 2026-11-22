@@ -191,12 +191,25 @@ export class ChatRenderer {
 		if (!state || !this.statusEl || !this.retryButton) return;
 		const execution = state.conversation?.execution;
 		switch (state.phase) {
-			case 'ready':
-				this.statusEl.setText(`Connected${execution && execution !== 'unknown' ? ` · ${this.executionLabel(execution)}` : ''}`);
+			case 'ready': {
+				if (state.connection?.phase === 'starting') {
+					this.statusEl.setText(state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…');
+					this.retryButton.disabled = true;
+					break;
+				}
+				if (state.connection?.phase === 'failed' && state.connection.error) {
+					this.statusEl.setText(state.connection.error);
+					this.retryButton.disabled = false;
+					break;
+				}
+				this.statusEl.setText(`Connected${this.connectionLabel(state)}${execution && execution !== 'unknown' ? ` · ${this.executionLabel(execution)}` : ''}`);
 				this.retryButton.disabled = false;
 				break;
+			}
 			case 'synchronizing':
-				this.statusEl.setText(state.snapshot ? 'Reconnecting…' : 'Synchronizing conversation…');
+				this.statusEl.setText(state.connection?.phase === 'starting'
+					? (state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…')
+					: state.snapshot ? 'Reconnecting…' : 'Synchronizing conversation…');
 				this.retryButton.disabled = true;
 				break;
 			case 'retrying':
@@ -215,6 +228,11 @@ export class ChatRenderer {
 				this.statusEl.setText('Connecting…');
 				this.retryButton.disabled = false;
 		}
+	}
+
+	private connectionLabel(state: SynchronizationState): string {
+		return state.connection?.mode === 'managed' ? ' · Managed service'
+			: state.connection?.mode === 'shared' ? ' · Shared service' : '';
 	}
 
 	private executionLabel(execution: string): string {

@@ -1,5 +1,6 @@
 import type { AgentInfo, FormInfo, ModelInfo, PermissionRequest } from '@opencode/client';
 import * as timers from 'node:timers';
+import type { ConnectionStatus } from '../opencode/connection';
 import type { SessionSnapshot } from '../opencode/sessions';
 import type { ConversationProjection } from './session-reducer';
 import type { PendingPrompt } from './prompt-coordinator';
@@ -24,6 +25,7 @@ export interface SynchronizationState {
 	readonly optionsError?: string;
 	readonly actionError?: string;
 	readonly interactionBusy?: InteractionBusy;
+	readonly connection?: ConnectionStatus;
 }
 
 export interface Policy {

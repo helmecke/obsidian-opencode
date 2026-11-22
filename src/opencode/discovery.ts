@@ -6,6 +6,14 @@ import { assertSupportedOpenCodeVersion } from './compatibility';
 import { withApiValidation } from './api-contract';
 import { ConnectionError } from './errors';
 import { createNodeFetch, localOrigin } from './node-fetch';
+import { isProcessAlive } from './process';
+
+function transportFailure(error: unknown): boolean {
+	if (error instanceof ConnectionError) return error.code === 'transport';
+	const value = error && typeof error === 'object' ? error as Record<string, unknown> : undefined;
+	const cause = value?.cause && typeof value.cause === 'object' ? value.cause as Record<string, unknown> : undefined;
+	return value?.reason === 'Transport' || cause?.reason === 'Transport';
+}
 
 const MAX_REGISTRATION_BYTES = 16_384;
 
@@ -46,7 +54,8 @@ function parseRegistration(text: string): Info & { password: string } {
 	} catch { throw new ConnectionError('registration'); }
 }
 
-export async function discoverConnection(read = () => readRegistration(fallback()), signal?: AbortSignal) {
+export async function discoverConnection(read = () => readRegistration(fallback()), signal?: AbortSignal,
+	alive: (pid: number) => boolean = isProcessAlive) {
 	signal?.throwIfAborted();
 	let text: string | undefined;
 	try { text = await read(); } catch { throw new ConnectionError('registration'); }
@@ -61,6 +70,10 @@ export async function discoverConnection(read = () => readRegistration(fallback(
 	try {
 		health = await probe.server.info({ signal: AbortSignal.timeout(10_000) });
 	} catch (error) {
+		// A registered process that no longer exists is a stale registration, not
+		// permission to replace a live but unhealthy service. A response of any
+		// kind still proves the service exists.
+		if (transportFailure(error) && !alive(info.pid)) throw new ConnectionError('stale');
 		const status = error && typeof error === 'object' && 'status' in error ? error.status : undefined;
 		throw new ConnectionError(status === 401 || status === 403 ? 'authentication' : 'transport');
 	}

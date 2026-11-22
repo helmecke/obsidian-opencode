@@ -7,15 +7,19 @@ Connect the Obsidian interface to an already-running local OpenCode service with
 ## Requirements
 
 ### Requirement: Lazy local service discovery and reuse
-Opening chat SHALL discover and reuse a compatible healthy already-running local service. Plugin loading alone SHALL NOT contact the service. The plugin SHALL NOT download OpenCode, launch a service, or restart or replace an incompatible shared service.
+Opening chat SHALL discover and reuse a compatible healthy already-running local service. Plugin loading alone SHALL NOT contact the service. The plugin SHALL NOT download OpenCode or restart or replace an incompatible shared service. When no healthy service is registered and automatic startup is enabled, the plugin MAY start and own a private managed OpenCode 2 runtime as specified by the managed-opencode-runtime capability.
 
 #### Scenario: Compatible service exists
 - **WHEN** chat opens while a compatible healthy service is registered
 - **THEN** the plugin connects without starting another service
 
 #### Scenario: Service is absent
-- **WHEN** chat opens with no registered running service
-- **THEN** the plugin explains that no service is available and automatic startup is unavailable, with explicit discovery retry and no process launch
+- **WHEN** chat opens with no registered running service and automatic startup is enabled
+- **THEN** the plugin starts the managed runtime
+
+#### Scenario: Service is absent and automatic startup is disabled
+- **WHEN** chat opens with no registered running service and automatic startup is disabled
+- **THEN** the plugin explains that no service is available with explicit discovery retry and no process launch
 - **AND** the user can start OpenCode outside Obsidian and retry
 
 #### Scenario: Service version is outside the eligible range
@@ -39,7 +43,7 @@ The plugin SHALL use a documented, validated OpenCode 2.x eligibility range rath
 - **THEN** the plugin reports version incompatibility with recovery guidance and does not treat the result as service absence
 
 ### Requirement: Shared-service ownership preservation
-The plugin SHALL leave shared service registration, configuration, and process ownership unchanged, including when discovery fails or another service appears. Automatic startup is outside this change and tracked in [GitHub issue #1](https://github.com/helmecke/obsidian-opencode/issues/1), not a release prerequisite for the existing-service workflow.
+The plugin SHALL leave shared service registration, configuration, and process ownership unchanged, including when discovery fails, another service appears, or a managed runtime is started or stopped.
 
 #### Scenario: Another service appears during discovery
 - **WHEN** another service changes the registration while the plugin is discovering a service
@@ -48,17 +52,6 @@ The plugin SHALL leave shared service registration, configuration, and process o
 #### Scenario: Registration cannot be trusted
 - **WHEN** registration is malformed, unreadable, unauthenticated, unhealthy, or incompatible
 - **THEN** the plugin reports the error without interpreting it as permission to launch or replace a service
-
-### Requirement: Inactive executable configuration
-The plugin SHALL retain an executable-path setting as future configuration, disclose that it performs no executable lookup, validation, or launch, and preserve paths as data rather than shell commands. Unsupported service versions SHALL produce actionable errors and an explicit retry action.
-
-#### Scenario: Installation path contains spaces
-- **WHEN** the configured executable is installed at a valid path containing spaces
-- **THEN** saving preserves spaces as path data without evaluating or launching it
-
-#### Scenario: Saving future configuration
-- **WHEN** the user saves an executable path
-- **THEN** the plugin rejects NUL characters and line breaks, saves only valid path data, and does not check for an executable or launch a process
 
 ### Requirement: Authenticated local transport
 The plugin SHALL use authenticated local service connections and SHALL NOT persist service credentials in plugin settings or expose them in logs and user-visible errors.

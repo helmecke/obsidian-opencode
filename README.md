@@ -5,12 +5,12 @@ This development build provides a movable, theme-aware conversation view with
 streamed answers, vault link navigation, tool activity, permission decisions,
 and structured agent forms. It is not published in the community catalog.
 
-**Start OpenCode outside Obsidian before opening chat.** The plugin discovers
-and reuses an already-running compatible local service; it does not launch one.
-Automatic startup is deferred in [GitHub issue #1](https://github.com/helmecke/obsidian-opencode/issues/1).
-If no service is registered, chat explains that automatic startup is unavailable,
-and offers **Retry discovery** after you start OpenCode outside Obsidian. No
-process is launched by the plugin.
+**A healthy OpenCode service is reused first.** When none is registered, the
+plugin can start and own a private OpenCode 2 process instead of requiring you
+to launch one first. Open **Settings → OpenCode** to enable or disable
+**Start OpenCode automatically** (on by default) and to set the executable path.
+The plugin never starts a process merely because Obsidian loads, and it never
+downloads OpenCode.
 
 ## Supported and tested versions
 
@@ -89,34 +89,50 @@ and reload the plugin to test changes. Do not commit generated `main.js` or
 
 ## Executable-path configuration
 
-Open **Settings → OpenCode → OpenCode executable path**. Enter only the full
-executable path, without surrounding quotes or arguments, for example
-`C:\Tools\OpenCode 2.2.2\opencode.exe`. Spaces are preserved as path data; this
-is not a shell-command field. NUL characters and line breaks are rejected. The
-value is saved in Obsidian plugin data.
+Open **Settings → OpenCode → OpenCode 2 executable path**. Enter the full path
+to the OpenCode 2 executable, without surrounding quotes or arguments, for
+example `C:\Tools\OpenCode 2.2.2\opencode.exe`. Spaces are preserved as path
+data; the field is never run through a shell. NUL characters and line breaks
+are rejected. The value is saved in Obsidian plugin data.
 
-The field is retained future configuration. **No executable lookup, validation,
-or launch is implemented.** Saving a path does not start anything, check that
-the file exists, or affect discovery of an existing service. There is no
-server-URL, service-password, or provider-key setting. Automatic startup and
-executable handling belong to issue #1, not this plugin version.
+The path is an override. When it is empty, the plugin looks for `opencode.exe`
+on Windows or `opencode` elsewhere in `PATH` and common install locations such
+as `~/.opencode/bin` or `/usr/local/bin`. On Windows only a native `.exe` is
+accepted; the `.cmd` shim is rejected. Before launching, the plugin runs
+`opencode --version` and accepts only a stable release in `>=2.2.2 <3.0.0`.
+An OpenCode 1.x executable is rejected with a fixed error and is never launched.
+
+There is no server-URL, service-password, or provider-key setting. Automatic
+startup never writes the shared service registration.
 
 ## Start OpenCode and open chat
 
-Only if a healthy, authenticated, eligible OpenCode service is already registered
-for the same OS user:
+Automatic startup is controlled by **Settings → OpenCode → Start OpenCode
+automatically** (default on). With it enabled:
 
 1. Select the **OpenCode** ribbon action or run **OpenCode: Open chat** from the
    command palette. The view opens in a main tab; move it to a sidebar as needed.
 2. The plugin lazily reads the standard local registration and checks the
    service version, PID identity, authenticated health response, and required API
-   contracts before enabling sends and decisions. It accepts
-   literal loopback HTTP endpoints only and rejects redirects. Credentials are
-   transient and never written to settings or errors.
-3. After a failed attempt, select **Retry discovery**. Absent registration
-   explains how to start OpenCode outside Obsidian; malformed, unreachable,
-   unauthenticated, incompatible, or changed registrations show fixed errors
-   instead of permitting startup. Retry never launches a process.
+   contracts before enabling sends and decisions. It accepts literal loopback
+   HTTP endpoints only and rejects redirects. Credentials are transient and never
+   written to settings or errors.
+3. When a healthy compatible service is registered, the plugin reuses it and
+   shows **Connected · Shared service**. When no service is registered or the
+   registration points at a process that is gone, the plugin resolves the
+   configured executable, validates its version, starts a private `serve` process
+   on an ephemeral loopback port, and shows **Connected · Managed service**.
+4. After a failed attempt, select **Retry discovery**. Absence explains how to
+   enable automatic startup or start OpenCode outside Obsidian; malformed,
+   unreachable, unauthenticated, incompatible, or changed shared registrations
+   show fixed errors and never permission to replace the service.
+
+The managed process keeps running while the plugin is enabled, including after
+you close the chat view. Disabling the plugin stops the process tree. After a
+crash, the plugin makes a bounded number of restart attempts before showing an
+error with **Retry discovery**. The private server uses a fresh random password,
+a plugin-private state directory, and never writes or changes the shared
+`service.json`.
 
 Do not edit OpenCode's registration, change CORS, or restart another client's
 service to work around discovery errors. Use the official
@@ -166,9 +182,10 @@ read-only workarounds.
 ### Conversation persistence and connection recovery
 
 OpenCode owns the transcript and execution. The plugin stores only the
-executable-path setting and the selected session ID plus its vault directory; it
-does not duplicate transcripts or store service credentials. Reopening always
-uses OpenCode's messages as the source of truth.
+executable-path setting, the automatic-startup preference, the selected session
+ID plus its vault directory, and a transient record of a managed process PID for
+orphan cleanup; it does not duplicate transcripts or store service credentials.
+Reopening always uses OpenCode's messages as the source of truth.
 
 On connect or reconnect, the plugin subscribes to live events, buffers relevant
 ones, and loads authoritative messages, active execution, pending permissions,
@@ -265,15 +282,20 @@ or provider keys into the executable-path field, logs, or bug reports. Local
 discovery relies on the normal OS-user trust boundary; it does not protect
 against a malicious process running as the same user.
 
-## Shared-service ownership
+## Shared-service and managed-service ownership
 
-OpenCode owns the shared background service and its execution state; the plugin
-is only a client. It reads registration without modifying it and never stops,
-restarts, or replaces the service. Closing the view releases its UI resources
-without interrupting execution. Disabling the plugin aborts plugin-owned
-requests, subscriptions, retries, and timers without stopping the shared service
-or interrupting another client's work. Automatic startup remains outside this
-change in issue #1.
+A healthy shared OpenCode service owns its process and execution state; the
+plugin is only a client. It reads the shared registration without modifying it
+and never stops, restarts, or replaces that service. Closing the view releases
+its UI resources without interrupting execution.
+
+A service started by the plugin is private: its own loopback port, password,
+state directory, and process tree. The plugin starts it lazily when chat opens
+with no healthy shared service, keeps it running while the plugin is enabled, and
+stops its process tree on unload. It never writes the shared registration, and a
+recorded PID from an earlier run is stopped before a new managed process starts.
+Disabling the plugin aborts plugin-owned requests, subscriptions, retries, and
+timers without stopping a shared service or interrupting another client's work.
 
 Do not delete or edit OpenCode's service registration, private service
 configuration, or database to fix plugin discovery. Coordinate service lifecycle
@@ -281,10 +303,12 @@ changes with other connected clients outside this plugin.
 
 ## Verification status
 
-`npm test` covers connection/discovery safety, session scoping and persistence,
-event reduction, synchronization and recovery, prompt identity, link routing and
-Markdown batching, form validation, permission payloads, tool entries, and the
-native view controls. `npm run build` and `npm run lint` are the other required
-checks. These automated checks do not replace the manual Obsidian acceptance
-checks listed in [runtime verification](docs/runtime-compatibility.md); that
-document records what has and has not been observed.
+`npm test` covers connection/discovery safety, executable resolution and version
+validation, managed spawn arguments and environment, ephemeral ports, readiness,
+lifecycle/orphan handling, shared-versus-managed fallback, session scoping and
+persistence, event reduction, synchronization and recovery, prompt identity, link
+routing and Markdown batching, form validation, permission payloads, tool entries,
+and the native view controls. `npm run build` and `npm run lint` are the other
+required checks. These automated checks do not replace the manual Obsidian
+acceptance checks listed in [runtime verification](docs/runtime-compatibility.md);
+that document records what has and has not been observed.

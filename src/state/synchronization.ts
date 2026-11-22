@@ -29,21 +29,27 @@ export class SynchronizationCoordinator {
 	private failures = 0;
 	private readonly policy: Policy;
 	private readonly actions: SynchronizationActions;
+	private readonly unsubscribeConnection: () => void;
 	constructor(readonly connection: ConnectionCoordinator, readonly sessions: SessionCoordinator,
 		policy: Partial<Policy> = {}, private readonly scheduler = clock,
 		private readonly promptID: () => string = createPromptID) {
 		this.policy = { ...defaultPolicy, ...policy };
 		if (Object.values(this.policy).some((n) => !Number.isSafeInteger(n) || n < 1)) throw new Error('Invalid recovery policy');
 		this.actions = new SynchronizationActions(this);
+		this.unsubscribeConnection = connection.subscribe?.(() => {
+			if (this.value.phase === 'inactive' || this.value.phase === 'disposed') return;
+			this.publish({ ...this.value });
+		}) ?? (() => undefined);
 		connection.signal.addEventListener('abort', this.dispose, { once: true });
 	}
 
 	get state(): SynchronizationState {
-		if (this.value.phase !== 'ready') return this.value;
+		const base = { ...this.value, connection: this.connection.status };
+		if (base.phase !== 'ready') return base;
 		const conversation = this.ingestion?.state;
 		// Ingestion discards uncertain state immediately, before its scheduled recovery callback.
-		if (this.ingestion && !conversation) return { ...this.value, phase: 'synchronizing', conversation: undefined, permissions: [], forms: [] };
-		return { ...this.value, conversation };
+		if (this.ingestion && !conversation) return { ...base, phase: 'synchronizing', conversation: undefined, permissions: [], forms: [] };
+		return { ...base, conversation };
 	}
 	get canOperate(): boolean { return this.state.phase === 'ready' && this.state.snapshot?.selected !== undefined; }
 	assertReady(): void {
@@ -73,6 +79,7 @@ export class SynchronizationCoordinator {
 
 	dispose = (): void => {
 		this.cancelAttempt();
+		this.unsubscribeConnection();
 		this.connection.signal.removeEventListener('abort', this.dispose);
 		this.publish({ phase: 'disposed', attempt: this.failures, permissions: [], forms: [] });
 		this.listeners.clear();

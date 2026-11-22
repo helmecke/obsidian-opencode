@@ -72,7 +72,7 @@ test('selection persists only allowlisted metadata and reopen fetches authoritat
 	const f = fixture();
 	await f.coordinator.open();
 	assert.equal((await f.coordinator.select('one')).messages[0].text, 'first');
-	assert.deepEqual(f.writes.at(-1), { executablePath: f.settings.executablePath, selectedSession: { id: 'one', directory: root } });
+	assert.deepEqual(f.writes.at(-1), { executablePath: f.settings.executablePath, autoStart: true, selectedSession: { id: 'one', directory: root } });
 	f.texts.set('one', [message('m1', 'changed'), message('m3', 'server-added')]);
 	assert.deepEqual((await f.coordinator.open()).messages.map((m) => m.text), ['changed', 'server-added']);
 	const reloaded = new SessionCoordinator(f.connection, () => root, loadSettings(f.writes.at(-1)), f.save);
@@ -209,7 +209,7 @@ test('absolute path comparison handles Windows aliases but not nested or unrelat
 test('settings parsing strips credentials, transcripts, and unrecognized selection data', () => {
 	assert.deepEqual(loadSettings({ executablePath: 'opencode', password: 'secret', messages: ['private'],
 		selectedSession: { id: 'one', directory: root, transcript: ['secret'], authorization: 'secret' } }),
-	{ executablePath: 'opencode', selectedSession: { id: 'one', directory: root } });
+	{ executablePath: 'opencode', autoStart: true, selectedSession: { id: 'one', directory: root } });
 });
 
 test('pinned generated client uses actual session/message routes and envelopes with isolated fetch', async () => {

@@ -124,7 +124,7 @@ test('native view renders the conversation shell and clears its content on close
 	assert.equal(view.getDisplayText(), 'OpenCode');
 	assert.equal(view.getIcon(), 'message-square');
 	assert.ok(view.contentEl.classList.contains('opencode-chat'));
-	assert.match(view.statusEl.textContent, /Connected/);
+	assert.match(view.statusEl.textContent, /Connected · Shared service/);
 	assert.equal(view.retryButton.textContent, 'Retry discovery');
 	assert.ok(view.messagesEl);
 	assert.ok(view.composer);
@@ -180,7 +180,28 @@ test('view exposes explicit discovery retry and never displays unknown diagnosti
 	const pending = view.synchronization.retry();
 	await pending;
 	assert.equal(calls, 2);
-	assert.match(view.statusEl.textContent, /Connected/);
+	assert.match(view.statusEl.textContent, /Connected · Shared service/);
+	plugin.unload();
+});
+
+test('view reports managed startup and the managed-versus-shared connection source', async () => {
+	const { registrations, plugin } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	let mode = 'managed';
+	let phase = 'starting';
+	Object.defineProperty(view.connection, 'status', {
+		configurable: true,
+		get: () => ({ mode, phase }),
+	});
+	let finish;
+	view.connection.discover = () => new Promise((resolve) => { finish = resolve; });
+	const opening = view.onOpen();
+	await new Promise(setImmediate);
+	assert.match(view.statusEl.textContent, /Starting OpenCode…/);
+	phase = 'running';
+	finish(emptyClient());
+	await opening;
+	assert.match(view.statusEl.textContent, /Connected · Managed service/);
 	plugin.unload();
 });
 
@@ -225,9 +246,9 @@ test('concurrent views share discovery; close releases handlers without affectin
 	finish(emptyClient());
 	await Promise.all([a, b]);
 	assert.equal(oldStatus.textContent, 'Synchronizing conversation…', 'Closed DOM must not receive late connection results');
-	assert.match(second.statusEl.textContent, /Connected/);
+	assert.match(second.statusEl.textContent, /Connected · Shared service/);
 	await first.onOpen();
-	assert.match(first.statusEl.textContent, /Connected/);
+	assert.match(first.statusEl.textContent, /Connected · Shared service/);
 	assert.equal(discoveries, 1, 'Reopen reuses the plugin connection');
 	first.unload();
 	assert.equal(first.contentEl.childElementCount, 0);
@@ -249,7 +270,7 @@ test('close/reopen before discovery settles updates only the current opening', a
 	finish(emptyClient());
 	await Promise.all([oldOpen, newOpen]);
 	assert.equal(oldStatus.textContent, 'Synchronizing conversation…');
-	assert.match(view.statusEl.textContent, /Connected/);
+	assert.match(view.statusEl.textContent, /Connected · Shared service/);
 	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header').length, 1);
 	plugin.unload();
 });
@@ -501,6 +522,6 @@ test('plugin wires the filesystem vault path, persisted selection and authoritat
 	await first.onOpen();
 	assert.equal(loads, 2);
 	assert.equal(first.sessions.state.messages[0].id, 'm2');
-	assert.deepEqual(saved.at(-1), { executablePath: 'opencode', selectedSession: { id: 'saved', directory: 'C:\\Vault' } });
+	assert.deepEqual(saved.at(-1), { executablePath: 'opencode', autoStart: true, selectedSession: { id: 'saved', directory: 'C:\\Vault' } });
 	plugin.unload();
 });

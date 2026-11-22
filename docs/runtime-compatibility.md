@@ -448,3 +448,67 @@ deterministic tests. Task 7.2's listed observations are recorded above.
 
 The earlier exact-2.2.2 statements above are historical records superseded by
 the current eligibility policy and these observations.
+
+## Managed OpenCode startup (2026-11-22)
+
+The plugin now has a private managed-runtime fallback. It still reuses a healthy
+shared service first and never writes, stops, or replaces that service. When
+discovery reports `absent` or a registration whose process is gone (`stale`),
+automatic startup (default on) resolves the OpenCode 2 executable, validates
+`opencode --version` against `>=2.2.2 <3.0.0`, selects an ephemeral loopback
+port, and spawns `serve --hostname 127.0.0.1 --port <n>` with a fresh random
+password and a plugin-private `XDG_STATE_HOME`.
+
+Automated coverage added in `tests/managed-runtime.test.mjs`:
+
+- Executable resolution keeps paths with spaces as data, uses `PATH` and common
+  locations, rejects a missing executable, and rejects the Windows `.cmd` shim.
+- Version parsing accepts only `opencode vX.Y.Z`; 1.x, 3.x, malformed output, and
+  query failures map to the fixed version error without leaking output.
+- Port selection binds literal `127.0.0.1`, releases the port, and retries once
+  on `EADDRINUSE`.
+- Spawn options assert separate arguments, no shell, hidden windows, piped
+  output, the transient password, the private state directory, and an unchanged
+  shared registration.
+- Readiness polls `/api/info`, requires the spawned PID, and times out within a
+  bounded budget.
+- Disposal kills the process tree and clears the orphan record; a recorded orphan
+  is stopped before a new start; crashes restart with bounded backoff and end in
+  a fixed, password-free failure.
+- The coordinator falls back only on `absent` or `stale`; registration,
+  authentication, identity, and transport failures never launch a process.
+- The view reports **Starting OpenCode…** and distinguishes **Connected · Shared
+  service** from **Connected · Managed service**.
+
+`npm test` (145 tests), `npm run build`, and `npm run lint` pass after this
+change. Lint has no errors and two warnings (declarative settings API and sentence
+case for the **OpenCode 2 executable path** label).
+
+The manual acceptance in task 5.2 was performed on 2026-11-22 in the approved
+disposable vault with the installed plugin, Obsidian's process environment, and
+the npm-installed `opencode v2.3.2` executable. Observations:
+
+- With `XDG_STATE_HOME` pointed at an empty directory (so discovery saw no
+  registration), opening chat resolved the npm native binary, started a managed
+  process, and showed **Connected · Managed service**. The recorded managed PID
+  was alive and the real shared `service.json` stayed byte-identical.
+- On reload, the real shared registration pointed at a dead PID. Discovery
+  reported `stale`, started a managed process without modifying that
+  registration, and the view showed the managed connection.
+- A disposable healthy loopback registration satisfied authenticated
+  `/api/info`; discovery reused it with connection mode `shared` and did not
+  launch another process. This was a fixture at the discovery boundary, not a
+  real second OpenCode shared service.
+- An incompatible disposable registration (version `1.9.9`) produced the fixed
+  compatibility error with sends disabled and retry enabled; no replacement
+  process started. An unhealthy registration (HTTP 500) produced the fixed
+  transport error; the existing managed PID was unchanged and no replacement
+  started.
+- Disabling the plugin stopped the managed process tree; the PID stopped
+  responding, no `opencode.exe` remained, and the persisted orphan record was
+  cleared. The real shared registration remained unchanged throughout.
+- Re-enabling and reopening chat started a fresh managed process and returned to
+  a ready conversation.
+
+The vault and plugin were left enabled with the managed runtime connected. No
+shared service was stopped, started, or replaced.
