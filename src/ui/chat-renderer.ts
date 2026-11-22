@@ -10,6 +10,7 @@ import type { FormValue } from './form-card';
 import type { PermissionDecision } from './permission-card';
 import { ChatComposer } from './chat-composer';
 import { ChatInteractionsPanel } from './chat-interactions-panel';
+import { NoteLinkSuggest } from './note-link-suggest';
 
 const VAULT_ROOT_SOURCE = '';
 
@@ -171,6 +172,10 @@ export class ChatRenderer {
 		};
 		attachLinkRouter(this.messagesEl, VAULT_ROOT_SOURCE, environment, opening);
 		if (!this.retryButton || !this.newButton || !this.composer) return;
+		// AbstractInputSuggest declares an input element but only needs value, events and a rectangle.
+		const suggestions = new NoteLinkSuggest(
+			this.app, this.composer.element as unknown as HTMLInputElement, () => this.handlers.send());
+		opening.register(() => suggestions.dispose());
 		// Obsidian's keymap handles trusted shortcuts before DOM bubbling.
 		// A view-local scope takes priority without registering a global hotkey.
 		const scope = this.scope;

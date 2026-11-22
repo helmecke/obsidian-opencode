@@ -38,7 +38,13 @@ const app = {
 		revealLeaf: async () => {},
 	},
 	metadataCache: { getFirstLinkpathDest: () => null },
-	vault: { adapter: { getBasePath: () => 'C:\\Vault' } },
+	vault: {
+		adapter: { getBasePath: () => 'C:\\Vault' },
+		getMarkdownFiles: () => [
+			{ basename: 'Alone', path: 'Alone.md', parent: { path: '' } },
+			{ basename: 'Example', path: 'Notes/Example.md', parent: { path: 'Notes' } },
+		],
+	},
 };
 
 async function createShell(data = {}) {
@@ -519,6 +525,47 @@ test('composer grows with its text up to 40vh and scrolls internally beyond the 
 	const height = parseFloat(composer.style.getPropertyValue('--opencode-composer-input-height'));
 	assert.ok(Math.abs(height - window.innerHeight * 0.4) < 0.5, 'Growth stops at 40vh');
 	assert.equal(composer.classList.contains('is-scrollable'), true, 'Longer text scrolls inside the field');
+	plugin.unload();
+});
+
+test('composer pairs brackets through programmatic edits, opens note completion, and still sends while open', async () => {
+	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+	const view = registrations.views.get('opencode-chat')({});
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	const composer = view.composer;
+	const press = (key, extra = {}) => composer.dispatchEvent(
+		new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
+
+	view.composer.focus();
+	assert.equal(view.sendButton.disabled, true);
+	press('[');
+	assert.equal(composer.value, '[]');
+	assert.equal(composer.selectionStart, 1);
+	assert.equal(view.sendButton.disabled, false, 'A programmatic pairing edit enables send');
+	press('[');
+	assert.equal(composer.value, '[[]]');
+	assert.equal(composer.selectionStart, 2);
+	assert.equal(composer.__suggest.isOpen, true, 'Typing [[ opens note completion');
+	assert.deepEqual(composer.__suggest.suggestions.map((file) => file.basename), ['Alone', 'Example']);
+	press('Backspace');
+	assert.equal(composer.value, '[]', 'Backspacing the empty inner pair removes both brackets');
+	assert.equal(composer.selectionStart, 1);
+	press(']');
+	assert.equal(composer.value, '[]', 'A typed closer skips the existing pair');
+	assert.equal(composer.selectionStart, 2);
+
+	composer.value = '';
+	composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	press('[');
+	press('[');
+	assert.equal(composer.__suggest.isOpen, true);
+	press('Enter', { ctrlKey: true });
+	await wait();
+	const prompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(prompt.text, '[[]]', 'Ctrl+Enter sends while the popover is open');
 	plugin.unload();
 });
 

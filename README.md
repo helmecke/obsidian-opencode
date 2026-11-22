@@ -171,6 +171,13 @@ read-only workarounds.
 - Type in the message field; **Ctrl/Cmd+Enter** sends and **Shift+Enter** inserts
   a newline. The **Send** button is an alternative. The field grows with the
   message up to 40% of the window height and then scrolls.
+- Type `[[` to search this vault's Markdown notes. The inline list shows each
+  note's name and folder; arrow keys move, Enter or Tab inserts, and Escape or
+  blur closes it. The composer inserts `[[Note]]` when the name is unique, or
+  the vault-relative `[[folder/Note]]` when it is not. The reference remains
+  plain prompt text and is not attached as a file. Brackets pair automatically,
+  a typed `]` skips an existing closer, and Backspace removes an empty pair.
+  Ctrl/Cmd+Enter still sends while the list is open.
 - While execution is running, the composer's toolbar also shows a square
   **Stop** button. It requests server-side interruption, refreshes the reported
   state, and disappears when execution finishes. Closing, moving, or disabling

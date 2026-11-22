@@ -512,3 +512,27 @@ the npm-installed `opencode v2.3.2` executable. Observations:
 
 The vault and plugin were left enabled with the managed runtime connected. No
 shared service was stopped, started, or replaced.
+
+## Composer note linking (2026-11-22)
+
+The chat composer now pairs square brackets and completes vault Markdown notes
+after `[[`. The reference stays plain prompt text; no file attachment is added.
+Live acceptance in the approved disposable vault (Obsidian 1.15.1, Electron
+43.8.4, Node 24.22.1) observed:
+
+- `[[` opened an inline list for duplicate-basename notes, with the basename and
+  vault-relative folder on each row.
+- Selecting `Acceptance/Other/Example` inserted
+  `[[Acceptance/Other/Example]]`; selecting a unique note inserts `[[Note]]`.
+- Arrow keys moved the selection, Enter inserted it without sending, and Escape
+  or blur closed the list.
+- Ctrl+Enter sent while the list was open; the prompt contained the exact
+  `[[...]]` text and no structured file attachment.
+- Light and dark themes and a 300px sidebar rendered the list legibly, with the
+  popover kept inside the viewport.
+- `npm test` passed 161 tests, `npm run build` succeeded, `npm run lint`
+  reported no errors, and reloading the plugin produced no captured errors.
+
+| Date | Change | Tasks | Tests | Build | Archive |
+| --- | --- | --- | --- | --- | --- |
+| 2026-11-22 | `add-composer-note-linking` | 9/9 | 161 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-note-linking` |

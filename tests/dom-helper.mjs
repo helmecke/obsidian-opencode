@@ -79,9 +79,55 @@ export function createObsidian(app, notices = [], extra = {}) {
 	class ItemView extends Component {
 		constructor(leaf) { super(); this.leaf = leaf; this.app = app; this.contentEl = document.createElement('div'); }
 	}
+	class AbstractInputSuggest {
+		constructor(suggestApp, textInputEl) {
+			this.app = suggestApp;
+			this.textInputEl = textInputEl;
+			this.limit = 100;
+			this.suggestions = [];
+			this.isOpen = false;
+			this.onSelectCallback = undefined;
+			this.scope = {
+				handlers: [],
+				register(modifiers, key, callback) {
+					const handler = { modifiers, key, callback };
+					this.handlers.push(handler);
+					return handler;
+				},
+				unregister(handler) {
+					const index = this.handlers.indexOf(handler);
+					if (index >= 0) this.handlers.splice(index, 1);
+				},
+			};
+			textInputEl.__suggest = this;
+			textInputEl.addEventListener('input', () => this.refresh());
+		}
+		getValue() { return this.textInputEl.value; }
+		setValue(value) { this.textInputEl.value = value; }
+		refresh() {
+			const results = this.getSuggestions(this.textInputEl.value);
+			this.suggestions = Array.isArray(results) ? results : [];
+			this.isOpen = this.suggestions.length > 0;
+		}
+		onSelect(callback) { this.onSelectCallback = callback; return this; }
+		open() { this.isOpen = true; }
+		close() { this.isOpen = false; }
+	}
 	return {
 		Component,
 		ItemView,
+		AbstractInputSuggest,
+		prepareFuzzySearch(query) {
+			const needle = query.toLowerCase();
+			return (text) => {
+				const haystack = text.toLowerCase();
+				const index = haystack.indexOf(needle);
+				return index < 0 ? null : { score: 100 - index, matches: [] };
+			};
+		},
+		sortSearchResults(results) {
+			results.sort((left, right) => right.match.score - left.match.score);
+		},
 		Scope: class {
 			handlers = new Set();
 			constructor(parent) { this.parent = parent; }

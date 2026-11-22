@@ -2,6 +2,8 @@ import { setIcon } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
 import { fillAgentOptions, fillModelOptions, modelValue } from './chat-options';
+import { applyCloseBracket, applyComposerEdit, applyOpenBracket, deleteEmptyPair } from './composer-link';
+import type { ComposerEdit, ComposerSelection } from './composer-link';
 
 export interface ComposerHandlers {
 	send(): void;
@@ -73,9 +75,12 @@ export class ChatComposer {
 			if (model) this.handlers.setModel(model);
 		});
 		this.composer.addEventListener('keydown', (event) => {
-			if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) return;
-			event.preventDefault();
-			this.handlers.send();
+			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+				event.preventDefault();
+				this.handlers.send();
+				return;
+			}
+			this.applyPairingKey(event);
 		});
 		this.composer.addEventListener('input', () => {
 			this.resize();
@@ -188,5 +193,24 @@ export class ChatComposer {
 	private updateInput(): void {
 		const state = this.lastState;
 		if (state) this.update(state);
+	}
+
+	private applyPairingKey(event: KeyboardEvent): void {
+		if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+		const state: ComposerSelection = {
+			value: this.composer.value,
+			selectionStart: this.composer.selectionStart,
+			selectionEnd: this.composer.selectionEnd,
+		};
+		let edit: ComposerEdit | null;
+		if (event.key === '[') edit = applyOpenBracket(state);
+		else if (event.key === ']') edit = applyCloseBracket(state);
+		else if (event.key === 'Backspace') edit = deleteEmptyPair(state);
+		else return;
+		if (!edit) return;
+		event.preventDefault();
+		applyComposerEdit(this.composer, edit);
+		// Programmatic edits bypass the native input event; keep resize and send state in sync.
+		this.composer.dispatchEvent(new Event('input', { bubbles: true }));
 	}
 }
