@@ -311,7 +311,7 @@
 .opencode-composer-select {
 	display: flex;
 	align-items: center;
-	gap: var(--size-4-1);
+	gap: var(--size-4-2);
 	min-width: 0;
 	max-width: 15em;
 }
@@ -321,10 +321,38 @@
 	font-size: var(--font-ui-smaller);
 }
 
+/* Match the flat, borderless vault switcher in the primary sidebar. */
+.opencode-chat-select,
 .opencode-composer-select select {
 	min-width: 0;
-	max-width: 13em;
+	height: auto;
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	background-color: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	line-height: var(--line-height-tight);
 	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.opencode-composer-select select {
+	max-width: 13em;
+}
+
+.opencode-chat-select:hover:not(:disabled),
+.opencode-composer-select select:hover:not(:disabled) {
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
+.opencode-chat-select:focus-visible,
+.opencode-composer-select select:focus-visible {
+	box-shadow: 0 0 0 3px var(--background-modifier-border-focus);
 }
 
 .opencode-composer-icon {
