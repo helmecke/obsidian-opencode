@@ -22,6 +22,8 @@ export default defineConfig(
 			parserOptions: {
 				projectService: {
 					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'tests/*.mjs', 'scripts/*.mjs'],
+					// Keep the Node fixture/probe suite type-aware as new suites are added.
+					maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 32,
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -30,9 +32,18 @@ export default defineConfig(
 	},
 	...obsidianmd.configs.recommended,
 	{
+		rules: {
+			'obsidianmd/ui/sentence-case': ['warn', { brands: ['OpenCode'] }],
+		},
+	},
+	{
 		files: ['tests/*.mjs', 'scripts/*.mjs'],
 		languageOptions: { globals: globals.node },
 		// Node test/developer tooling is not part of a mobile plugin.
-		rules: { 'obsidianmd/no-nodejs-modules': 'off' },
+		rules: {
+			'obsidianmd/no-nodejs-modules': 'off',
+			// Test helpers assign jsdom globals deliberately.
+			'obsidianmd/no-global-this': 'off',
+		},
 	},
 );

@@ -1,0 +1,165 @@
+import { Component, MarkdownRenderer } from 'obsidian';
+import type { App } from 'obsidian';
+
+export interface Timer {
+	set(callback: () => void, delay: number): unknown;
+	clear(handle: unknown): void;
+}
+
+const clock: Timer = {
+	set: (callback, delay) => window.setTimeout(callback, delay),
+	clear: (handle) => window.clearTimeout(handle as number),
+};
+
+export interface MarkdownHost {
+	readonly app: App;
+	readonly component: Component;
+	readonly sourcePath: string;
+}
+
+/** Batched Obsidian Markdown with a child lifetime per render; final rendering is immediate. */
+export class MarkdownBlock {
+	private readonly el: HTMLElement;
+	private child?: Component;
+	private rendered = '';
+	private scheduled?: unknown;
+	private pendingText?: string;
+	private generation = 0;
+	private disposed = false;
+	constructor(private readonly host: MarkdownHost, container: HTMLElement,
+		private readonly timer: Timer = clock) {
+		this.el = container.createDiv({ cls: 'opencode-markdown' });
+	}
+
+	set(text: string, final = false): void {
+		if (this.disposed) return;
+		if (text === this.rendered) { this.cancel(); return; }
+		if (final) {
+			this.cancel();
+			void this.flush(text);
+			return;
+		}
+		this.pendingText = text;
+		// Throttle, not debounce: continuous token traffic must not postpone
+		// painting indefinitely. Keep one timer and render its latest text.
+		if (this.scheduled !== undefined) return;
+		this.scheduled = this.timer.set(() => {
+			this.scheduled = undefined;
+			const latest = this.pendingText;
+			this.pendingText = undefined;
+			if (latest !== undefined) void this.flush(latest);
+		}, 60);
+	}
+
+	dispose(): void {
+		this.disposed = true;
+		this.cancel();
+		this.generation++;
+		this.unloadChild();
+	}
+
+	private cancel(): void {
+		if (this.scheduled !== undefined) this.timer.clear(this.scheduled);
+		this.scheduled = undefined;
+		this.pendingText = undefined;
+	}
+
+	private async flush(text: string): Promise<void> {
+		if (this.disposed) return;
+		this.rendered = text;
+		const generation = ++this.generation;
+		const previous = this.child;
+		const child = new Component();
+		this.host.component.addChild(child);
+		this.child = child;
+		this.el.empty();
+		if (previous) this.host.component.removeChild(previous);
+		try {
+			await MarkdownRenderer.render(this.host.app, text, this.el, this.host.sourcePath, child);
+		} catch {
+			if (!this.disposed && this.generation === generation) {
+				this.el.setText('Unable to render this part of the answer.');
+			}
+		}
+		if (this.disposed || this.generation !== generation) {
+			this.host.component.removeChild(child);
+			if (this.child === child) this.child = undefined;
+		}
+	}
+
+	private unloadChild(): void {
+		if (this.child) {
+			this.host.component.removeChild(this.child);
+			this.child = undefined;
+		}
+		this.el.empty();
+		this.rendered = '';
+	}
+}
+
+export interface InternalLinkTarget {
+	readonly linkpath: string;
+	readonly subpath: string;
+}
+
+/** Split Obsidian's href form without interpreting aliases or Markdown. */
+export function splitInternalLink(raw: string): InternalLinkTarget {
+	const withoutAlias = raw.split('|', 1)[0] ?? '';
+	const hash = withoutAlias.indexOf('#');
+	if (hash < 0) return { linkpath: withoutAlias.trim(), subpath: '' };
+	return { linkpath: withoutAlias.slice(0, hash).trim(), subpath: withoutAlias.slice(hash) };
+}
+
+export interface LinkEnvironment {
+	/** Obsidian metadata resolution; never creates a file. */
+	resolve(linkpath: string, sourcePath: string): { readonly path: string } | null;
+	/** Non-chat-leaf navigation preserving heading/block subpaths. */
+	open(href: string, sourcePath: string): void;
+	notify(message: string): void;
+}
+
+export type LinkDecision =
+	| { readonly kind: 'open'; readonly href: string }
+	| { readonly kind: 'unresolved'; readonly message: string };
+
+export const UNRESOLVED_LINK = 'Unable to open this internal link: Obsidian found no target in this vault. No file was created.';
+export const CONTEXTLESS_LINK = 'Unable to open this internal link: it names only a heading or block, so it has no note target. No file was created.';
+
+/**
+ * Stable vault-root source context. Opening never falls back to the active
+ * editor or the note that happens to be focused when the link is activated.
+ */
+export function decideInternalLink(raw: string, sourcePath: string, environment: Pick<LinkEnvironment, 'resolve'>): LinkDecision {
+	const { linkpath, subpath } = splitInternalLink(raw);
+	if (!linkpath) return { kind: 'unresolved', message: CONTEXTLESS_LINK };
+	try {
+		const target = environment.resolve(linkpath, sourcePath);
+		if (!target || !target.path) return { kind: 'unresolved', message: UNRESOLVED_LINK };
+	} catch { return { kind: 'unresolved', message: UNRESOLVED_LINK }; }
+	return { kind: 'open', href: `${linkpath}${subpath}` };
+}
+
+export interface LinkRegistration {
+	registerDomEvent(element: HTMLElement, event: 'click', callback: (event: MouseEvent) => void, options?: AddEventListenerOptions): void;
+}
+
+/** Intercept internal anchors before MarkdownRenderer's own navigation handler. */
+export function attachLinkRouter(container: HTMLElement, sourcePath: string,
+	environment: LinkEnvironment, register: LinkRegistration): void {
+	register.registerDomEvent(container, 'click', (event) => {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		const anchor = target.closest('a.internal-link');
+		if (!(anchor instanceof HTMLAnchorElement)) return;
+		const raw = anchor.getAttribute('data-href') ?? anchor.getAttribute('href');
+		if (!raw) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const decision = decideInternalLink(raw, sourcePath, environment);
+		if (decision.kind === 'unresolved') { environment.notify(decision.message); return; }
+		// Always a separate leaf: navigating the chat leaf would hide the conversation.
+		environment.open(decision.href, sourcePath);
+	}, { capture: true });
+}
+
+export { MarkdownRenderer };

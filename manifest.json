@@ -1,11 +1,9 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "opencode",
+	"name": "OpenCode",
 	"version": "1.0.0",
-	"minAppVersion": "1.0.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
-	"isDesktopOnly": false
+	"minAppVersion": "1.14.5",
+	"description": "Work with a local OpenCode agent in a native chat view.",
+	"author": "Jakob",
+	"isDesktopOnly": true
 }

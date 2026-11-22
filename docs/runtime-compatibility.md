@@ -1,5 +1,128 @@
 # Runtime compatibility gate
 
+## Compatibility revision investigation (2026-11-22, incomplete)
+
+### Latest live findings
+
+- A real synthetic text prompt completed successfully through the installed
+  plugin after correcting the `msg_` identity prefix and omitting `order` on
+  message-cursor follow-ups. Its final Markdown retained inline/fenced wikilinks
+  as literal code.
+- CLI-driven clicks on actual rendered links opened the aliased
+  `Acceptance/Example`, its `#Details` heading, its `#^acceptance-block` block,
+  and `Acceptance/Other/Example` (duplicate basename) in non-chat leaves.
+  Navigation preserved an empty vault-root source path after active-note
+  changes. Chat retained its leaf and transcript. Missing/contextless references
+  made no navigation call, showed the documented notices, and left the vault's
+  file list unchanged.
+- A live tool/form check found and corrected the validator's erroneous global
+  version-1 assumption. `session.tool.success` and `session.tool.failed` use
+  durable version **2 in both reviewed releases**, as do deletion/fork/instruction
+  update events; the generated declarations agree. Known event types now require
+  their exact reviewed version, ephemeral types reject unexpected durable
+  envelopes, and unknown types are forwarded only for recovery. No blanket
+  acceptance of arbitrary versions was added.
+- With that correction installed, a fresh real read of
+  `Acceptance/Example.md` completed in the chat, the agent's question appeared
+  with Alpha/Beta controls, and selecting Alpha and **Submit** completed both
+  the question tool and execution without errors or CLI interaction with the
+  agent. Six tool entries (including earlier diagnostic calls) were expanded in
+  the actual view and retained completed states. No persistent grant, service
+  restart, or configuration write was used to work around the validator error.
+- Event payload validation now occurs after session/vault scope selection, so
+  another client's unsupported form fields cannot disable this conversation.
+  Unknown field types in the selected session's own form are preserved and
+  reported by the form card, which blocks submission instead of sending a
+  partial answer. Generic envelopes are still checked at the transport boundary.
+
+The implementation now admits stable releases
+`>=2.2.2 <3.0.0` and valid SemVer build metadata; prereleases, malformed values,
+prefixes, whitespace, leading-zero release components, and unsafe integers are
+rejected. Eligibility is separate from required API/event compatibility.
+Automated boundary/non-replacement tests and the production Electron gate cover
+this policy. This range does not claim individual testing of every eligible
+release.
+
+- Compared the installed pinned 2.2.2 package with the published
+  `@opencode/client@2.3.2` npm archive (SHA-1
+  `39f211db5f0f5ea7d098f554fd29f91affd70762`). `dist/service.d.ts` is
+  unchanged. The generated Promise client declarations retain the session,
+  message, prompt, agent/model, permission, and form methods used by this plugin.
+- The generated type declaration diff retains the prompt identity, permission
+  decision, form field/reply/cancel, and session-scoped pending-list types.
+  Both releases also expose directory-scoped pending-list interfaces; the
+  OpenChamber call sites alone do not establish removal of session-scoped lists.
+  These declaration comparisons are not verification of endpoint implementations,
+  directory header encoding, runtime validation, or event ordering.
+- 2.3.2 adds the durable `session.step.first-token` event and optional
+  assistant-message `time.firstToken`. The existing reducer's default recovery
+  behavior needs explicit review and regression coverage for that new event.
+- The reviewed OpenChamber compatibility source at commit
+  `30c70496a5ca0105e04e60a783964576973edc8f` sets its own minimum to 2.2.4.
+  Its source does not explain that minimum; it is not evidence that this plugin's
+  baseline 2.2.2 contracts are insufficient. The lower-bound review remains open.
+- A read-only host-Node probe using the production `createNodeFetch` adapter,
+  transient `Service.headers` authentication, and `client.server.info` found
+  registered and reported service version **2.2.5**, with matching PID. No
+  credentials, endpoint, transcript, or vault content were printed. No service
+  startup, restart, replacement, registration/configuration write, prompt, or
+  permission decision was performed.
+
+After the user explicitly authorized a service restart and reported completing
+it, authenticated health reported **2.3.2**, matching the registration and PID.
+The plugin did not perform that lifecycle change; its discovery-only ownership
+policy is unchanged.
+
+`scripts/production-connection-probe.mjs` bundles the actual discovery and
+transport adapters. In host Node **26.13.0**, it verified 2.3.2 discovery,
+authenticated identity, unauthenticated HTTP 401, `server.connected`, and
+read-only vault-scoped session, agent/model, permission-request, and form
+listings. No session was created and no prompt or decision was sent. Empty
+pending lists are not evidence of a real permission or form round trip.
+
+The running-service result is not inferred from CLI output. A subsequent
+production-adapter probe in **Obsidian 1.15.1 / Electron 43.8.4 / embedded Node
+24.22.1** also passed against **2.3.2**: matching authenticated identity,
+unauthenticated HTTP 401, `server.connected`, and the same read-only scoped
+listings. This probe observed seven agents and 78 models, with no conversations
+or pending interactions in the disposable vault. It is a transport/read-only
+gate, not evidence of a real prompt, tool call, permission, or form round trip.
+The probe was rebuilt and rerun with the validated production client: it passed
+the same Electron gate. Live session creation and server-confirmed agent/model
+changes also succeeded through the installed plugin. The
+[contract review](client-contract-review.md) compares the required endpoints,
+registration/authentication, prompt identity, permission/form schemas, directory
+encoding, and additive events. It establishes that OpenChamber's 2.2.4 minimum
+comes from a configuration feature this plugin does not use; the 2.2.2 lower
+bound and client pin are retained.
+
+Required API responses and used event fields are validated at the client
+boundary. Initial synchronization verifies agent/model lists before readiness;
+incompatible required endpoints, payloads, or events disable sends and decisions
+with a fixed API error and require explicit retry. Authentication, transient
+network failures, missing sessions, and server-side form answer rejection remain
+distinct. Regression tests cover malformed responses, endpoint mismatch,
+interaction/session scoping, first-token ordering, and non-replacement.
+
+Contract review also found that prompt identities require `msg_`. Both default
+and fallback generators now preserve that prefix; tests cover the default
+generator as well as stable identity/reconciliation. Full live conversation,
+permission, form, and lifecycle acceptance was recorded on 2026-11-22; see
+[Live Electron acceptance](#live-electron-acceptance-2026-11-22) below.
+
+The Bash `obsidian` wrapper's request did not return and the user cancelled it;
+that cancellation is not recorded as an Obsidian failure. Direct
+`node:child_process.execFile` invocation of
+`C:\Program Files\Obsidian\Obsidian.com` with `windowsHide: true` and a bounded
+timeout successfully returned vault-targeted `eval` results. No global CLI or
+Obsidian configuration was changed by these checks.
+
+The approved disposable vault remains
+`C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`.
+
+The older exact-version statements below are historical verification records,
+superseded by the current eligibility policy above.
+
 ## Automated verification
 
 Task 1.1 verified on Windows with Node.js 26.13.0 and pinned
@@ -34,29 +157,42 @@ of `2.x`, prereleases, build-suffixed versions, or missing/malformed versions.
 Expand this policy only after testing the registration, API, and event contracts.
 Full conversation, permission, form, and startup acceptance remain pending.
 
-`src/opencode/compatibility.ts` defines the policy and a fixed, actionable error
-that does not interpolate untrusted service metadata. `service-policy.ts` gates
-service reuse and admission to a future startup adapter:
+`src/opencode/compatibility.ts` defines the current eligibility policy and a
+fixed, actionable error that does not interpolate untrusted service metadata.
+The production connection path in `src/opencode/discovery.ts` is reuse-only: it
+validates the discovered service and never invokes a startup adapter.
 
-- Reject an incompatible discovered service without invoking startup.
-- Reuse a compatible discovered service without invoking startup.
-- Propagate discovery errors rather than interpreting them as absence.
-- Admit the startup callback only on explicit absence; check its returned version
-  and propagate startup failures without automatic retry.
-- Never request service stop, restart, or replacement from this gate.
+A provisional `src/opencode/service-policy.ts` once gated service reuse and a
+future startup callback. Post-archive verification removed it because production
+code never imported it and its `startWhenAbsent` path conflicted with the
+accepted existing-service workflow. `tests/compatibility.test.mjs` now covers
+version eligibility, recovery guidance, and redaction; `tests/connection.test.mjs`
+covers discovery/reuse, identity changes, and non-replacement. Automatic startup
+remains outside this change in issue #1.
 
-`tests/service-policy.test.mjs` exercises the real TypeScript modules with mock
-discovery/startup. It verifies unchanged shared-service PID/version/running state
-and zero replacement callbacks across repeated attempts for older/newer,
-prerelease, build-suffixed, and malformed versions. It also verifies recovery
-guidance and exclusion of untrusted metadata from compatibility errors.
+Task 1.3 historical verification: all nine automated tests, production build,
+and focused lint on the then-new modules/test passed. The gate was never wired
+into the production plugin.
 
-Task 1.3 verification: all nine automated tests, production build, and focused
-lint on the new modules/test pass. The policy is not wired into the sample
-plugin yet. This does not prove filesystem discovery, a real startup command,
-or race-safe startup: task 2.2 must integrate the gate with the production
-adapters and test service arrival during startup. No live service was changed
-by the task 1.3 tests.
+## Plugin shell verification (task 2.1)
+
+The plugin now uses the `opencode` ID and OpenCode name and is desktop-only.
+The minimum Obsidian version and version mapping are 1.14.5, the runtime recorded
+below; compatibility with older Obsidian versions is not claimed.
+
+`tests/plugin-shell.test.mjs` bundles the actual plugin entrypoint with a strict
+Obsidian mock. Enabling registers only the `opencode-chat` ItemView, chat ribbon,
+and stable `open-chat` command. The bundle contains only the three shell modules
+and imports no service, networking, or process APIs. Enabling neither opens a
+view nor starts or contacts OpenCode. The tests also cover opening a native tab,
+revealing an existing leaf after sidebar placement, placeholder rendering/cleanup,
+safe open-failure feedback, and metadata consistency.
+
+Production build, all 14 automated tests, and lint pass. Lint retains one existing
+`no-global-this` warning in `scripts/runtime-probe.mjs`. These are automated shell
+checks, not a new live Obsidian acceptance run. The view deliberately shows a
+preview placeholder; connection setup, settings, and conversation controls remain
+for subsequent tasks.
 
 ## Electron verification
 
@@ -156,3 +292,159 @@ Do not alter shared-service registration,
 restart an incompatible service, weaken authentication, or change global CORS
 configuration. If the documented client approach fails, pause for design
 revision before building the full UI.
+
+### Task 2.2 independent implementation (2026-10-29, historical scope)
+
+Production modules now provide lazy, deduplicated discovery and reuse with
+transient authentication, bounded read-only registration and health validation,
+literal-loopback origin binding, redirect rejection, and Node HTTP streaming.
+The settings tab stores only the executable path; paths with spaces remain
+plain data and are never passed to a shell. Chat offers **Retry discovery**.
+Genuine registration absence reports the upstream startup safety blocker and
+launches no process. Invalid, unreachable, incompatible, or changed registrations
+remain distinct errors, never startup permission.
+
+Automated tests use in-process disposable loopback HTTP fixtures and temporary
+registration files, not the user's service or vault. They cover reuse,
+authentication/redaction, deduplication/retry, unsafe URLs/redirects, bounded
+responses, identity/credential changes, cancellation, and settings validation.
+Executable lookup, actual startup, missing-executable/startup-failure behavior,
+and Windows launcher handling remain unimplemented behind the ownership gate.
+The earlier probe does not validate these production adapters in Electron;
+that rerun and automatic-startup acceptance remain pending. Task 2.2 stays
+unchecked; no task 2.3 lifecycle completion is claimed.
+
+### Scope decision and startup technical debt (2026-10-30)
+
+The user accepted the existing-service workflow to prioritize a usable plugin.
+Automatic startup is now outside `add-native-opencode-chat`, tracked in
+[GitHub issue #1](https://github.com/helmecke/obsidian-opencode/issues/1), not
+another task in the change or a release prerequisite. Earlier startup-gate
+statements above describe the historical plan and are superseded by this
+decision. Task 2.2 is unblocked for verification of its revised discovery/reuse,
+transient authentication, deduplication, inactive path settings, absence/retry,
+and redaction scope; its checkbox must reflect verification, not this deferral.
+Actual startup and executable lookup/validation remain unimplemented.
+
+Source comparison between released OpenCode 2.2.2 and 2.2.4 found no changes to
+CLI server startup, registration publication/watcher, the service-start handler,
+or the Promise service helper. Issue #1 records that evidence and the deferred
+startup/path/failure/ownership-race tests. No live startup race was run and no
+shared service was changed. This review does not establish API/Electron support
+for 2.2.4: the accepted runtime and pinned client remain exactly 2.2.2 until
+separately verified. Production Electron acceptance and the remaining chat/UI
+tasks are still required; removing startup from scope is not a release claim.
+
+## Native chat implementation (2026-11-22)
+
+The remaining plugin implementation is in place. The README is the user-facing
+record for the behaviors below; this section records what automated checks
+establish, and the live Electron acceptance run is recorded at the end of it.
+
+### Conversation persistence and recovery (task 3.5)
+
+- Only the executable path and the selected session ID plus exact vault directory
+  are persisted. Transcripts, credentials, and drafts are never written to
+  plugin data.
+- Reopen reloads authoritative messages from OpenCode. A saved session that is
+  missing or moved to another workspace produces a recoverable empty state.
+- Connection states are `inactive`, `synchronizing`, `ready`, `retrying`,
+  `exhausted`, and `disposed`. These match the tested transitions in
+  `tests/synchronization.test.mjs`: initial snapshot, buffered-event overlap,
+  disconnect, bounded backoff, exhaustion, explicit retry, and unload.
+- A prompt with a lost acknowledgment is shown as `Not confirmed`; draft text is
+  retained. Reconciliation checks authoritative messages before retry, and retry
+  reuses the same prompt identity. Tests cover an admitted message that must not
+  be sent again and a genuine loss that retries the same ID.
+- Sends and decisions are gated while synchronizing. Recovery never replays a
+  prompt, decision, or execution.
+
+### Controls and close-versus-stop (task 4.4)
+
+The README walkthrough matches the observed workflow: conversation
+creation/selection, multiline composition with Ctrl/Cmd+Enter, agent/model
+selectors, explicit stop, and connection errors. Automated component tests cover
+the same controls. Trusted Shift+Enter and Mod+Enter were observed in both the
+main tab and sidebar. Closing or moving the view does not call interruption;
+only **Stop** does.
+
+### Markdown and link navigation (task 5.4)
+
+Answers use Obsidian `MarkdownRenderer`. Internal link decisions are tested with
+paths, aliases, headings, block references, duplicate basenames, unresolved
+targets, and contextless `[[#Heading]]` references. A resolved link is opened in
+a separate leaf with the stable vault-root source path; unresolved targets only
+produce a notice and never create files. Hover previews are intentionally
+deferred. Live activation of aliases, explicit paths, headings, blocks, and a
+duplicate basename opened the intended notes beside the retained chat leaf;
+missing and contextless references produced notices without creating files.
+
+### Permissions, forms, and tool details (task 6.5)
+
+Permission cards submit explicit `once`, `always`, or `reject` decisions and show
+the server-provided persistent scope; `always` is unavailable when no scope is
+provided. No automatic grant or configuration write exists. Form fixtures cover
+text, choice, multiselect, number, integer, boolean, external links, conditional
+visibility, hidden required fields, invalid answers, cancellation, and
+unsupported field types. Tool entries distinguish preparing/running/completed/
+failed states and render details as text. A live read tool completed, a live
+agent question was answered through the rendered controls, and a session-scoped
+`ask` policy produced a real permission card whose **Allow once** decision
+completed the command without saving a persistent grant.
+
+### Automated verification (task 7.1)
+
+`npm test`, `npm run build`, and `npm run lint` are the release checks. The
+automated suite includes the prompt, API-contract, event-version,
+synchronization-action, interaction, Markdown-routing, streaming, keyboard-scope,
+and component-control tests. The archived change's final run on 2026-11-22
+passed **137 tests**; the post-archive cleanup run passed **133 tests** after
+removing the unused startup-policy tests. The production build succeeded, and
+lint completed with no errors and one pre-existing warning about the settings
+tab's declarative API. Generated `main.js`, probe bundles, and `node_modules`
+remain untracked.
+
+### Live Electron acceptance (2026-11-22)
+
+Observed in `C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`
+with Obsidian 1.15.1, Electron 43.8.4, embedded Node 24.22.1, and an
+externally managed OpenCode service reporting 2.3.2:
+
+- Discovery and authenticated reuse succeeded. Automatic startup remained
+  absent. Setting `XDG_STATE_HOME` to an empty test directory produced the fixed
+  absence message, no process launch, disabled sends, automatic bounded retry,
+  and recovery once the real registration path was restored. The shared
+  registration, PID, and version were unchanged.
+- A real streamed answer grew through **35 observed revisions** before the final
+  render. Inline and fenced wikilinks stayed literal, Markdown links resolved,
+  and the transcript followed the bottom while streaming.
+- Trusted keyboard input from the Obsidian window confirmed **Shift+Enter**
+  multiline composition and **Mod+Enter** sending in both the main tab and the
+  right sidebar. Obsidian consumes shortcuts through the view scope; the earlier
+  DOM-only handler did not receive trusted Mod+Enter. The new scope sends only
+  when its composer owns focus and unregisters on close/reopen.
+- Main-tab and sidebar layouts, moved leaves, light/dark theme switching, and
+  text/background tokens were observed. Sidebar content no longer overflows
+  horizontally after constraining select widths.
+- Closing the view during active execution and reopening restored the same
+  conversation, running state, and pending form. **Stop** then produced an
+  observed `interrupted` state. Closing itself did not interrupt.
+- A disposable session created with a session-scoped `shell → ask` rule produced
+  a real permission card for `echo OPENCODE_PERMISSION_ACCEPTANCE`, showed the
+  persistent scope `echo *`, and **Allow once** completed the command with
+  `OPENCODE_PERMISSION_ACCEPTANCE` output. No saved grant appeared and the test
+  session was removed. This used session-scoped test policy, not a config edit.
+- Disabling the plugin while another client used the service left the service
+  running at the same PID/version; re-enabling reopened the chat view. No service
+  stop or interruption was initiated by the plugin.
+
+A forced rediscovery transport failure while the view was ready produced the
+fixed recovery error, `retrying`, attempt 1, and a 500 ms bounded retry; restoring
+the registration path reconnected automatically to the same session and
+execution state, with the service PID/version unchanged. This exercised the
+production disconnect/reconnect state machine, but a mid-stream socket drop was
+not forced at the OS/network layer; stream-end handling is covered by
+deterministic tests. Task 7.2's listed observations are recorded above.
+
+The earlier exact-2.2.2 statements above are historical records superseded by
+the current eligibility policy and these observations.
