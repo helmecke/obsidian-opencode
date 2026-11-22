@@ -211,7 +211,7 @@ test('desktop metadata and version mapping consistently use the new identity', a
 	const versions = await readJson('../versions.json');
 	const pkg = await readJson('../package.json');
 	const lock = await readJson('../package-lock.json');
-	assert.equal(manifest.id, 'opencode');
+	assert.equal(manifest.id, 'opencode-chat');
 	assert.equal(manifest.name, 'OpenCode');
 	assert.equal(manifest.isDesktopOnly, true);
 	assert.equal(manifest.minAppVersion, '1.14.5');

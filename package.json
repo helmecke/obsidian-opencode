@@ -1,5 +1,5 @@
 {
-	"name": "opencode",
+	"name": "opencode-chat",
 	"version": "1.0.0",
 	"description": "A desktop Obsidian plugin for native OpenCode chat.",
 	"main": "main.js",

@@ -21,7 +21,7 @@ export default class OpenCodePlugin extends Plugin {
 		const adapter = this.app.vault.adapter;
 		const vaultRoot = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
 		const configDir = this.app.vault.configDir;
-		const pluginID = this.manifest?.id ?? 'opencode';
+		const pluginID = this.manifest?.id ?? 'opencode-chat';
 		const pluginDir = this.manifest?.dir ?? (configDir ? join(configDir, 'plugins', pluginID) : pluginID);
 		const stateDir = vaultRoot
 			? join(vaultRoot, pluginDir, '.state')

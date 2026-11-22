@@ -76,7 +76,7 @@ path).
    npm run lint
    ```
 
-3. In a disposable desktop test vault, create `.obsidian/plugins/opencode/`.
+3. In a disposable desktop test vault, create `.obsidian/plugins/opencode-chat/`.
    Copy `main.js`, `manifest.json`, and `styles.css` from the repository root
    into that directory. Do not copy `node_modules` or install into a real vault
    as part of this development check.

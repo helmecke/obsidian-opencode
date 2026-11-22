@@ -176,7 +176,7 @@ into the production plugin.
 
 ## Plugin shell verification (task 2.1)
 
-The plugin now uses the `opencode` ID and OpenCode name and is desktop-only.
+The plugin now uses the `opencode-chat` ID and OpenCode name and is desktop-only.
 The minimum Obsidian version and version mapping are 1.14.5, the runtime recorded
 below; compatibility with older Obsidian versions is not claimed.
 
