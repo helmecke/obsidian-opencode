@@ -131,6 +131,8 @@ test('native view renders the conversation shell and clears its content on close
 	assert.equal(view.getIcon(), 'message-square');
 	assert.ok(view.contentEl.classList.contains('opencode-chat'));
 	assert.match(view.statusEl.textContent, /Connected · Shared service/);
+	assert.ok(view.statusEl.classList.contains('is-icon-only'), 'Healthy status shows an icon');
+	assert.ok(view.statusEl.querySelector('.opencode-chat-status-icon .lucide-plug'), 'Shared connections use the plug icon');
 	assert.equal(view.retryButton.getAttribute('aria-label'), 'Retry discovery');
 	assert.ok(view.retryButton.classList.contains('clickable-icon'), 'Retry discovery uses the native icon-button surface');
 	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
@@ -213,6 +215,8 @@ test('view exposes explicit discovery retry and never displays unknown diagnosti
 	await view.onOpen();
 	assert.match(view.statusEl.textContent, /Retrying in 500 ms/);
 	assert.doesNotMatch(view.statusEl.textContent, /private password/);
+	assert.equal(view.statusEl.classList.contains('is-icon-only'), false, 'Errors keep their text');
+	assert.equal(view.statusEl.querySelector('.opencode-chat-status-icon')?.hidden, true);
 	assert.equal(view.retryButton.disabled, true);
 	assert.equal(view.retryButton.getAttribute('aria-disabled'), 'true');
 	// Let the scheduled backoff run, or use the explicit retry after exhaustion.
@@ -243,6 +247,7 @@ test('view reports managed startup and the managed-versus-shared connection sour
 	finish(emptyClient());
 	await opening;
 	assert.match(view.statusEl.textContent, /Connected · Managed service/);
+	assert.ok(view.statusEl.querySelector('.opencode-chat-status-icon .lucide-server'), 'Managed connections use the server icon');
 	plugin.unload();
 });
 
@@ -389,8 +394,8 @@ function interactionClient() {
 			{ id: 'child', name: 'Child', mode: 'subagent', hidden: false },
 		] }) },
 		model: { list: async () => ({ data: [
-			{ providerID: 'p', modelID: 'm1', name: 'One', enabled: true },
-			{ providerID: 'p', modelID: 'm2', name: 'Two', enabled: true },
+			{ providerID: 'p', modelID: 'm1', name: 'One', enabled: true, variants: [{ id: 'low' }, { id: 'high' }] },
+			{ providerID: 'p', modelID: 'm2', name: 'Two', enabled: true, variants: [{ id: 'high' }] },
 			{ providerID: 'p', modelID: 'off', name: 'Off', enabled: false },
 		] }) },
 		permission: { list: async () => [] },
@@ -465,19 +470,40 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	assert.deepEqual(options, [['old', 'Old'], ['new', 'New']]);
 	assert.deepEqual([...view.agentSelect.options].map((option) => option.value), ['plan', 'build']);
 	assert.deepEqual([...view.modelSelect.options].map((option) => option.value).length, 2);
+	assert.deepEqual([...view.variantSelect.options].map((option) => option.value), ['', 'low', 'high']);
 	assert.equal(view.agentSelect.getAttribute('aria-label'), 'Agent: Plan');
 	assert.equal(view.modelSelect.getAttribute('aria-label'), 'Model: p · One');
 	assert.equal(view.modelSelect.title, 'Model: p · One', 'The full selected value is available as a tooltip');
+	const modelChoice = view.contentEl.querySelector('.opencode-composer-choice[data-kind="model"]');
+	assert.equal(modelChoice?.querySelector('.opencode-composer-choice-label')?.textContent, 'One',
+		'The model trigger shows the model name without the provider');
+	assert.ok(modelChoice?.querySelector('.lucide-sparkles'), 'The model trigger carries an icon');
+	const variantChoice = view.contentEl.querySelector('.opencode-composer-choice[data-kind="variant"]');
+	assert.equal(variantChoice?.hidden, false, 'Thinking is available when the model exposes variants');
+	assert.equal(variantChoice?.querySelector('.opencode-composer-choice-label')?.textContent, 'default');
+	const variantSlash = view.contentEl.querySelector('.opencode-composer-variant-slash');
+	assert.ok(variantSlash, 'The thinking slash is rendered');
+	assert.equal(variantChoice?.contains(variantSlash), false, 'The slash stays outside the thinking select box');
+	assert.equal(view.variantSelect.getAttribute('aria-label'), 'Thinking: Default');
+	const agentChoice = view.contentEl.querySelector('.opencode-composer-choice[data-kind="agent"]');
+	assert.equal(agentChoice?.querySelector('.opencode-composer-choice-label')?.textContent, 'Plan');
+	assert.ok(agentChoice?.querySelector('.lucide-circle-user-round'), 'The agent trigger carries an agent icon');
 
 	view.agentSelect.value = 'build';
 	view.agentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
 	await wait();
 	assert.deepEqual(fixture.calls.find((call) => call[0] === 'switchAgent')[1], { sessionID: 'old', agent: 'build' });
 
+	view.variantSelect.value = 'high';
+	view.variantSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await wait();
+	assert.deepEqual(fixture.calls.find((call) => call[0] === 'switchModel')[1],
+		{ sessionID: 'old', model: { id: 'm1', providerID: 'p', variant: 'high' } });
+
 	view.modelSelect.value = JSON.stringify(['p', 'm2', '']);
 	view.modelSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
 	await wait();
-	assert.deepEqual(fixture.calls.find((call) => call[0] === 'switchModel')[1],
+	assert.deepEqual(fixture.calls.filter((call) => call[0] === 'switchModel').at(-1)[1],
 		{ sessionID: 'old', model: { id: 'm2', providerID: 'p' } });
 
 	view.composer.value = 'hello';

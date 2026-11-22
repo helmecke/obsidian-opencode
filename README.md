@@ -165,6 +165,8 @@ read-only workarounds.
   connection and execution status, the **Conversation** selector, the
   **New conversation** icon, and the **Retry discovery** icon; the **Agent** and
   **Model** selectors and the round arrow-up **Send** button follow on the right.
+  A healthy connection collapses to one small icon whose tooltip carries the
+  service mode and execution state; transitions and errors keep their text.
   The view has no separate header. Icon buttons show their name in a tooltip. The
   toolbar wraps in a narrow sidebar so every control and the status stay
   reachable without horizontal scrolling.
@@ -183,11 +185,12 @@ read-only workarounds.
   refreshes the reported state, and gives way to **Send** when execution
   finishes. Closing, moving, or disabling the UI is not a stop action: execution
   continues and reopening chat recovers its current state.
-- The **Agent** and **Model** selectors are compact pills in the composer's
-  toolbar. They list server-provided options for the current location; a
-  long selected model name is available in the selector's tooltip. A change is
-  applied on the server and the confirmed selection is refreshed. A failed
-  change leaves the previous confirmed selection in place and displays an
+- The **Model** trigger shows the selected model's name, followed by its
+  thinking variant when the model exposes variants, and the **Agent** trigger
+  shows the agent's name and icon. Both list server-provided options for the
+  current location; long names stay available in the selector's tooltip. A
+  change is applied on the server and the confirmed selection is refreshed. A
+  failed change leaves the previous confirmed selection in place and displays an
   error.
 - Submitted text appears immediately, followed by incremental Markdown and the
   final execution state. Connection, synchronization, and execution failures

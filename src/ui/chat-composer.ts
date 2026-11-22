@@ -1,6 +1,7 @@
 import type { ModelRef } from '@opencode/client';
+import { setIcon } from 'obsidian';
 import type { SynchronizationState } from '../state/synchronization';
-import { fillAgentOptions, fillModelOptions, modelValue } from './chat-options';
+import { fillAgentOptions, fillModelOptions, fillVariantOptions, modelValue } from './chat-options';
 import { applyCloseBracket, applyComposerEdit, applyOpenBracket, deleteEmptyPair } from './composer-link';
 import type { ComposerEdit, ComposerSelection } from './composer-link';
 import { createIconButton, setNativeDisabled } from './native-controls';
@@ -14,6 +15,14 @@ export interface ComposerHandlers {
 	stop(): void;
 }
 
+interface ComposerChoice {
+	readonly root: HTMLElement;
+	readonly container: HTMLElement;
+	readonly iconEl: HTMLElement;
+	readonly labelEl: HTMLElement;
+	readonly select: HTMLSelectElement;
+}
+
 /** Unified message card: textarea, agent/model controls, stop/send, and uncertain-send recovery. */
 export class ChatComposer {
 	private readonly card: HTMLElement;
@@ -21,10 +30,14 @@ export class ChatComposer {
 	private readonly composer: HTMLTextAreaElement;
 	private readonly sendButtonEl: HTMLButtonElement;
 	private readonly stopButtonEl: HTMLButtonElement;
+	private readonly agentChoice: ComposerChoice;
+	private readonly modelChoice: ComposerChoice;
+	private readonly variantChoice: ComposerChoice;
 	private readonly agentSelectEl: HTMLSelectElement;
 	private readonly modelSelectEl: HTMLSelectElement;
+	private readonly variantSelectEl: HTMLSelectElement;
 	private readonly promptActions: HTMLElement;
-	private signatures = { agents: '', models: '' };
+	private signatures = { agents: '', models: '', variants: '' };
 	private lastState?: SynchronizationState;
 
 	constructor(container: HTMLElement, private readonly handlers: ComposerHandlers) {
@@ -42,8 +55,13 @@ export class ChatComposer {
 		this.metaEl = start.createDiv({ cls: 'opencode-composer-meta' });
 
 		const end = toolbar.createDiv({ cls: 'opencode-composer-toolbar-end' });
-		this.agentSelectEl = this.createSelect(end, 'Agent');
-		this.modelSelectEl = this.createSelect(end, 'Model');
+		const modelGroup = end.createDiv({ cls: 'opencode-composer-model-group' });
+		this.modelChoice = this.createChoice(modelGroup, 'model', 'Model', 'sparkles');
+		this.modelSelectEl = this.modelChoice.select;
+		this.variantChoice = this.createVariantChoice(modelGroup);
+		this.variantSelectEl = this.variantChoice.select;
+		this.agentChoice = this.createChoice(end, 'agent', 'Agent', 'circle-user-round');
+		this.agentSelectEl = this.agentChoice.select;
 		this.sendButtonEl = createIconButton(end, {
 			icon: 'arrow-up',
 			label: 'Send message',
@@ -68,6 +86,16 @@ export class ChatComposer {
 			const model = modelValue(this.modelSelectEl.value);
 			if (model) this.handlers.setModel(model);
 		});
+		this.variantSelectEl.addEventListener('change', () => {
+			const selected = this.lastState?.snapshot?.selected?.model;
+			if (!selected) return;
+			const variant = this.variantSelectEl.value;
+			this.handlers.setModel({
+				providerID: selected.providerID,
+				id: selected.id,
+				...(variant ? { variant } : {}),
+			});
+		});
 		this.composer.addEventListener('keydown', (event) => {
 			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
 				event.preventDefault();
@@ -88,6 +116,7 @@ export class ChatComposer {
 	get stopButton(): HTMLButtonElement { return this.stopButtonEl; }
 	get agentSelect(): HTMLSelectElement { return this.agentSelectEl; }
 	get modelSelect(): HTMLSelectElement { return this.modelSelectEl; }
+	get variantSelect(): HTMLSelectElement { return this.variantSelectEl; }
 	get text(): string { return this.composer.value; }
 
 	setText(text: string): void {
@@ -119,10 +148,35 @@ export class ChatComposer {
 		this.renderPromptActions(state);
 	}
 
-	private createSelect(parent: HTMLElement, label: string): HTMLSelectElement {
-		const wrapper = parent.createDiv({ cls: 'opencode-composer-select' });
-		wrapper.createSpan({ text: label, cls: 'opencode-composer-select-label' });
-		return wrapper.createEl('select', { attr: { 'aria-label': label, title: label } });
+	private createChoice(parent: HTMLElement, kind: string, label: string, icon: string): ComposerChoice {
+		const root = parent.createDiv({ cls: 'opencode-composer-choice', attr: { 'data-kind': kind } });
+		const iconEl = root.createSpan({ cls: 'opencode-composer-choice-icon' });
+		setIcon(iconEl, icon);
+		const labelEl = root.createSpan({ cls: 'opencode-composer-choice-label' });
+		const select = root.createEl('select', {
+			cls: 'opencode-composer-choice-select',
+			attr: { 'aria-label': label, title: label },
+		});
+		return { root, container: root, iconEl, labelEl, select };
+	}
+
+	private createVariantChoice(parent: HTMLElement): ComposerChoice {
+		const container = parent.createDiv({ cls: 'opencode-composer-variant-slot' });
+		const slashEl = container.createSpan({ cls: 'opencode-composer-variant-slash', text: '/' });
+		const root = container.createDiv({
+			cls: 'opencode-composer-choice opencode-composer-variant',
+			attr: { 'data-kind': 'variant' },
+		});
+		const labelEl = root.createSpan({
+			cls: 'opencode-composer-choice-label opencode-composer-variant-label',
+		});
+		const select = root.createEl('select', {
+			cls: 'opencode-composer-choice-select',
+			attr: { 'aria-label': 'Thinking', title: 'Thinking' },
+		});
+		container.hidden = true;
+		root.hidden = true;
+		return { root, container, iconEl: slashEl, labelEl, select };
 	}
 
 	private updateAgentOptions(state: SynchronizationState): void {
@@ -133,7 +187,12 @@ export class ChatComposer {
 			this.signatures.agents = signature;
 			fillAgentOptions(this.agentSelectEl, agents, selected);
 		}
-		this.agentSelectEl.disabled = state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
+		const agent = agents.find((entry) => entry.id === selected);
+		this.agentChoice.labelEl.setText(agents.length ? agent?.name || selected || 'Agent' : 'No agents');
+		this.agentChoice.iconEl.style.color = agent?.color ?? '';
+		const disabled = state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
+		this.agentSelectEl.disabled = disabled;
+		this.agentChoice.root.classList.toggle('is-disabled', disabled);
 		this.describeSelect(this.agentSelectEl, 'Agent');
 	}
 
@@ -146,8 +205,44 @@ export class ChatComposer {
 			this.signatures.models = signature;
 			fillModelOptions(this.modelSelectEl, models, selected);
 		}
-		this.modelSelectEl.disabled = state.phase !== 'ready' || models.length === 0 || Boolean(state.interactionBusy);
+		const model = selected
+			? models.find((entry) => entry.providerID === selected.providerID && (entry.modelID ?? entry.id) === selected.id)
+			: undefined;
+		this.modelChoice.labelEl.setText(selected
+			? model?.name ?? selected.id
+			: models.length ? 'Session default' : 'No models');
+		this.modelChoice.root.classList.toggle('is-default', !selected);
+		const disabled = state.phase !== 'ready' || models.length === 0 || Boolean(state.interactionBusy);
+		this.modelSelectEl.disabled = disabled;
+		this.modelChoice.root.classList.toggle('is-disabled', disabled);
 		this.describeSelect(this.modelSelectEl, 'Model');
+		this.updateVariantOptions(model, selected, disabled, state.phase);
+	}
+
+	private updateVariantOptions(
+		model: { readonly variants?: readonly { readonly id: string }[] } | undefined,
+		selected: ModelRef | undefined,
+		disabled: boolean,
+		phase: SynchronizationState['phase'],
+	): void {
+		const ids = new Set((model?.variants ?? []).map((variant) => variant.id).filter(Boolean));
+		if (selected?.variant) ids.add(selected.variant);
+		const variants = [...ids];
+		const signature = JSON.stringify([selected ? [selected.providerID, selected.id] : null,
+			variants, selected?.variant ?? '', phase]);
+		if (signature !== this.signatures.variants) {
+			this.signatures.variants = signature;
+			fillVariantOptions(this.variantSelectEl, variants, selected?.variant);
+		}
+		const variant = selected?.variant ?? '';
+		this.variantChoice.container.hidden = variants.length === 0;
+		this.variantChoice.root.hidden = variants.length === 0;
+		const variantDisabled = disabled || !selected || variants.length === 0;
+		this.variantSelectEl.disabled = variantDisabled;
+		this.variantChoice.root.classList.toggle('is-disabled', variantDisabled);
+		this.variantChoice.root.classList.toggle('is-default', !variant);
+		this.variantChoice.labelEl.setText(variant || 'default');
+		this.describeSelect(this.variantSelectEl, 'Thinking');
 	}
 
 	private describeSelect(select: HTMLSelectElement, label: string): void {

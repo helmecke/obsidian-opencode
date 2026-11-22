@@ -1,4 +1,4 @@
-import { Component, Notice } from 'obsidian';
+import { Component, Notice, setIcon, setTooltip } from 'obsidian';
 import type { App, Scope } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
@@ -39,6 +39,8 @@ export class ChatRenderer {
 	private state?: SynchronizationState;
 	private viewError?: string;
 	private statusEl?: HTMLElement;
+	private statusIconEl?: HTMLElement;
+	private statusTextEl?: HTMLElement;
 	private errorEl?: HTMLElement;
 	private conversationSelect?: HTMLSelectElement;
 	private newButton?: HTMLButtonElement;
@@ -58,6 +60,7 @@ export class ChatRenderer {
 	get conversationSelectElement(): HTMLSelectElement | undefined { return this.conversationSelect; }
 	get agentSelectElement(): HTMLSelectElement | undefined { return this.composer?.agentSelect; }
 	get modelSelectElement(): HTMLSelectElement | undefined { return this.composer?.modelSelect; }
+	get variantSelectElement(): HTMLSelectElement | undefined { return this.composer?.variantSelect; }
 	get newButtonElement(): HTMLButtonElement | undefined { return this.newButton; }
 	get stopButtonElement(): HTMLButtonElement | undefined { return this.composer?.stopButton; }
 	get sendButtonElement(): HTMLButtonElement | undefined { return this.composer?.sendButton; }
@@ -94,6 +97,8 @@ export class ChatRenderer {
 		this.scope = undefined;
 		this.state = undefined;
 		this.statusEl = undefined;
+		this.statusIconEl = undefined;
+		this.statusTextEl = undefined;
 		this.errorEl = undefined;
 		this.conversationSelect = undefined;
 		this.newButton = undefined;
@@ -148,8 +153,17 @@ export class ChatRenderer {
 			label: 'New conversation',
 		});
 		this.statusEl = meta.createDiv({
-			cls: 'opencode-chat-status', text: 'Connecting…',
+			cls: 'opencode-chat-status',
 			attr: { role: 'status', 'aria-live': 'polite' },
+		});
+		this.statusIconEl = this.statusEl.createSpan({
+			cls: 'opencode-chat-status-icon',
+			attr: { 'aria-hidden': 'true' },
+		});
+		this.statusIconEl.hidden = true;
+		this.statusTextEl = this.statusEl.createSpan({
+			cls: 'opencode-chat-status-text',
+			text: 'Connecting…',
 		});
 		this.retryButton = createIconButton(meta, {
 			icon: 'refresh-cw',
@@ -201,40 +215,57 @@ export class ChatRenderer {
 		switch (state.phase) {
 			case 'ready': {
 				if (state.connection?.phase === 'starting') {
-					this.statusEl.setText(state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…');
+					this.setStatus(state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…');
 					setNativeDisabled(this.retryButton, true);
 					break;
 				}
 				if (state.connection?.phase === 'failed' && state.connection.error) {
-					this.statusEl.setText(state.connection.error);
+					this.setStatus(state.connection.error);
 					setNativeDisabled(this.retryButton, false);
 					break;
 				}
-				this.statusEl.setText(`Connected${this.connectionLabel(state)}${execution && execution !== 'unknown' ? ` · ${this.executionLabel(execution)}` : ''}`);
+				const label = `Connected${this.connectionLabel(state)}${execution && execution !== 'unknown' ? ` · ${this.executionLabel(execution)}` : ''}`;
+				const icon = execution === 'failed'
+					? undefined
+					: state.connection?.mode === 'managed' ? 'server' : 'plug';
+				this.setStatus(label, icon);
 				setNativeDisabled(this.retryButton, false);
 				break;
 			}
 			case 'synchronizing':
-				this.statusEl.setText(state.connection?.phase === 'starting'
+				this.setStatus(state.connection?.phase === 'starting'
 					? (state.connection.error ? 'Restarting OpenCode…' : 'Starting OpenCode…')
 					: state.snapshot ? 'Reconnecting…' : 'Synchronizing conversation…');
 				setNativeDisabled(this.retryButton, true);
 				break;
 			case 'retrying':
-				this.statusEl.setText(`${state.error ?? 'Connection lost.'} Retrying in ${state.delay ?? 0} ms…`);
+				this.setStatus(`${state.error ?? 'Connection lost.'} Retrying in ${state.delay ?? 0} ms…`);
 				setNativeDisabled(this.retryButton, true);
 				break;
 			case 'exhausted':
-				this.statusEl.setText(state.error ?? 'Unable to synchronize. Retry discovery.');
+				this.setStatus(state.error ?? 'Unable to synchronize. Retry discovery.');
 				setNativeDisabled(this.retryButton, false);
 				break;
 			case 'disposed':
-				this.statusEl.setText('Plugin disabled.');
+				this.setStatus('Plugin disabled.');
 				setNativeDisabled(this.retryButton, true);
 				break;
 			default:
-				this.statusEl.setText('Connecting…');
+				this.setStatus('Connecting…');
 				setNativeDisabled(this.retryButton, false);
+		}
+	}
+
+	private setStatus(text: string, icon?: string): void {
+		if (!this.statusEl || !this.statusIconEl || !this.statusTextEl) return;
+		this.statusTextEl.setText(text);
+		this.statusEl.toggleClass('is-icon-only', Boolean(icon));
+		this.statusIconEl.hidden = !icon;
+		if (icon) {
+			setIcon(this.statusIconEl, icon);
+			setTooltip(this.statusIconEl, text);
+		} else {
+			this.statusIconEl.empty();
 		}
 	}
 

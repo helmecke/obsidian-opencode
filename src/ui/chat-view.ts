@@ -34,6 +34,7 @@ export class ChatView extends ItemView {
 	get conversationSelect(): HTMLSelectElement | undefined { return this.renderer?.conversationSelectElement; }
 	get agentSelect(): HTMLSelectElement | undefined { return this.renderer?.agentSelectElement; }
 	get modelSelect(): HTMLSelectElement | undefined { return this.renderer?.modelSelectElement; }
+	get variantSelect(): HTMLSelectElement | undefined { return this.renderer?.variantSelectElement; }
 	get newButton(): HTMLButtonElement | undefined { return this.renderer?.newButtonElement; }
 	get stopButton(): HTMLButtonElement | undefined { return this.renderer?.stopButtonElement; }
 	get sendButton(): HTMLButtonElement | undefined { return this.renderer?.sendButtonElement; }

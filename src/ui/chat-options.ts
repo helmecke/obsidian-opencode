@@ -44,16 +44,23 @@ export function fillModelOptions(select: HTMLSelectElement, models: readonly Mod
 			text: `${model.providerID} · ${model.name}`, value: modelKey(model),
 		});
 	}
-	const value = selected ? modelKey(selected) : '';
+	const value = selected ? modelKey({ providerID: selected.providerID, id: selected.id }) : '';
 	if (selected && !models.some((model) => modelKey(model) === value)) {
-		// A session can carry a variant the current list does not expose; keep the
-		// full selected value while still showing the model's display name.
 		const match = models.find((model) => model.providerID === selected.providerID
 			&& (model.modelID ?? model.id) === selected.id);
 		const label = match ? `${match.providerID} · ${match.name}` : `${selected.providerID} · ${selected.id}`;
-		select.createEl('option', {
-			text: selected.variant ? `${label} / ${selected.variant}` : label, value,
-		});
+		select.createEl('option', { text: label, value });
 	}
 	select.value = value;
+}
+
+export function fillVariantOptions(select: HTMLSelectElement, variants: readonly string[], selected?: string): void {
+	select.empty();
+	if (!variants.length) {
+		select.disabled = true;
+		return;
+	}
+	select.createEl('option', { text: 'Default', value: '' });
+	for (const variant of variants) select.createEl('option', { text: variant, value: variant });
+	select.value = selected && variants.includes(selected) ? selected : '';
 }
