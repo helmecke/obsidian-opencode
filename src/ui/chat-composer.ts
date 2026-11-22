@@ -15,6 +15,7 @@ export interface ComposerHandlers {
 /** Unified message card: textarea, agent/model controls, stop/send, and uncertain-send recovery. */
 export class ChatComposer {
 	private readonly card: HTMLElement;
+	private readonly metaEl: HTMLElement;
 	private readonly composer: HTMLTextAreaElement;
 	private readonly sendButtonEl: HTMLButtonElement;
 	private readonly stopButtonEl: HTMLButtonElement;
@@ -46,6 +47,7 @@ export class ChatComposer {
 		setIcon(this.stopButtonEl, 'square');
 		this.stopButtonEl.hidden = true;
 		this.stopButtonEl.disabled = true;
+		this.metaEl = start.createDiv({ cls: 'opencode-composer-meta' });
 
 		const end = toolbar.createDiv({ cls: 'opencode-composer-toolbar-end' });
 		this.agentSelectEl = this.createSelect(end, 'Agent');
@@ -82,6 +84,7 @@ export class ChatComposer {
 	}
 
 	get element(): HTMLTextAreaElement { return this.composer; }
+	get metaElement(): HTMLElement { return this.metaEl; }
 	get sendButton(): HTMLButtonElement { return this.sendButtonEl; }
 	get stopButton(): HTMLButtonElement { return this.stopButtonEl; }
 	get agentSelect(): HTMLSelectElement { return this.agentSelectEl; }

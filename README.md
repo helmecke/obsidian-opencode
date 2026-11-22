@@ -146,8 +146,12 @@ read-only workarounds.
 
 - **New conversation** creates a session whose workspace is this vault's
   absolute filesystem path. Creation is deduplicated when clicked repeatedly.
+  The icon button sits in the composer's bottom toolbar, next to the
+  **Conversation** selector; its name appears in a tooltip.
 - The **Conversation** list shows sessions belonging to this vault only. Choose
-  one to resume it. The last selected session is remembered.
+  one to resume it. The last selected session is remembered. The selector is in
+  the composer's bottom toolbar and has no visible label; its name appears in a
+  tooltip.
 - Reopening chat reloads the selected conversation's authoritative messages from
   OpenCode without creating a duplicate. If the saved conversation no longer
   exists or was moved to another workspace, chat shows a recoverable empty state
@@ -156,28 +160,34 @@ read-only workarounds.
 
 ### Messages and execution
 
-- The composer is one card. The message field sits above a control row that
-  holds the **Agent** and **Model** selectors and the round arrow-up **Send**
-  button; the agent and model controls are no longer in the view header.
+- The composer is one card. The message field sits above a bottom toolbar shared
+  by the conversation and message controls. The toolbar's left side holds the
+  connection and execution status, the **Conversation** selector, the
+  **New conversation** icon, and the **Retry discovery** icon; the **Agent** and
+  **Model** selectors and the round arrow-up **Send** button follow on the right.
+  The view has no separate header. Icon buttons show their name in a tooltip. The
+  toolbar wraps in a narrow sidebar so every control and the status stay
+  reachable without horizontal scrolling.
 - Type in the message field; **Ctrl/Cmd+Enter** sends and **Shift+Enter** inserts
   a newline. The **Send** button is an alternative. The field grows with the
   message up to 40% of the window height and then scrolls.
-- While execution is running, the composer's control row also shows a square
+- While execution is running, the composer's toolbar also shows a square
   **Stop** button. It requests server-side interruption, refreshes the reported
   state, and disappears when execution finishes. Closing, moving, or disabling
   the UI is not a stop action: execution continues and reopening chat recovers
   its current state.
 - The **Agent** and **Model** selectors are compact pills in the composer's
-  control row. They list server-provided options for the current location; a
+  toolbar. They list server-provided options for the current location; a
   long selected model name is available in the selector's tooltip. A change is
   applied on the server and the confirmed selection is refreshed. A failed
   change leaves the previous confirmed selection in place and displays an
   error.
 - Submitted text appears immediately, followed by incremental Markdown and the
   final execution state. Connection, synchronization, and execution failures
-  appear in the view rather than as repeated global notifications.
-- **Retry discovery** is available after connection failure or exhaustion. It
-  is disabled while an automatic bounded-backoff attempt is running.
+  appear in the composer status rather than as repeated global notifications.
+- **Retry discovery** is the refresh icon in the composer toolbar and is
+  available after connection failure or exhaustion. It is disabled while an
+  automatic bounded-backoff attempt is running.
 
 ### Conversation persistence and connection recovery
 

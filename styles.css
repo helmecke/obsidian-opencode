@@ -9,58 +9,52 @@
 	font-size: var(--font-ui-medium);
 }
 
-.opencode-chat-header {
+.opencode-composer-meta {
 	display: flex;
-	flex-direction: column;
-	gap: var(--size-4-2);
-	padding: var(--size-4-3) var(--size-4-4);
-	border-bottom: 1px solid var(--background-modifier-border);
-	background-color: var(--background-secondary);
-}
-
-.opencode-chat-heading {
-	display: flex;
-	align-items: baseline;
-	gap: var(--size-4-3);
+	align-items: center;
+	gap: var(--size-4-1) var(--size-4-2);
+	flex: 1 1 auto;
 	flex-wrap: wrap;
-}
-
-.opencode-chat-heading h2 {
-	margin: 0;
-	font-size: var(--font-ui-large);
+	min-width: 0;
 }
 
 .opencode-chat-status {
-	flex: 1;
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 100%;
 	color: var(--text-muted);
-}
-
-.opencode-chat-conversations {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-2);
-	flex-wrap: wrap;
-	padding: var(--size-4-2) var(--size-4-4);
-	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
 }
 
 .opencode-chat-select {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-1);
+	flex: 0 1 auto;
 	min-width: 0;
-	max-width: 100%;
-}
-
-.opencode-chat-select-label {
+	max-width: 13em;
+	height: 1.9em;
+	padding: 0 var(--size-4-1);
+	border: 1px solid transparent;
+	border-radius: var(--radius-l);
+	background-color: var(--background-secondary);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+	cursor: pointer;
 }
 
-.opencode-chat-select select {
-	min-width: 0;
-	flex: 1;
-	max-width: 16em;
+.opencode-chat-select:hover {
+	background-color: var(--background-secondary-alt);
+	color: var(--text-normal);
+}
+
+.opencode-chat-select:focus-visible {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.opencode-chat-select:disabled {
+	cursor: default;
+	opacity: 0.6;
 }
 
 .opencode-chat-errors {
@@ -355,10 +349,10 @@
 .opencode-composer-toolbar-start {
 	display: flex;
 	align-items: center;
-	flex: 0 0 auto;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
 	gap: var(--size-4-1);
-	/* Reserve the stop slot so execution state changes never shift the field or selectors. */
-	min-width: 2.25rem;
+	min-width: 0;
 	min-height: 2.25rem;
 }
 

@@ -1,4 +1,4 @@
-import { Component, Notice } from 'obsidian';
+import { Component, Notice, setIcon } from 'obsidian';
 import type { App, Scope } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
@@ -122,17 +122,6 @@ export class ChatRenderer {
 
 	private build(): void {
 		if (!this.contentEl) return;
-		const header = this.contentEl.createDiv({ cls: 'opencode-chat-header' });
-		const heading = header.createDiv({ cls: 'opencode-chat-heading' });
-		heading.createEl('h2', { text: 'OpenCode' });
-		this.statusEl = heading.createDiv({ cls: 'opencode-chat-status', text: 'Connecting…' });
-		this.retryButton = heading.createEl('button', { text: 'Retry discovery', cls: 'opencode-retry' });
-		this.retryButton.disabled = true;
-
-		const conversations = this.contentEl.createDiv({ cls: 'opencode-chat-conversations' });
-		this.conversationSelect = this.createSelect(conversations, 'Conversation');
-		this.newButton = conversations.createEl('button', { text: 'New conversation' });
-
 		this.errorEl = this.contentEl.createDiv({ cls: 'opencode-chat-errors' });
 		this.messagesEl = this.contentEl.createDiv({ cls: 'opencode-chat-messages' });
 		this.interactions = new ChatInteractionsPanel(
@@ -146,12 +135,27 @@ export class ChatRenderer {
 			setModel: (model) => this.handlers.setModel(model),
 			stop: () => this.handlers.stop(),
 		});
-	}
 
-	private createSelect(parent: HTMLElement, label: string): HTMLSelectElement {
-		const wrapper = parent.createDiv({ cls: 'opencode-chat-select' });
-		wrapper.createSpan({ text: label, cls: 'opencode-chat-select-label' });
-		return wrapper.createEl('select', { attr: { 'aria-label': label } });
+		const meta = this.composer.metaElement;
+		this.conversationSelect = meta.createEl('select', {
+			cls: 'opencode-chat-select',
+			attr: { 'aria-label': 'Conversation', title: 'Conversation' },
+		});
+		this.newButton = meta.createEl('button', {
+			cls: 'opencode-composer-icon',
+			attr: { 'aria-label': 'New conversation', title: 'New conversation' },
+		});
+		setIcon(this.newButton, 'message-square-plus');
+		this.statusEl = meta.createDiv({
+			cls: 'opencode-chat-status', text: 'Connecting…',
+			attr: { role: 'status', 'aria-live': 'polite' },
+		});
+		this.retryButton = meta.createEl('button', {
+			cls: 'opencode-composer-icon opencode-retry',
+			attr: { 'aria-label': 'Retry discovery', title: 'Retry discovery' },
+		});
+		setIcon(this.retryButton, 'refresh-cw');
+		this.retryButton.disabled = true;
 	}
 
 	private attachRendering(opening: Component): void {

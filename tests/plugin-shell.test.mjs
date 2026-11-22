@@ -125,7 +125,9 @@ test('native view renders the conversation shell and clears its content on close
 	assert.equal(view.getIcon(), 'message-square');
 	assert.ok(view.contentEl.classList.contains('opencode-chat'));
 	assert.match(view.statusEl.textContent, /Connected · Shared service/);
-	assert.equal(view.retryButton.textContent, 'Retry discovery');
+	assert.equal(view.retryButton.getAttribute('aria-label'), 'Retry discovery');
+	assert.match(view.retryButton.title, /Retry discovery/);
+	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
 	assert.ok(view.messagesEl);
 	assert.ok(view.composer);
 	assert.ok(view.interactionsEl);
@@ -136,6 +138,26 @@ test('native view renders the conversation shell and clears its content on close
 	assert.ok(card.querySelector('.opencode-composer-toolbar-start'));
 	assert.ok(card.querySelector('.opencode-composer-toolbar-end'));
 	assert.ok(card.querySelector('.opencode-chat-prompt-actions'));
+	const meta = card.querySelector('.opencode-composer-toolbar-start > .opencode-composer-meta');
+	assert.ok(meta, 'The composer toolbar owns the meta group');
+	assert.notEqual(card.firstElementChild, meta, 'The meta group is not a separate row above the message field');
+	assert.ok(meta.contains(view.statusEl), 'Status lives in the composer toolbar');
+	assert.ok(meta.contains(view.retryButton), 'Retry discovery lives in the composer toolbar');
+	assert.ok(meta.contains(view.conversationSelect), 'Conversation selector lives in the composer toolbar');
+	assert.ok(meta.contains(view.newButton), 'New conversation lives in the composer toolbar');
+	assert.equal(view.statusEl.getAttribute('role'), 'status');
+	assert.equal(view.statusEl.getAttribute('aria-live'), 'polite');
+	assert.equal(view.conversationSelect.getAttribute('aria-label'), 'Conversation');
+	assert.equal(view.conversationSelect.title, 'Conversation');
+	assert.equal(meta.querySelector('.opencode-chat-select-label'), null, 'The conversation select has no visible label');
+	assert.equal(view.newButton.getAttribute('aria-label'), 'New conversation');
+	assert.equal(view.newButton.title, 'New conversation');
+	assert.ok(view.newButton.querySelector('.lucide-message-square-plus'), 'New conversation uses the message-square-plus icon');
+	assert.equal(view.retryButton.getAttribute('aria-label'), 'Retry discovery');
+	assert.equal(view.retryButton.title, 'Retry discovery');
+	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
+	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0,
+		'The transcript is not preceded by separate header rows');
 	assert.equal(view.sendButton.getAttribute('aria-label'), 'Send message');
 	assert.match(view.sendButton.title, /Ctrl\/Cmd\+Enter/);
 	assert.ok(view.sendButton.querySelector('.lucide-arrow-up'), 'Send uses the arrow-up icon');
@@ -153,7 +175,12 @@ test('native view renders the conversation shell and clears its content on close
 	const classes = [...card.querySelectorAll('*')].flatMap((element) => [...element.classList]);
 	assert.deepEqual(classes.filter((name) => /attach|voice|microphone|shield|command|skill/.test(name)), []);
 	await view.onOpen();
-	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header').length, 1);
+	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0);
+	const reopenedMeta = view.contentEl.querySelector('.opencode-composer-toolbar-start > .opencode-composer-meta');
+	assert.ok(reopenedMeta?.contains(view.statusEl));
+	assert.ok(reopenedMeta?.contains(view.retryButton));
+	assert.ok(reopenedMeta?.contains(view.conversationSelect));
+	assert.ok(reopenedMeta?.contains(view.newButton));
 	await view.onClose();
 	assert.equal(view.contentEl.childElementCount, 0);
 	assert.equal(view.contentEl.classList.contains('opencode-chat'), false);
@@ -271,7 +298,12 @@ test('close/reopen before discovery settles updates only the current opening', a
 	await Promise.all([oldOpen, newOpen]);
 	assert.equal(oldStatus.textContent, 'Synchronizing conversation…');
 	assert.match(view.statusEl.textContent, /Connected · Shared service/);
-	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header').length, 1);
+	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0);
+	const meta = view.contentEl.querySelector('.opencode-composer-toolbar-start > .opencode-composer-meta');
+	assert.ok(meta?.contains(view.statusEl));
+	assert.ok(meta?.contains(view.retryButton));
+	assert.ok(meta?.contains(view.conversationSelect));
+	assert.ok(meta?.contains(view.newButton));
 	plugin.unload();
 });
 
