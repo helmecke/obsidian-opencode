@@ -11,7 +11,7 @@ import type { PermissionDecision } from './permission-card';
 import { ChatComposer } from './chat-composer';
 import { ChatInteractionsPanel } from './chat-interactions-panel';
 import { createIconButton, setNativeDisabled } from './native-controls';
-import { NoteLinkSuggest } from './note-link-suggest';
+import { ComposerSuggest } from './composer-suggest';
 
 const VAULT_ROOT_SOURCE = '';
 
@@ -29,6 +29,8 @@ export interface ChatViewHandlers {
 	replyForm(id: string, answer: Record<string, FormValue>): void;
 	cancelForm(id: string): void;
 	loadOptions(): void;
+	loadSkills(): Promise<void>;
+	loadCommands(): Promise<void>;
 }
 
 /** Owns the chat DOM: element creation, control wiring, and state-to-DOM updates. */
@@ -186,8 +188,14 @@ export class ChatRenderer {
 		attachLinkRouter(this.messagesEl, VAULT_ROOT_SOURCE, environment, opening);
 		if (!this.retryButton || !this.newButton || !this.composer) return;
 		// AbstractInputSuggest declares an input element but only needs value, events and a rectangle.
-		const suggestions = new NoteLinkSuggest(
-			this.app, this.composer.element as unknown as HTMLInputElement, () => this.handlers.send());
+		const suggestions = new ComposerSuggest(
+			this.app, this.composer.element as unknown as HTMLInputElement, {
+				loadSkills: () => this.handlers.loadSkills(),
+				getSkills: () => this.state?.skills,
+				loadCommands: () => this.handlers.loadCommands(),
+				getCommands: () => this.state?.commands,
+			},
+			() => this.handlers.send());
 		opening.register(() => suggestions.dispose());
 		// Obsidian's keymap handles trusted shortcuts before DOM bubbling.
 		// A view-local scope takes priority without registering a global hotkey.
@@ -320,7 +328,8 @@ export class ChatRenderer {
 		const messages: string[] = [];
 		if (state.error && (state.phase === 'retrying' || state.phase === 'exhausted')) messages.push(state.error);
 		if (this.viewError) messages.push(this.viewError);
-		if (state.actionError) messages.push(state.actionError);
+		// A failed command is shown with its retained text in the composer card.
+		if (state.actionError && state.actionError !== state.commandError) messages.push(state.actionError);
 		if (state.optionsError) messages.push(state.optionsError);
 		const signature = JSON.stringify([messages, Boolean(state.optionsError)]);
 		if (signature === this.signatures.errors) return;

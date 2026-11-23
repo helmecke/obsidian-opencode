@@ -32,9 +32,22 @@ function fixture(policy = {}) {
 	let invalidations = 0;
 	let selected = { id: 'one', location: { directory: root }, outcome: 'succeeded' };
 	let messages = [{ id: 'answer', type: 'assistant', content: [{ type: 'text', text: 'answer' }], time: { created: 1, completed: 2 } }];
+	let skills = [
+		{ id: 'skill-apply', name: 'apply', description: 'Apply a change', path: 'C:\\Vault\\skills\\apply.md', content: '# apply' },
+		{ id: 'skill-build', name: 'build', path: 'C:\\Vault\\skills\\build.md', content: '# build' },
+	];
+	let commands = [
+		{ name: 'review', description: 'Review the working tree' },
+		{ name: 'team/review' },
+		{ name: 'broken' },
+	];
+	let failNextPrompt = false;
 	const client = {
 		agent: { list: async () => ({ data: [] }) },
 		model: { list: async () => ({ data: [] }) },
+		skill: { list: async (input) => { calls.push(['skills', input]); return { location: { directory: root }, data: skills }; } },
+		command: { list: async (input) => { calls.push(['commands', input]); return { location: { directory: root }, data: commands }; } },
+		message: { list: async () => ({ data: structuredClone(messages), cursor: {} }) },
 		event: { subscribe({ signal }) {
 			calls.push('subscribe');
 			const queue = [event('server.connected')];
@@ -53,6 +66,15 @@ function fixture(policy = {}) {
 		session: {
 			active: async ({ signal }) => { calls.push(['active', signal]); return f.active; },
 			form: { list: async (input, { signal }) => { calls.push(['forms', input, signal]); return f.forms; } },
+			prompt: async (input) => {
+				calls.push(['prompt', structuredClone(input)]);
+				if (failNextPrompt) { failNextPrompt = false; throw new Error('lost ack'); }
+				return { id: input.id, sessionID: input.sessionID, type: 'user', payload: { text: input.text }, delivery: 'queue' };
+			},
+			command: async (input) => {
+				calls.push(['command', structuredClone(input)]);
+				if (input.name === 'broken') throw new Error('rejected by the service');
+			},
 		},
 		permission: { list: async (input, { signal }) => { calls.push(['permissions', input, signal]); return f.permissions; } },
 	};
@@ -65,6 +87,10 @@ function fixture(policy = {}) {
 			await f.duringSnapshot?.(snapshots, signal);
 			return result;
 		},
+		async refreshSelected() {
+			calls.push('refreshSelected');
+			return structuredClone({ selected, messages, sessions: [selected] });
+		},
 	};
 	const connection = { signal: lifetime.signal, connect: async () => { calls.push('connect'); return client; }, invalidate: () => { invalidations++; } };
 	const coordinator = new SynchronizationCoordinator(connection, sessions, { retries: 3, baseDelay: 10, maxDelay: 20, timeout: 100, ...policy }, clock);
@@ -72,6 +98,8 @@ function fixture(policy = {}) {
 		coordinator, lifetime, client, sessions, connection, jobs, streams, calls, active: {}, permissions: [], forms: [],
 		get snapshots() { return snapshots; }, get invalidations() { return invalidations; },
 		setSelected(value) { selected = value; }, setMessages(value) { messages = value; },
+		setSkills(value) { skills = value; }, setCommands(value) { commands = value; },
+		failNext() { failNextPrompt = true; },
 		run(delay) { const entry = [...jobs].find(([, job]) => job.delay === delay); assert.ok(entry, `Missing ${delay}ms timer`); jobs.delete(entry[0]); entry[1].callback(); },
 	};
 	return f;
@@ -112,6 +140,65 @@ test('live text batches publish incremental projection changes to subscribed vie
 	await tick();
 	f.coordinator.ingestion.drain();
 	assert.equal(observed.at(-1), 'first second');
+	f.lifetime.abort();
+});
+
+test('known skill mentions attach IDs end-to-end and an unconfirmed retry keeps them', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	await f.coordinator.sendMessage('use $apply');
+	const sent = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(sent.text, 'use $apply');
+	assert.deepEqual(sent.skills, [{ id: 'skill-apply' }]);
+	assert.equal(f.coordinator.state.pendingPrompt.phase, 'admitted');
+
+	f.failNext();
+	await f.coordinator.sendMessage('retry $apply');
+	const failed = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(failed.text, 'retry $apply');
+	assert.deepEqual(failed.skills, [{ id: 'skill-apply' }]);
+	assert.equal(f.coordinator.state.pendingPrompt.phase, 'uncertain');
+	await f.coordinator.pending;
+	await f.coordinator.retryPrompt();
+	const retried = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(retried.id, failed.id, 'Retry preserves the prompt identity');
+	assert.equal(retried.text, 'retry $apply');
+	assert.deepEqual(retried.skills, [{ id: 'skill-apply' }]);
+	assert.equal(f.coordinator.state.pendingPrompt.phase, 'admitted');
+	f.lifetime.abort();
+});
+
+test('a known leading command dispatches end-to-end while an unknown one keeps the prompt path', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(await f.coordinator.sendMessage('/review src/auth.ts'), true);
+	assert.deepEqual(f.calls.find((call) => call[0] === 'command')[1],
+		{ sessionID: 'one', name: 'review', text: 'src/auth.ts' });
+	assert.equal(f.calls.filter((call) => call[0] === 'prompt').length, 0,
+		'A known command never reaches the prompt endpoint');
+
+	assert.equal(await f.coordinator.sendMessage('/team/review src/other.ts'), true);
+	assert.deepEqual(f.calls.filter((call) => call[0] === 'command').at(-1)[1],
+		{ sessionID: 'one', name: 'team/review', text: 'src/other.ts' });
+
+	assert.equal(await f.coordinator.sendMessage('/unknown stays text'), true);
+	assert.equal(f.calls.filter((call) => call[0] === 'command').length, 2);
+	assert.equal(f.calls.filter((call) => call[0] === 'prompt').at(-1)[1].text, '/unknown stays text');
+	f.lifetime.abort();
+});
+
+test('the command catalog is not requested during open and loads once on demand', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(f.calls.filter((call) => call[0] === 'commands').length, 0,
+		'A ready conversation must not request commands before the first / query');
+	assert.equal(f.coordinator.state.commands, undefined);
+	await f.coordinator.loadCommands();
+	assert.deepEqual(f.calls.filter((call) => call[0] === 'commands')[0][1], { location: { directory: root } });
+	assert.deepEqual(f.coordinator.state.commands.map((command) => command.name),
+		['review', 'team/review', 'broken']);
+	await f.coordinator.loadCommands();
+	assert.equal(f.calls.filter((call) => call[0] === 'commands').length, 1, 'The catalog is reused');
 	f.lifetime.abort();
 });
 

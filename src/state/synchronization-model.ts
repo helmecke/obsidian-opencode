@@ -1,4 +1,4 @@
-import type { AgentInfo, FormInfo, ModelInfo, PermissionRequest } from '@opencode/client';
+import type { AgentInfo, CommandInfo, FormInfo, ModelInfo, PermissionRequest, SkillInfo } from '@opencode/client';
 import * as timers from 'node:timers';
 import type { ConnectionStatus } from '../opencode/connection';
 import type { SessionSnapshot } from '../opencode/sessions';
@@ -22,8 +22,12 @@ export interface SynchronizationState {
 	readonly pendingPrompt?: PendingPrompt;
 	readonly agents?: readonly AgentInfo[];
 	readonly models?: readonly ModelInfo[];
+	readonly skills?: readonly SkillInfo[];
+	readonly commands?: readonly CommandInfo[];
 	readonly optionsError?: string;
 	readonly actionError?: string;
+	/** A failed command shown with the composer that kept its text. */
+	readonly commandError?: string;
 	readonly interactionBusy?: InteractionBusy;
 	readonly connection?: ConnectionStatus;
 }
@@ -40,6 +44,7 @@ export const defaultPolicy: Policy = {
 
 export const actionMessages = {
 	send: 'Unable to confirm whether the message was received. Its text was kept; reconcile before retrying.',
+	command: 'Unable to run the command. Its text was kept; check the conversation before sending it again.',
 	retry: 'The message is still unconfirmed. Reconcile again before retrying.',
 	stop: 'Unable to confirm execution interruption. The conversation was refreshed; check its current state.',
 	agent: 'Unable to change the agent. The server-confirmed selection is unchanged.',

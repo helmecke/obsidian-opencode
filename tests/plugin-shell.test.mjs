@@ -22,6 +22,7 @@ const emptyClient = () => ({
 	agent: { list: async () => ({ data: [] }) },
 	model: { list: async () => ({ data: [] }) },
 	permission: { list: async () => [] },
+	command: { list: async () => ({ data: [] }) },
 	session: {
 		list: async () => ({ data: [], cursor: {} }),
 		active: async () => ({}),
@@ -398,6 +399,21 @@ function interactionClient() {
 			{ providerID: 'p', modelID: 'm2', name: 'Two', enabled: true, variants: [{ id: 'high' }] },
 			{ providerID: 'p', modelID: 'off', name: 'Off', enabled: false },
 		] }) },
+		skill: { list: async () => {
+			calls.push(['skills']);
+			return { location: { directory: 'C:\\Vault' }, data: [
+				{ id: 'skill-apply', name: 'apply', description: 'Apply a change', path: 'C:\\Vault\\skills\\apply.md', content: '# apply' },
+				{ id: 'skill-build', name: 'build', path: 'C:\\Vault\\skills\\build.md', content: '# build' },
+			] };
+		} },
+		command: { list: async () => {
+			calls.push(['commands']);
+			return { location: { directory: 'C:\\Vault' }, data: [
+				{ name: 'review', description: 'Review the working tree' },
+				{ name: 'team/review' },
+				{ name: 'broken' },
+			] };
+		} },
 		permission: { list: async () => [] },
 		message: { list: async ({ sessionID, order }) => {
 			calls.push(['messages', sessionID, order]);
@@ -418,6 +434,10 @@ function interactionClient() {
 			prompt: async (input) => {
 				calls.push(['prompt', input]);
 				return { id: input.id, sessionID: input.sessionID, type: 'user', payload: { text: input.text }, delivery: 'queue' };
+			},
+			command: async (input) => {
+				calls.push(['command', input]);
+				if (input.name === 'broken') throw new Error('rejected by the service');
 			},
 			interrupt: async (input) => { calls.push(['interrupt', input]); return { interrupted: true }; },
 			switchAgent: async (input) => { calls.push(['switchAgent', input]); },
@@ -589,7 +609,7 @@ test('composer pairs brackets through programmatic edits, opens note completion,
 	assert.equal(composer.value, '[[]]');
 	assert.equal(composer.selectionStart, 2);
 	assert.equal(composer.__suggest.isOpen, true, 'Typing [[ opens note completion');
-	assert.deepEqual(composer.__suggest.suggestions.map((file) => file.basename), ['Alone', 'Example']);
+	assert.deepEqual(composer.__suggest.suggestions.map((entry) => entry.file.basename), ['Alone', 'Example']);
 	press('Backspace');
 	assert.equal(composer.value, '[]', 'Backspacing the empty inner pair removes both brackets');
 	assert.equal(composer.selectionStart, 1);
@@ -606,6 +626,91 @@ test('composer pairs brackets through programmatic edits, opens note completion,
 	await wait();
 	const prompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
 	assert.equal(prompt.text, '[[]]', 'Ctrl+Enter sends while the popover is open');
+
+	assert.equal(fixture.calls.filter((call) => call[0] === 'skills').length, 0,
+		'Note completion does not request the skill catalog');
+	composer.value = '$';
+	composer.setSelectionRange(1, 1);
+	composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'skills').length, 1,
+		'The first $ query requests the catalog once');
+	assert.deepEqual(composer.__suggest.suggestions.map((entry) => entry.skill.name), ['apply', 'build']);
+	composer.__suggest.selectSuggestion(composer.__suggest.suggestions[0], {});
+	assert.equal(composer.value, '$apply ', 'Selecting a skill inserts the trailing-space mention');
+	assert.equal(composer.selectionStart, 7);
+	press('Enter', { ctrlKey: true });
+	await wait();
+	const skillPrompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(skillPrompt.text, '$apply ');
+	assert.deepEqual(skillPrompt.skills, [{ id: 'skill-apply' }]);
+	assert.equal(fixture.calls.filter((call) => call[0] === 'skills').length, 1,
+		'A typed send reuses the loaded catalog');
+	plugin.unload();
+});
+
+test('slash completion loads the command catalog only after the first / and inserts without sending', async () => {
+	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+	const view = registrations.views.get('opencode-chat')({});
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'commands').length, 0,
+		'No command catalog request before the first /');
+	const composer = view.composer;
+	composer.focus();
+	composer.value = '/';
+	composer.setSelectionRange(1, 1);
+	composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'commands').length, 1,
+		'The first / requests the catalog once');
+	assert.equal(composer.__suggest.isOpen, true);
+	assert.deepEqual(composer.__suggest.suggestions.map((entry) => entry.command.name),
+		['broken', 'review', 'team/review']);
+	composer.__suggest.selectSuggestion(
+		composer.__suggest.suggestions.find((entry) => entry.command.name === 'review'), {});
+	assert.equal(composer.value, '/review ');
+	assert.equal(composer.selectionStart, 8);
+	assert.equal(fixture.calls.filter((call) => call[0] === 'prompt').length, 0, 'Selection does not send');
+	plugin.unload();
+});
+
+test('a confirmed command clears the composer while a failed command keeps its text and reports an error', async () => {
+	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+	const view = registrations.views.get('opencode-chat')({});
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	const composer = view.composer;
+	const send = async (value) => {
+		composer.focus();
+		composer.value = value;
+		composer.setSelectionRange(value.length, value.length);
+		composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+		composer.dispatchEvent(new window.KeyboardEvent('keydown',
+			{ key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+		await wait();
+	};
+
+	await send('/review src/auth.ts');
+	assert.deepEqual(fixture.calls.find((call) => call[0] === 'command')[1],
+		{ sessionID: 'old', name: 'review', text: 'src/auth.ts' });
+	assert.equal(fixture.calls.filter((call) => call[0] === 'prompt').length, 0,
+		'A known command is not sent as prompt text');
+	assert.equal(composer.value, '', 'A confirmed command clears the composer');
+
+	await send('/broken keep me');
+	assert.equal(composer.value, '/broken keep me', 'A failed command keeps its text');
+	const card = view.contentEl.querySelector('.opencode-composer-card');
+	assert.match(card.textContent, /Unable to run the command/,
+		'The composer card reports the command failure beside the retained text');
+	assert.doesNotMatch(view.contentEl.querySelector('.opencode-chat-errors').textContent,
+		/Unable to run the command/, 'The same command error is not duplicated above the transcript');
+	assert.equal(fixture.calls.filter((call) => call[0] === 'command').length, 2,
+		'A failed command is never automatically resent');
 	plugin.unload();
 });
 

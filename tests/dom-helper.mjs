@@ -106,8 +106,19 @@ export function createObsidian(app, notices = [], extra = {}) {
 		setValue(value) { this.textInputEl.value = value; }
 		refresh() {
 			const results = this.getSuggestions(this.textInputEl.value);
-			this.suggestions = Array.isArray(results) ? results : [];
-			this.isOpen = this.suggestions.length > 0;
+			if (Array.isArray(results)) {
+				this.suggestions = results;
+				this.isOpen = results.length > 0;
+				return;
+			}
+			// A skill query loads the catalog asynchronously; keep the last rows until it resolves.
+			Promise.resolve(results).then((entries) => {
+				this.suggestions = Array.isArray(entries) ? entries : [];
+				this.isOpen = this.suggestions.length > 0;
+			}).catch(() => {
+				this.suggestions = [];
+				this.isOpen = false;
+			});
 		}
 		onSelect(callback) { this.onSelectCallback = callback; return this; }
 		open() { this.isOpen = true; }

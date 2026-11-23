@@ -90,7 +90,17 @@ export class SynchronizationCoordinator {
 		return this.actions.loadOptions();
 	}
 
-	sendMessage(text: string): Promise<void> {
+	/** Lazy skill catalog for composer completion; never gates chat. */
+	loadSkills(): Promise<void> {
+		return this.actions.loadSkills();
+	}
+
+	/** Lazy command catalog for composer completion; never gates chat. */
+	loadCommands(): Promise<void> {
+		return this.actions.loadCommands();
+	}
+
+	sendMessage(text: string): Promise<boolean> {
 		return this.actions.sendMessage(text);
 	}
 

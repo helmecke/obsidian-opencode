@@ -11,6 +11,7 @@ compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'], {}
 const { SynchronizationCoordinator } = module.exports;
 const root = 'C:\\Vault';
 const tick = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+const deferred = () => { let resolve; const promise = new Promise((value) => { resolve = value; }); return { promise, resolve }; };
 let eventID = 0;
 const event = (type, data = {}) => ({ id: `event-${++eventID}`, created: eventID, type,
 	...(/^session\.(inbox|execution|step)\.|^session\.(agent|model)\.selected$/.test(type)
@@ -24,6 +25,16 @@ function fixture() {
 	let messages = [{ id: 'saved', type: 'assistant', content: [{ type: 'text', text: 'saved' }], time: { created: 1, completed: 2 } }];
 	let permissions = [];
 	let forms = [];
+	let skills = [
+		{ id: 'skill-apply', name: 'apply', description: 'Apply a change', path: 'C:\\Vault\\skills\\apply.md', content: '# apply' },
+		{ id: 'skill-build', name: 'build', path: 'C:\\Vault\\skills\\build.md', content: '# build' },
+	];
+	let commands = [
+		{ name: 'review', description: 'Review the working tree' },
+		{ name: 'team/review' },
+		{ name: 'broken' },
+		{ name: 'gone' },
+	];
 	let promptID = 0;
 	const streams = [];
 	const client = {
@@ -48,6 +59,8 @@ function fixture() {
 			{ id: 'secret', name: 'Secret', mode: 'primary', hidden: true },
 			{ id: 'child', name: 'Child', mode: 'subagent', hidden: false },
 		] }; } },
+		skill: { list: async (input) => { calls.push(['skills', input]); return { location: { directory: root }, data: skills }; } },
+		command: { list: async (input) => { calls.push(['commands', input]); return { location: { directory: root }, data: commands }; } },
 		model: { list: async (input) => { calls.push(['models', input]); return { data: [
 			{ id: 'm', modelID: 'm1', providerID: 'p', name: 'Model One', enabled: true },
 			{ id: 'm', modelID: 'm2', providerID: 'p', name: 'Model Two', enabled: true },
@@ -87,6 +100,11 @@ function fixture() {
 				}
 				return { id: input.id, sessionID: session.id, type: 'user', payload: { text: input.text }, delivery: 'queue' };
 			},
+			command: async (input) => {
+				calls.push(['command', input]);
+				if (input.name === 'broken') throw new Error('rejected by the service');
+				if (input.name === 'gone') throw Object.assign(new Error('command not found'), { status: 404 });
+			},
 			interrupt: async (input) => { calls.push(['interrupt', input]); return { interrupted: true }; },
 			switchAgent: async (input) => {
 				calls.push(['switchAgent', input]);
@@ -118,6 +136,8 @@ function fixture() {
 		setPermissions(value) { permissions = value; },
 		setForms(value) { forms = value; },
 		setMessages(value) { messages = value; },
+		setSkills(value) { skills = value; },
+		setCommands(value) { commands = value; },
 		push(event) { streams.at(-1).push(event); },
 	};
 }
@@ -130,6 +150,96 @@ test('loadOptions publishes only usable, location-scoped agents and models', asy
 	assert.deepEqual(f.coordinator.state.models.map((model) => model.modelID), ['m1', 'm2']);
 	assert.deepEqual(f.calls.filter((call) => call[0] === 'agents')[0][1], { location: { directory: root } });
 	assert.deepEqual(f.calls.filter((call) => call[0] === 'models')[0][1], { location: { directory: root } });
+	f.lifetime.abort();
+});
+
+test('skills load lazily once, publish for the connection, and are not requested during open', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(f.calls.filter((call) => call[0] === 'skills').length, 0, 'Connecting must not request the catalog');
+	assert.equal(f.coordinator.state.skills, undefined);
+	await f.coordinator.loadSkills();
+	assert.deepEqual(f.calls.filter((call) => call[0] === 'skills')[0][1], { location: { directory: root } });
+	assert.deepEqual(f.coordinator.state.skills.map((skill) => skill.name), ['apply', 'build']);
+	await f.coordinator.loadSkills();
+	assert.equal(f.calls.filter((call) => call[0] === 'skills').length, 1, 'A published catalog is reused');
+	f.lifetime.abort();
+});
+
+test('concurrent skill loads share one request and publish the first catalog', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	const wait = deferred();
+	let requests = 0;
+	f.client.skill.list = () => { requests++; return wait.promise; };
+	const first = f.coordinator.loadSkills();
+	const second = f.coordinator.loadSkills();
+	assert.equal(first, second, 'Concurrent callers receive the same in-flight promise');
+	wait.resolve({ location: { directory: root }, data: [{ id: 'skill', name: 'apply',
+		path: 'C:\\Vault\\skills\\apply.md', content: '# apply' }] });
+	await first;
+	assert.equal(requests, 1);
+	assert.deepEqual(f.coordinator.state.skills.map((skill) => skill.id), ['skill']);
+	f.lifetime.abort();
+});
+
+test('a failed skill catalog is empty, non-fatal, and not retried on every request', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	let requests = 0;
+	f.client.skill.list = async () => { requests++; throw new Error('offline'); };
+	await f.coordinator.loadSkills();
+	assert.equal(requests, 1);
+	assert.deepEqual(f.coordinator.state.skills, []);
+	assert.equal(f.coordinator.state.optionsError, undefined, 'A skill failure is not an options error');
+	assert.equal(f.coordinator.state.phase, 'ready');
+	await f.coordinator.loadSkills();
+	assert.equal(requests, 1, 'The empty catalog is cached for the connection');
+	f.lifetime.abort();
+});
+
+test('commands load lazily once, publish for the connection, and are not requested during open', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(f.calls.filter((call) => call[0] === 'commands').length, 0, 'Connecting must not request the catalog');
+	assert.equal(f.coordinator.state.commands, undefined);
+	await f.coordinator.loadCommands();
+	assert.deepEqual(f.calls.filter((call) => call[0] === 'commands')[0][1], { location: { directory: root } });
+	assert.deepEqual(f.coordinator.state.commands.map((command) => command.name),
+		['review', 'team/review', 'broken', 'gone']);
+	await f.coordinator.loadCommands();
+	assert.equal(f.calls.filter((call) => call[0] === 'commands').length, 1, 'A published catalog is reused');
+	f.lifetime.abort();
+});
+
+test('concurrent command loads share one request and publish the first catalog', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	const wait = deferred();
+	let requests = 0;
+	f.client.command.list = () => { requests++; return wait.promise; };
+	const first = f.coordinator.loadCommands();
+	const second = f.coordinator.loadCommands();
+	assert.equal(first, second, 'Concurrent callers receive the same in-flight promise');
+	wait.resolve({ location: { directory: root }, data: [{ name: 'review' }] });
+	await first;
+	assert.equal(requests, 1);
+	assert.deepEqual(f.coordinator.state.commands.map((command) => command.name), ['review']);
+	f.lifetime.abort();
+});
+
+test('a failed command catalog is empty, non-fatal, and not retried on every request', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	let requests = 0;
+	f.client.command.list = async () => { requests++; throw new Error('offline'); };
+	await f.coordinator.loadCommands();
+	assert.equal(requests, 1);
+	assert.deepEqual(f.coordinator.state.commands, []);
+	assert.equal(f.coordinator.state.optionsError, undefined, 'A command failure is not an options error');
+	assert.equal(f.coordinator.state.phase, 'ready');
+	await f.coordinator.loadCommands();
+	assert.equal(requests, 1, 'The empty catalog is cached for the connection');
 	f.lifetime.abort();
 });
 
@@ -168,6 +278,139 @@ test('stable prompt identity is shown and uncertain admission is reconciled with
 	assert.deepEqual(prompts.map((call) => call[1].id), ['prompt-1', 'prompt-2']);
 	assert.equal(f.coordinator.state.pendingPrompt, undefined, 'Snapshot reconciliation settles the admitted prompt');
 	assert.equal(prompts.length, 2, 'Uncertain admission must not be automatically replayed');
+	f.lifetime.abort();
+});
+
+test('send resolves selected and typed skill mentions to unique IDs while leaving text unchanged', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	await f.coordinator.sendMessage('use $apply');
+	assert.deepEqual(f.calls.find((call) => call[0] === 'prompt')[1].skills, [{ id: 'skill-apply' }]);
+	await f.coordinator.sendMessage('$build and $apply then $build again');
+	const prompt = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(prompt.text, '$build and $apply then $build again');
+	assert.deepEqual(prompt.skills, [{ id: 'skill-build' }, { id: 'skill-apply' }], 'Duplicates attach once');
+	await f.coordinator.sendMessage('$unknown stays text');
+	const unknown = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(unknown.text, '$unknown stays text');
+	assert.equal('skills' in unknown, false);
+	f.lifetime.abort();
+});
+
+test('an unavailable catalog sends mention text without attachments and does not block chat', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	f.client.skill.list = async () => { throw new Error('offline'); };
+	await f.coordinator.sendMessage('use $apply');
+	const prompt = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(prompt.text, 'use $apply');
+	assert.equal('skills' in prompt, false);
+	assert.equal(f.coordinator.state.phase, 'ready');
+	assert.equal(f.coordinator.state.pendingPrompt.phase, 'admitted');
+	assert.equal(f.coordinator.state.actionError, undefined);
+	f.lifetime.abort();
+});
+
+test('a message without mentions never requests the skill catalog', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	await f.coordinator.sendMessage('plain message');
+	assert.equal(f.calls.filter((call) => call[0] === 'skills').length, 0);
+	f.lifetime.abort();
+});
+
+test('a known leading command runs through session.command with its arguments instead of a prompt', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(await f.coordinator.sendMessage('/review'), true);
+	assert.deepEqual(f.calls.find((call) => call[0] === 'command')[1],
+		{ sessionID: 'one', name: 'review', text: '' });
+	assert.equal(f.calls.filter((call) => call[0] === 'prompt').length, 0, 'A command is not sent as prompt text');
+	assert.equal(f.coordinator.state.actionError, undefined);
+	assert.ok(f.calls.includes('refreshSelected'), 'A confirmed command refreshes the snapshot');
+
+	assert.equal(await f.coordinator.sendMessage('/review src/auth.ts'), true);
+	assert.deepEqual(f.calls.filter((call) => call[0] === 'command').at(-1)[1],
+		{ sessionID: 'one', name: 'review', text: 'src/auth.ts' });
+	assert.equal(f.calls.filter((call) => call[0] === 'commands').length, 1, 'The catalog is loaded once');
+
+	assert.equal(await f.coordinator.sendMessage('/team/review src/auth.ts'), true);
+	assert.deepEqual(f.calls.filter((call) => call[0] === 'command').at(-1)[1],
+		{ sessionID: 'one', name: 'team/review', text: 'src/auth.ts' }, 'Nested names match exactly');
+	f.lifetime.abort();
+});
+
+test('an unknown leading command and an unavailable catalog fall back to prompt text', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(await f.coordinator.sendMessage('/unknown some text'), true);
+	assert.equal(f.calls.filter((call) => call[0] === 'command').length, 0);
+	assert.equal(f.calls.filter((call) => call[0] === 'prompt').at(-1)[1].text, '/unknown some text');
+
+	const g = fixture();
+	g.client.command.list = async () => { throw new Error('offline'); };
+	await g.coordinator.open();
+	assert.equal(await g.coordinator.sendMessage('/review src'), true);
+	assert.equal(g.calls.filter((call) => call[0] === 'command').length, 0);
+	assert.equal(g.calls.filter((call) => call[0] === 'prompt').at(-1)[1].text, '/review src');
+	assert.deepEqual(g.coordinator.state.commands, [], 'The failure publishes an empty catalog');
+	f.lifetime.abort();
+	g.lifetime.abort();
+});
+
+test('a rejected command reports the command error, keeps its text, and is not retried', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(await f.coordinator.sendMessage('/broken now'), false);
+	assert.equal(f.calls.filter((call) => call[0] === 'command').length, 1);
+	assert.equal(f.calls.filter((call) => call[0] === 'prompt').length, 0);
+	assert.match(f.coordinator.state.actionError, /Unable to run the command/);
+	assert.equal(f.coordinator.state.commandError, f.coordinator.state.actionError,
+		'The command error is available with the retained composer text');
+	assert.equal(f.coordinator.state.phase, 'ready', 'A command failure is not an API incompatibility');
+	f.lifetime.abort();
+});
+
+test('command-not-found is an ordinary command failure rather than API incompatibility', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(await f.coordinator.sendMessage('/gone'), false);
+	assert.match(f.coordinator.state.actionError, /Unable to run the command/);
+	assert.equal(f.coordinator.state.phase, 'ready');
+	assert.equal(f.coordinator.state.error, undefined);
+	assert.equal(f.calls.filter((call) => call[0] === 'command').length, 1);
+	f.lifetime.abort();
+});
+
+test('a command is blocked while a prompt is unconfirmed, using the prompt message', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	let finish;
+	f.client.session.prompt = (input) => {
+		f.calls.push(['prompt', input]);
+		return new Promise((resolve) => {
+			finish = () => resolve({ id: input.id, sessionID: 'one', type: 'user',
+				payload: { text: input.text }, delivery: 'queue' });
+		});
+	};
+	const sending = f.coordinator.sendMessage('slow prompt');
+	await tick();
+	assert.equal(await f.coordinator.sendMessage('/review src'), false);
+	assert.match(f.coordinator.state.actionError, /already being submitted/);
+	assert.equal(f.calls.filter((call) => call[0] === 'command').length, 0, 'The command never starts');
+	assert.equal(f.calls.filter((call) => call[0] === 'prompt').length, 1);
+	finish();
+	await sending;
+	f.lifetime.abort();
+});
+
+test('command arguments attach matching skills and keep the argument text unchanged', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	assert.equal(await f.coordinator.sendMessage('/review $apply and $build plus $unknown'), true);
+	const sent = f.calls.filter((call) => call[0] === 'command').at(-1)[1];
+	assert.equal(sent.text, '$apply and $build plus $unknown');
+	assert.deepEqual(sent.skills, [{ id: 'skill-apply' }, { id: 'skill-build' }]);
 	f.lifetime.abort();
 });
 

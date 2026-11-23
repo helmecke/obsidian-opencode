@@ -563,7 +563,102 @@ succeeded, and `npm run lint` reported 0 errors and 2 pre-existing warnings
 The manual light/dark, narrow-sidebar, keyboard, and form pass is recorded in
 task 5.3 of the change.
 
+## Composer skill mentions (2026-11-22)
+
+The chat composer now completes OpenCode skills after `$`. Note links (`[[`)
+still take precedence, and the existing Mod+Enter send path remains the only
+send shortcut while the inline list is open.
+
+- A `$` at the start of the message or after whitespace opens the inline skill
+  list; a `$` inside a word, or a query that gains whitespace or a newline,
+  does not. Rows show the skill name and its description when the service
+  provides one.
+- The list filters by fuzzy name match, lists all skills in name order for an
+  empty query, and inserts `$skill-name ` with the caret after the space.
+  Enter, Tab, and pointer selection insert without sending; Escape or blur
+  closes the list; Ctrl/Cmd+Enter still sends while it is open.
+- The skill catalog loads lazily on the first `$` query, is shared by
+  concurrent callers, and is cached for the connection. It is not requested
+  during the initial connection. A failed load publishes an empty catalog and
+  does not block composing or sending.
+- Sending resolves `$name` tokens by exact name against the loaded catalog and
+  attaches each unique matching skill by ID as `skills: [{ id }]`. The prompt
+  text is unchanged; duplicate mentions attach once; unknown names stay plain
+  text. An unconfirmed retry reuses the same prompt identity and skill IDs.
+  Messages without mentions do not request the catalog.
+
+Automated verification: `npm test` passed **183 tests**, `npm run build`
+succeeded, and `npm run lint` reported 0 errors and 2 pre-existing warnings
+(declarative settings API; sentence case for **OpenCode 2 executable path**).
+The manual smoke test in the approved disposable vault confirmed that `$`
+completion filters and inserts a skill, the sent prompt retains `$name` and
+carries the skill attachment, and `[[` completion and Mod+Enter sending still
+work.
+
+## Composer slash commands (2026-11-23)
+
+The chat composer now completes and runs OpenCode commands after a leading `/`.
+Note links, skill mentions, and the existing send path are unchanged.
+
+- `/` opens the inline command list only at the start of the message while the
+  caret remains in the first token. A `/` after text, a `/` inside a word, and
+  a caret in the arguments do not open it.
+- Rows show the command as invoked (`/name`) and its description when the
+  service provides one. Nested names such as `/team/review` are supported. The
+  list filters by fuzzy name match, lists all commands in name order for an
+  empty query, and inserts `/name ` with the caret after the space while
+  preserving text that followed it. Enter, Tab, and pointer selection insert
+  without sending; Escape or blur closes; Ctrl/Cmd+Enter still sends.
+- The catalog loads on the first `/`, is shared by concurrent callers, and is
+  cached for the connection. It is not requested during the initial
+  connection. A failed load publishes an empty catalog and does not block
+  composing or sending.
+- A message whose first token exactly matches a loaded command runs it through
+  `session.command({ sessionID, name, text, skills? })`; the rest of the message
+  is the argument text and `$name` mentions attach the same unique skill IDs as
+  ordinary prompts. Unknown names and an unavailable catalog keep the ordinary
+  prompt path, so slash-leading prose is never dropped. A confirmed command
+  refreshes the selected snapshot and clears the composer; a failed command
+  keeps its text, reports `Unable to run the command…` in the composer card,
+  and is never resent.
+
+Supported API surface for this feature:
+
+- `client.command.list({ location })` returns `{ location, data }` with a
+  non-empty command `name` and optional `description`; unknown fields are
+  preserved. The endpoint is optional and non-gating.
+- `client.session.command(...)` is deliberately not passed through the
+  prompt compatibility translator: a 404 may mean command-not-found, so
+  command-not-found and command-execution errors are ordinary command failures
+  rather than API incompatibility. Other failures still use the existing
+  incompatibility gate.
+
+Live acceptance in the approved disposable vault (Obsidian 1.15.1, Electron
+43.8.9, Node 24.22.1) observed:
+
+- Typing `/` opened the popover with the full catalog; each row showed
+  `/name` and its description, and typing `/te` filtered the rows.
+- Typing `/team/r` matched the nested `team/review` row and Enter inserted
+  `/team/review ` with the caret after the space.
+- Sending `/team/review NESTED-ARG` and `/smoke ARG-ONE` executed the command
+  templates (the agent returned `NESTED-COMMAND-OK` and `SLASH-COMMAND-OK`)
+  and cleared the composer; neither appeared as prompt text.
+- Sending `/unknown falls back` kept the exact text as an ordinary user prompt,
+  confirming the fallback path.
+- Sending a command whose configured agent did not exist kept `/fail KEEP-TEXT`
+  in the composer, showed `Unable to run the command…` in the composer card,
+  and made no automatic retry.
+- `[[` still opened note completion, Escape closed it, and `$` still listed
+  skills; Enter inserted `$smoke-skill ` and Ctrl/Cmd+Enter still sent.
+
+Automated verification: `npm test` passed **207 tests**, `npm run build`
+succeeded, and `npm run lint` reported 0 errors and the same 2 pre-existing
+warnings (declarative settings API; sentence case for **OpenCode 2 executable
+path**).
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-23 | `add-composer-slash-commands` | 19/19 | 207 passing | pass | `openspec/changes/archive/2026-11-23-add-composer-slash-commands` |
 | 2026-11-22 | `reuse-obsidian-ui-styles` | 14/14 | 163 passing | pass | `openspec/changes/archive/2026-11-22-reuse-obsidian-ui-styles` |
 | 2026-11-22 | `add-composer-note-linking` | 9/9 | 161 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-note-linking` |
+| 2026-11-22 | `add-composer-skill-mentions` | 16/16 | 183 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-skill-mentions` |

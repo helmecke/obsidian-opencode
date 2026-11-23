@@ -256,6 +256,9 @@ export class ChatComposer {
 	private renderPromptActions(state: SynchronizationState): void {
 		const pending = state.pendingPrompt;
 		this.promptActions.empty();
+		if (state.commandError) {
+			this.promptActions.createDiv({ cls: 'opencode-composer-error', text: state.commandError });
+		}
 		if (pending?.phase === 'uncertain') {
 			this.promptActions.createSpan({ text: 'Message not confirmed. Reconcile before retrying.', cls: 'opencode-uncertain' });
 			const retry = this.promptActions.createEl('button', { text: 'Reconcile and retry' });

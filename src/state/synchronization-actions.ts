@@ -1,6 +1,7 @@
 import type { ModelRef } from '@opencode/client';
 import type { ConnectionCoordinator } from '../opencode/connection';
 import type { SessionCoordinator } from '../opencode/sessions';
+import { skillMentions } from '../ui/composer-link';
 import { PromptError } from './prompt-coordinator';
 import type { PromptCoordinator } from './prompt-coordinator';
 import { actionMessages } from './synchronization-model';
@@ -19,8 +20,31 @@ export interface SynchronizationActionHost {
 	recover(): void;
 }
 
+/** A message-leading `/name` token and its argument text. */
+interface LeadingCommand {
+	readonly name: string;
+	readonly arguments: string;
+}
+
+/**
+ * Splits a message-leading `/name` from its arguments. Only the first
+ * whitespace delimiter is removed, so the remaining text is preserved.
+ */
+function leadingCommand(text: string): LeadingCommand | null {
+	const match = /^\/(\S+)/u.exec(text);
+	const name = match?.[1];
+	if (!match || !name) return null;
+	const rest = text.slice(match[0].length);
+	const delimiter = rest.charAt(0);
+	const args = delimiter && /\s/u.test(delimiter) ? rest.slice(1) : rest;
+	return { name, arguments: args };
+}
+
 /** Server-backed selectors, execution and interaction actions. */
 export class SynchronizationActions {
+	private skillsRequest?: Promise<void>;
+	private commandsRequest?: Promise<void>;
+
 	constructor(private readonly host: SynchronizationActionHost) {}
 
 	/** Server-backed selectors; failures are displayed without blocking the conversation. */
@@ -45,26 +69,150 @@ export class SynchronizationActions {
 		}
 	}
 
-	async sendMessage(text: string): Promise<void> {
+	/**
+	 * Lazy, non-fatal skill catalog for the composer. The first request is shared
+	 * by concurrent callers; a failure publishes an empty catalog so chat keeps
+	 * working and keystrokes do not retry it.
+	 */
+	loadSkills(): Promise<void> {
+		if (this.host.state.skills !== undefined) return Promise.resolve();
+		if (this.skillsRequest) return this.skillsRequest;
+		const pending = this.fetchSkills().finally(() => {
+			if (this.skillsRequest === pending) this.skillsRequest = undefined;
+		});
+		this.skillsRequest = pending;
+		return pending;
+	}
+
+	/**
+	 * Lazy, non-fatal command catalog for composer completion. It follows the
+	 * skill catalog: one shared request, a connection-scoped result, and an empty
+	 * catalog after failure so `/` text still reaches the prompt path.
+	 */
+	loadCommands(): Promise<void> {
+		if (this.host.state.commands !== undefined) return Promise.resolve();
+		if (this.commandsRequest) return this.commandsRequest;
+		const pending = this.fetchCommands().finally(() => {
+			if (this.commandsRequest === pending) this.commandsRequest = undefined;
+		});
+		this.commandsRequest = pending;
+		return pending;
+	}
+
+	/** Returns whether delivery was confirmed, so the view clears only accepted text. */
+	async sendMessage(text: string): Promise<boolean> {
 		try {
 			this.host.assertReady();
 		} catch {
 			this.host.publishReady({ actionError: 'Wait until the conversation is synchronized and pending decisions are settled.' });
-			return;
+			return false;
 		}
 		const prompt = this.host.getPrompt();
-		if (!prompt) return;
+		if (!prompt) return false;
+		const command = leadingCommand(text);
+		return command ? this.sendCommand(text, command, prompt) : this.sendPrompt(text, prompt);
+	}
+
+	private async sendPrompt(text: string, prompt: PromptCoordinator): Promise<boolean> {
 		try {
-			await prompt.send(text);
-			this.host.publishReady({ pendingPrompt: prompt.pending, actionError: undefined });
+			const skillIDs = await this.resolveSkills(skillMentions(text).map((mention) => mention.name));
+			const pending = await prompt.send(text, skillIDs);
+			this.host.publishReady({ pendingPrompt: prompt.pending, actionError: undefined, commandError: undefined });
+			return pending.phase === 'admitted';
 		} catch (error) {
-			if (this.host.rejectIncompatible(error)) return;
+			if (this.host.rejectIncompatible(error)) return false;
 			this.host.publishReady({
 				pendingPrompt: prompt.pending,
+				commandError: undefined,
 				actionError: error instanceof PromptError ? error.message : actionMessages.send,
 			});
 			if (prompt.pending?.phase === 'uncertain') this.host.recover();
+			return false;
 		}
+	}
+
+	/**
+	 * A leading `/name` runs the command when it exactly matches a loaded name.
+	 * Unknown names and an unavailable catalog keep the ordinary prompt path, so
+	 * slash-leading prose is never dropped.
+	 */
+	private async sendCommand(text: string, command: LeadingCommand, prompt: PromptCoordinator): Promise<boolean> {
+		try {
+			prompt.assertIdle();
+			if (this.host.state.commands === undefined) await this.loadCommands();
+			const known = (this.host.state.commands ?? []).some((entry) => entry.name === command.name);
+			if (!known) return this.sendPrompt(text, prompt);
+			const skillIDs = await this.resolveSkills(
+				skillMentions(command.arguments).map((mention) => mention.name));
+			const client = await this.host.connection.connect();
+			await client.session.command({
+				sessionID: prompt.sessionID,
+				name: command.name,
+				text: command.arguments,
+				...(skillIDs.length > 0 ? { skills: skillIDs.map((id) => ({ id })) } : {}),
+			}, { signal: this.host.connection.signal });
+			const snapshot = await this.host.sessions.refreshSelected();
+			this.host.publishReady({ snapshot, pendingPrompt: prompt.pending, actionError: undefined, commandError: undefined });
+			return true;
+		} catch (error) {
+			if (error instanceof PromptError) {
+				this.host.publishReady({ pendingPrompt: prompt.pending, commandError: undefined, actionError: error.message });
+				return false;
+			}
+			if (this.host.rejectIncompatible(error)) return false;
+			if (this.host.canOperate) {
+				this.host.publishReady({
+					pendingPrompt: prompt.pending,
+					actionError: actionMessages.command,
+					commandError: actionMessages.command,
+				});
+			}
+			return false;
+		}
+	}
+
+	private async fetchSkills(): Promise<void> {
+		if (!this.host.canOperate) return;
+		try {
+			const client = await this.host.connection.connect();
+			const result = await client.skill.list(
+				{ location: { directory: this.host.sessions.vaultRoot } },
+				{ signal: this.host.connection.signal });
+			if (this.host.canOperate) this.host.publishReady({ skills: result.data });
+		} catch {
+			// Skills are optional; an incompatible or failed catalog must not gate chat.
+			if (this.host.canOperate) this.host.publishReady({ skills: [] });
+		}
+	}
+
+	private async fetchCommands(): Promise<void> {
+		if (!this.host.canOperate) return;
+		try {
+			const client = await this.host.connection.connect();
+			const result = await client.command.list(
+				{ location: { directory: this.host.sessions.vaultRoot } },
+				{ signal: this.host.connection.signal });
+			if (this.host.canOperate) this.host.publishReady({ commands: result.data });
+		} catch {
+			// Commands are optional; a failure must leave `/name` usable as prompt text.
+			if (this.host.canOperate) this.host.publishReady({ commands: [] });
+		}
+	}
+
+	/** Exact-name resolution at send time; unknown mentions stay plain text. */
+	private async resolveSkills(names: readonly string[]): Promise<string[]> {
+		if (names.length === 0) return [];
+		if (this.host.state.skills === undefined) await this.loadSkills();
+		const idsByName = new Map<string, string>();
+		for (const skill of this.host.state.skills ?? []) {
+			if (!idsByName.has(skill.name)) idsByName.set(skill.name, skill.id);
+		}
+		const ids = new Set<string>();
+		for (const name of names) {
+			const id = idsByName.get(name);
+			if (id !== undefined) ids.add(id);
+		}
+		return [...ids];
 	}
 
 	async retryPrompt(): Promise<void> {

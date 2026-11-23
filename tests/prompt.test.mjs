@@ -62,6 +62,34 @@ test('sending uses one stable prompt ID supplied by the caller and marks admissi
 	assert.deepEqual(f.prompts, [{ sessionID: 'session', id: 'prompt-1', text: 'hello' }]);
 });
 
+test('sending attaches resolved skill IDs while keeping the prompt text unchanged', async () => {
+	const f = fixture();
+	const pending = await f.coordinator.send('use $apply', ['skill-apply']);
+	assert.equal(pending.phase, 'admitted');
+	assert.deepEqual(pending.skillIDs, ['skill-apply']);
+	assert.deepEqual(f.prompts, [{ sessionID: 'session', id: 'prompt-1', text: 'use $apply',
+		skills: [{ id: 'skill-apply' }] }]);
+});
+
+test('prompts without skills omit the skills field', async () => {
+	const f = fixture();
+	const pending = await f.coordinator.send('plain');
+	assert.equal(pending.skillIDs, undefined);
+	assert.equal('skills' in f.prompts[0], false);
+});
+
+test('retry reuses the same prompt identity and skill IDs after a genuine loss', async () => {
+	const f = fixture();
+	f.failNext(true, true); // failure without recording an admitted message
+	await assert.rejects(f.coordinator.send('use $apply', ['skill-apply', 'skill-build']), PromptError);
+	assert.equal(f.coordinator.pending.phase, 'uncertain');
+	await f.coordinator.retry();
+	assert.deepEqual(f.prompts.map((prompt) => prompt.id), ['prompt-1', 'prompt-1']);
+	assert.deepEqual(f.prompts.map((prompt) => prompt.skills),
+		[[{ id: 'skill-apply' }, { id: 'skill-build' }], [{ id: 'skill-apply' }, { id: 'skill-build' }]]);
+	assert.equal(f.coordinator.pending.phase, 'admitted');
+});
+
 test('lost acknowledgment retains the prompt and reconciles an admitted message without resending', async () => {
 	const f = fixture();
 	f.failNext(true);
@@ -106,6 +134,28 @@ test('empty input, concurrent sends, and uncertain retries are rejected explicit
 	f.failNext(true);
 	await assert.rejects(f.coordinator.send('a'), PromptError);
 	await assert.rejects(f.coordinator.send('b'), (error) => error.code === 'uncertain');
+});
+
+test('the idle gate reuses busy and uncertain rules without creating a prompt identity', async () => {
+	const f = fixture();
+	assert.doesNotThrow(() => f.coordinator.assertIdle(), 'No pending prompt is idle');
+	let finish;
+	const slow = { session: { prompt: async () => new Promise((resolve) => { finish = resolve; }) } };
+	let ids = 0;
+	const coordinator = new PromptCoordinator(async () => slow, 'session', () => `gate-${++ids}`);
+	const sending = coordinator.send('first');
+	for (let index = 0; index < 5; index++) await Promise.resolve();
+	assert.throws(() => coordinator.assertIdle(), (error) => error.code === 'busy');
+	finish({ id: 'gate-1', sessionID: 'session', type: 'user', payload: { text: 'first' }, delivery: 'queue' });
+	await sending;
+	assert.doesNotThrow(() => coordinator.assertIdle(), 'An admitted prompt does not block');
+	assert.equal(coordinator.pending, undefined, 'The gate settles a confirmed prompt');
+
+	f.failNext(true);
+	await assert.rejects(f.coordinator.send('lost'), PromptError);
+	assert.throws(() => f.coordinator.assertIdle(), (error) => error.code === 'uncertain');
+	assert.equal(f.coordinator.pending.text, 'lost', 'The gate never creates or replaces an identity');
+	assert.equal(f.prompts.length, 1, 'The gate sends no prompt request');
 });
 
 test('a confirmed prompt is settled before the next send; uncertain text is only returned explicitly', async () => {

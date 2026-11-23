@@ -10,7 +10,7 @@
 export { validateModelRef } from './api-primitives';
 export { validateSessionInfo, validateSessionPage, validateActiveSessions } from './session-shapes';
 export { validateSessionMessage, validateMessagePage } from './message-shapes';
-export { validateAgentList, validateModelList } from './catalog-shapes';
+export { validateAgentList, validateCommandList, validateModelList, validateSkillList } from './catalog-shapes';
 export {
 	validatePermissionRequest, validatePermissionList, validateFormInfo, validateFormList,
 } from './interaction-shapes';

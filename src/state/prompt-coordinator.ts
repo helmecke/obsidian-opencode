@@ -7,6 +7,7 @@ export interface PendingPrompt {
 	readonly id: string;
 	readonly text: string;
 	readonly phase: PromptPhase;
+	readonly skillIDs?: readonly string[];
 	readonly error?: string;
 }
 
@@ -61,14 +62,26 @@ export class PromptCoordinator {
 		return this.current;
 	}
 
+	/**
+	 * Applies the prompt admission rules to an operation that has no admission
+	 * identity of its own, such as a command. An admitted prompt is settled, so
+	 * only a sending or uncertain prompt blocks.
+	 */
+	assertIdle(): void {
+		if (this.current?.phase === 'uncertain') throw new PromptError('uncertain');
+		if (this.current?.phase === 'sending') throw new PromptError('busy');
+		if (this.current?.phase === 'admitted') this.current = undefined;
+	}
+
 	/** One admission at a time. An uncertain prompt must be reconciled or retried explicitly. */
-	async send(text: string): Promise<PendingPrompt> {
+	async send(text: string, skillIDs: readonly string[] = []): Promise<PendingPrompt> {
 		if (!text.trim()) throw new PromptError('empty');
 		if (this.current?.phase === 'uncertain') throw new PromptError('uncertain');
 		// A confirmed prompt is settled; only another unconfirmed admission blocks a new one.
 		if (this.current?.phase === 'sending') throw new PromptError('busy');
 		if (this.current?.phase === 'admitted') this.current = undefined;
-		const prompt: PendingPrompt = { id: this.makeID(), text, phase: 'sending' };
+		const prompt: PendingPrompt = { id: this.makeID(), text, phase: 'sending',
+			...(skillIDs.length > 0 ? { skillIDs: [...skillIDs] } : {}) };
 		this.current = prompt;
 		return this.transmit(prompt);
 	}
@@ -110,10 +123,12 @@ export class PromptCoordinator {
 		try {
 			const client = await this.client();
 			this.signal?.throwIfAborted();
+			const skills = prompt.skillIDs?.map((id) => ({ id }));
 			const inbox = await client.session.prompt({
 				sessionID: this.sessionID,
 				id: prompt.id,
 				text: prompt.text,
+				...(skills && skills.length > 0 ? { skills } : {}),
 			}, { signal: this.signal });
 			this.checkInbox(inbox, prompt);
 			this.current = { ...prompt, phase: 'admitted', error: undefined };

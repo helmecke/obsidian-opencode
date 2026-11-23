@@ -98,6 +98,8 @@ export class ChatView extends ItemView {
 			replyForm: (id, answer) => { void this.synchronization.replyForm(id, answer); },
 			cancelForm: (id) => { void this.synchronization.cancelForm(id); },
 			loadOptions: () => { void this.synchronization.loadOptions(); },
+			loadSkills: () => this.synchronization.loadSkills(),
+			loadCommands: () => this.synchronization.loadCommands(),
 		};
 	}
 
@@ -169,9 +171,9 @@ export class ChatView extends ItemView {
 	private async send(): Promise<void> {
 		const text = this.renderer?.composerText() ?? '';
 		if (!text.trim()) return;
-		await this.synchronization.sendMessage(text);
-		const pending = this.synchronization.state.pendingPrompt;
-		if (pending?.phase === 'admitted' && pending.text === text) this.renderer?.clearComposerIf(text);
+		// Only a confirmed prompt or command clears the composer; a failed command
+		// keeps its text for the user to inspect or retry manually.
+		if (await this.synchronization.sendMessage(text)) this.renderer?.clearComposerIf(text);
 		this.refresh();
 	}
 

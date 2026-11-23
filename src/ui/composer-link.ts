@@ -31,6 +31,93 @@ export function linkInsertText(basename: string, folder: string, unique: boolean
 	return `[[${target}]]`;
 }
 
+/** A leading `/` command query at the caret; it always starts the message. */
+export interface CommandQuery {
+	readonly query: string;
+	readonly start: number;
+}
+
+/**
+ * Returns the command query at the caret, or `null` unless the message starts
+ * with `/` and the caret stays inside that first whitespace-delimited token.
+ * Nested names may contain `/`; a caret in the arguments has no query.
+ */
+export function commandQueryAt(text: string, caret: number): CommandQuery | null {
+	const position = clamp(caret, text.length);
+	if (position < 1 || text.charAt(0) !== '/') return null;
+	const before = text.slice(0, position);
+	if (/\s/u.test(before)) return null;
+	return { query: text.slice(1, position), start: 0 };
+}
+
+/** Replaces the leading `/` query through the caret with `/name ` and leaves the caret after the space. */
+export function commandInsertEdit(state: ComposerSelection, name: string): ComposerEdit | null {
+	const caret = clamp(state.selectionStart, state.value.length);
+	const trigger = commandQueryAt(state.value, caret);
+	if (!trigger) return null;
+	const insertion = `/${name} `;
+	const value = `${state.value.slice(0, trigger.start)}${insertion}${state.value.slice(caret)}`;
+	const position = trigger.start + insertion.length;
+	return { value, selectionStart: position, selectionEnd: position };
+}
+
+/** An eligible `$` skill query at the caret and the index of its `$`. */
+export interface SkillQuery {
+	readonly query: string;
+	readonly start: number;
+}
+
+/** A `$name` mention found in text, with the span of the token. */
+export interface SkillMention {
+	readonly name: string;
+	readonly start: number;
+	readonly end: number;
+}
+
+/**
+ * Returns the skill query at the caret, or `null` when no eligible `$` starts
+ * the current token. A `$` must begin the input or follow whitespace, and the
+ * caret must follow it with no whitespace in between; so `word$` and `$skill
+ * name` have no query.
+ */
+export function skillQueryAt(text: string, caret: number): SkillQuery | null {
+	const position = Math.max(0, Math.min(caret, text.length));
+	let start = position;
+	while (start > 0 && !isWhitespace(text.charAt(start - 1))) start--;
+	if (start >= position || text.charAt(start) !== '$') return null;
+	const query = text.slice(start + 1, position);
+	return query.includes('$') ? null : { query, start };
+}
+
+/**
+ * Every `$name` mention in `text`, using the same boundary rule as the picker:
+ * the `$` starts the text or follows whitespace and the name has no whitespace.
+ */
+export function skillMentions(text: string): SkillMention[] {
+	const mentions: SkillMention[] = [];
+	const pattern = /(^|\s)\$([^\s$]+)/gu;
+	let match: RegExpExecArray | null;
+	while ((match = pattern.exec(text)) !== null) {
+		const prefix = match[1] ?? '';
+		const name = match[2] ?? '';
+		if (!name) continue;
+		const start = match.index + prefix.length;
+		mentions.push({ name, start, end: start + name.length + 1 });
+	}
+	return mentions;
+}
+
+/** Replaces the query after its `$` with `$name ` and leaves the caret after the space. */
+export function skillMentionEdit(state: ComposerSelection, name: string): ComposerEdit | null {
+	const caret = clamp(state.selectionStart, state.value.length);
+	const trigger = skillQueryAt(state.value, caret);
+	if (!trigger) return null;
+	const mention = `$${name} `;
+	const value = `${state.value.slice(0, trigger.start)}${mention}${state.value.slice(caret)}`;
+	const position = trigger.start + mention.length;
+	return { value, selectionStart: position, selectionEnd: position };
+}
+
 /** Wraps the selection in brackets, or inserts an empty pair with the caret between. */
 export function applyOpenBracket(state: ComposerSelection): ComposerEdit {
 	const start = clamp(state.selectionStart, state.value.length);
@@ -82,6 +169,10 @@ export function applyComposerEdit(element: HTMLTextAreaElement | HTMLInputElemen
 function clamp(position: number, length: number): number {
 	if (!Number.isFinite(position)) return length;
 	return Math.max(0, Math.min(position, length));
+}
+
+function isWhitespace(character: string): boolean {
+	return /\s/u.test(character);
 }
 
 function commonPrefixLength(left: string, right: string): number {

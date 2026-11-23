@@ -2,13 +2,15 @@ import { isSessionNotFoundError } from '@opencode/client';
 import type { OpenCode, V2Event } from '@opencode/client';
 import { OpenCodeApiCompatibilityError } from './compatibility';
 import {
-	validateActiveSessions, validateAgentList, validateEventEnvelope, validateFormList, validateMessagePage,
-	validateModelList, validatePermissionList, validateSessionInfo, validateSessionPage,
+	validateActiveSessions, validateAgentList, validateCommandList, validateEventEnvelope, validateFormList,
+	validateMessagePage, validateModelList, validatePermissionList, validateSessionInfo, validateSessionPage,
+	validateSkillList,
 } from './api-shapes';
 
 export {
 	validateActiveSessions,
 	validateAgentList,
+	validateCommandList,
 	validateEvent,
 	validateFormInfo,
 	validateFormList,
@@ -19,6 +21,7 @@ export {
 	validateSessionInfo,
 	validateSessionMessage,
 	validateSessionPage,
+	validateSkillList,
 } from './api-shapes';
 export { OpenCodeApiCompatibilityError } from './compatibility';
 
@@ -102,6 +105,14 @@ export function withApiValidation(client: Client): Client {
 		model: {
 			...client.model,
 			list: (input, options) => guarded(() => client.model.list(input, options), validateModelList),
+		},
+		skill: {
+			...client.skill,
+			list: (input, options) => guarded(() => client.skill.list(input, options), validateSkillList),
+		},
+		command: {
+			...client.command,
+			list: (input, options) => guarded(() => client.command.list(input, options), validateCommandList),
 		},
 		message: {
 			...client.message,

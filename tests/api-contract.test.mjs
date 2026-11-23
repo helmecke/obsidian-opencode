@@ -16,9 +16,10 @@ compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 	createRequire(import.meta.url), module, module.exports,
 );
 const {
-	withApiValidation, validateActiveSessions, validateAgentList, validateEvent, validateFormInfo,
-	validateFormList, validateMessagePage, validateModelList, validatePermissionList,
-	validateSessionInfo, validateSessionPage, discoverConnection, OpenCodeApiCompatibilityError,
+	withApiValidation, validateActiveSessions, validateAgentList, validateCommandList, validateEvent,
+	validateFormInfo, validateFormList, validateMessagePage, validateModelList, validatePermissionList,
+	validateSessionInfo, validateSessionPage, validateSkillList, discoverConnection,
+	OpenCodeApiCompatibilityError,
 } = module.exports;
 
 const root = 'C:\\Vault';
@@ -84,6 +85,14 @@ test('generated session, message, agent, model, active, permission and form resp
 			capabilities: { tools: true, input: [], output: [] }, variants: [], cost: [],
 			time: { released: 1 }, status: 'active', limit: { context: 1, output: 1 },
 		}] });
+		if (url.pathname === '/api/skill') return json(res, { location: { directory: root }, data: [{
+			id: 'skill', name: 'apply', description: 'Apply a change',
+			path: 'C:\\Vault\\skills\\apply.md', content: '# apply',
+		}] });
+		if (url.pathname === '/api/command') return json(res, { location: { directory: root }, data: [
+			{ name: 'review', description: 'Review the working tree' },
+			{ name: 'team/review' },
+		] });
 		json(res, { _tag: 'NotFoundError', message: 'unknown endpoint' }, 404);
 	});
 	const client = withApiValidation(OpenCode.make({ baseUrl: origin }));
@@ -95,6 +104,9 @@ test('generated session, message, agent, model, active, permission and form resp
 	assert.deepEqual((await client.message.list({ sessionID: 'one' })).data.map((entry) => entry.id), ['m1', 'm2']);
 	assert.deepEqual((await client.agent.list({ location: { directory: root } })).data.map((entry) => entry.id), ['build']);
 	assert.deepEqual((await client.model.list({ location: { directory: root } })).data.map((entry) => entry.id), ['model']);
+	assert.deepEqual((await client.skill.list({ location: { directory: root } })).data.map((entry) => entry.name), ['apply']);
+	assert.deepEqual((await client.command.list({ location: { directory: root } })).data.map((entry) => entry.name),
+		['review', 'team/review']);
 	assert.deepEqual(await client.session.active(), { one: { type: 'running' } });
 	assert.deepEqual((await client.permission.list({ sessionID: 'one' })).map((entry) => entry.id), ['permission']);
 	assert.deepEqual((await client.session.form.list({ sessionID: 'one' })).map((entry) => entry.id), ['form']);
@@ -206,6 +218,39 @@ test('message, agent, model and active shapes reject malformed fields used by pr
 		id: 'm', modelID: 'm', providerID: 'p', name: 'M', enabled: true,
 	}] }).data[0].id, 'm');
 	assert.throws(() => validateModelList({ location: { directory: root }, data: [{ id: 'm', modelID: 'm', providerID: 'p', name: 'M' }] }), isApiError);
+
+	const skill = (extra = {}) => ({ id: 'skill', name: 'apply', path: 'C:\\Vault\\skills\\apply.md',
+		content: '# apply', ...extra });
+	assert.equal(validateSkillList({ location: { directory: root }, data: [
+		skill({ description: 'Apply a change' }),
+	] }).data[0].name, 'apply');
+	const extraFields = skill({ autoinvoke: true, future: { scope: 'project' } });
+	assert.deepEqual(validateSkillList({ location: { directory: root }, data: [extraFields] }).data[0].future,
+		{ scope: 'project' }, 'Unknown skill fields are preserved');
+	for (const broken of [
+		{ location: { directory: root }, data: [skill({ id: '' })] },
+		{ location: { directory: root }, data: [skill({ name: undefined })] },
+		{ location: { directory: root }, data: [skill({ path: 1 })] },
+		{ location: { directory: root }, data: [skill({ content: null })] },
+		{ location: { directory: root }, data: [skill({ description: 1 })] },
+		{ location: { directory: root }, data: [skill({ autoinvoke: 'yes' })] },
+		{ location: {}, data: [] },
+	]) assert.throws(() => validateSkillList(broken), isApiError);
+
+	const command = (extra = {}) => ({ name: 'review', ...extra });
+	assert.equal(validateCommandList({ location: { directory: root }, data: [
+		command({ description: 'Review the working tree' }),
+	] }).data[0].name, 'review');
+	const extraCommand = command({ future: { scope: 'project' } });
+	assert.deepEqual(validateCommandList({ location: { directory: root }, data: [extraCommand] }).data[0].future,
+		{ scope: 'project' }, 'Unknown command fields are preserved');
+	for (const broken of [
+		{ location: { directory: root }, data: [command({ name: '' })] },
+		{ location: { directory: root }, data: [command({ name: undefined })] },
+		{ location: { directory: root }, data: [command({ description: 1 })] },
+		{ location: { directory: root }, data: null },
+		{ location: {}, data: [] },
+	]) assert.throws(() => validateCommandList(broken), isApiError);
 
 	assert.equal(validateActiveSessions({ one: { type: 'running' }, two: { type: 'future-state' } }).one.type, 'running');
 	for (const broken of [{ one: null }, { one: { type: 1 } }, { '': { type: 'running' } }]) {

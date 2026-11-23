@@ -180,6 +180,27 @@ read-only workarounds.
   plain prompt text and is not attached as a file. Brackets pair automatically,
   a typed `]` skips an existing closer, and Backspace removes an empty pair.
   Ctrl/Cmd+Enter still sends while the list is open.
+- Type `$` at the start of the message or after a space to search the OpenCode
+  skills available to this vault. The inline list shows each skill's name and
+  description; arrow keys move, Enter or Tab inserts, and Escape or blur closes
+  it. The composer inserts `$skill-name ` and leaves the caret after the space.
+  Sending a message attaches every mentioned skill by ID while the `$name` text
+  stays in the message; duplicate mentions attach a skill once, and unknown
+  names stay plain text. The catalog loads on the first `$` and does not block
+  composing or sending if it is unavailable. Ctrl/Cmd+Enter still sends while
+  the list is open.
+- Type `/` at the start of the message to search the OpenCode commands
+  available to this vault. The inline list shows each command as invoked
+  (`/name`) and its description when one is available; nested names such as
+  `/team/review` are supported. Arrow keys move, Enter or Tab inserts, and Escape or blur closes
+  it. The composer inserts `/name ` and leaves the caret after the space while
+  preserving any text that followed it. Sending a message whose first token is
+  a known command runs it with the rest of the text as arguments instead of
+  sending it as a prompt; unknown `/name` text is sent as an ordinary prompt.
+  Skill mentions in the arguments attach the same way as for prompts. The
+  catalog loads on the first `/` without blocking composing or sending, and a
+  failed command keeps its text in the composer. Ctrl/Cmd+Enter still sends
+  while the list is open.
 - While execution is running, a square **Stop** button replaces the **Send**
   button in the same toolbar position. It requests server-side interruption,
   refreshes the reported state, and gives way to **Send** when execution
