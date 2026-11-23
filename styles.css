@@ -7,10 +7,11 @@
  * - `markdown-rendered` for rendered answers
  *
  * The `.opencode-*` rules below are chat-specific structures: composer card and
- * borderless textarea, message bubbles and roles, status/prompt strips, tool
- * disclosures, reasoning disclosure, note suggestions, and truncation. Keep the
- * plugin-owned semantic classes (`opencode-muted`, `opencode-uncertain`)
- * because Obsidian exposes the color variables, not utility classes.
+ * borderless textarea, one reading column, quoted prompt aside, end-of-run
+ * footnote, inline reasoning/tool/notice disclosures, note suggestions, and
+ * truncation. Keep the plugin-owned semantic classes (`opencode-muted`,
+ * `opencode-uncertain`) because Obsidian exposes the color variables, not
+ * utility classes.
  */
 
 .opencode-chat {
@@ -95,45 +96,107 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--size-4-3) var(--size-4-4);
-	display: flex;
-	flex-direction: column;
-	gap: var(--size-4-3);
+	padding-block: var(--size-4-3);
+	padding-inline: var(--size-4-4);
 	overflow-wrap: anywhere;
+}
+
+/*
+ * Readable line length. Obsidian toggles `is-readable-line-width` on its
+ * Markdown views from the same setting and caps them at `--file-line-width`;
+ * the transcript and the composer follow that class so themes and snippets
+ * stay in charge of the measure. The scroll container keeps the full pane
+ * width, so the scrollbar stays at the pane edge.
+ */
+.opencode-chat.is-readable-line-width {
+	--opencode-line-inset: max(var(--size-4-4), calc((100% - var(--file-line-width, 700px)) / 2));
+}
+
+.opencode-chat.is-readable-line-width .opencode-chat-messages,
+.opencode-chat.is-readable-line-width .opencode-chat-composer {
+	padding-inline: var(--opencode-line-inset);
 }
 
 .opencode-message {
 	display: flex;
 	flex-direction: column;
-	gap: var(--size-4-1);
+	gap: 0;
 	max-width: 100%;
 }
 
-.opencode-message-role {
-	font-size: var(--font-ui-smaller);
-	font-weight: var(--font-semibold);
-	color: var(--text-muted);
+.opencode-message-body {
+	width: 100%;
+	min-width: 0;
 }
 
-.opencode-message-user .opencode-message-body {
-	align-self: flex-end;
-	max-width: 85%;
-	padding: var(--size-4-2) var(--size-4-3);
-	border-radius: var(--radius-m);
-	background-color: var(--background-secondary-alt);
+/* The prompt is a passage in the document, not a chat bubble. */
+.opencode-message-user:not(:first-child) {
+	margin-top: var(--size-4-5);
+}
+
+.opencode-prompt {
 	white-space: pre-wrap;
 }
 
-.opencode-message-assistant .opencode-message-body {
-	padding: var(--size-4-2) var(--size-4-3);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background-color: var(--background-primary-alt);
+.opencode-prompt-quote {
+	margin-block: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.opencode-message-footnote {
+	margin-top: var(--size-4-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	line-height: var(--line-height-tight);
 }
 
 .opencode-message-notice {
+	margin-block: var(--size-4-2);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.opencode-outcome {
+	margin-block: var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.opencode-outcome.is-failed {
+	color: var(--text-error);
+}
+
+.opencode-outcome.is-interrupted {
+	color: var(--text-warning);
+}
+
+.opencode-disclosure {
+	margin-block: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-disclosure summary {
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+
+.opencode-disclosure-body {
+	margin-top: var(--size-4-1);
+}
+
+.opencode-disclosure-text {
+	max-height: 18em;
+	margin: 0;
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller);
+	white-space: pre-wrap;
+	overflow: auto;
+	overflow-wrap: anywhere;
 }
 
 .opencode-markdown pre {
@@ -141,11 +204,12 @@
 }
 
 .opencode-prompt-status {
+	margin-top: var(--size-4-1);
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 }
 
-.opencode-prompt-uncertain .opencode-prompt-status,
+.opencode-message-user.is-uncertain .opencode-prompt-status,
 .opencode-uncertain {
 	color: var(--text-warning);
 }
@@ -154,9 +218,37 @@
 	color: var(--text-muted);
 }
 
+.opencode-reasoning {
+	font-size: var(--font-ui-smaller);
+}
+
 .opencode-reasoning summary {
 	cursor: pointer;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.opencode-reasoning-name {
+	flex: 0 0 auto;
+	font-weight: var(--font-medium);
+}
+
+.opencode-reasoning-preview {
+	flex: 1 1 auto;
+	min-width: 0;
+	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.opencode-reasoning-preview[hidden] {
+	display: none;
+}
+
+.opencode-reasoning-body {
+	padding: var(--size-4-1) 0;
 }
 
 .opencode-chat-interactions:empty {
@@ -209,27 +301,63 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.opencode-tool {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	background-color: var(--background-secondary);
-}
-
-.opencode-tool summary {
+.opencode-disclosure-summary {
 	display: flex;
 	gap: var(--size-4-2);
 	align-items: center;
-	padding: var(--size-4-1) var(--size-4-2);
+	min-width: 0;
+	padding: var(--size-4-1) 0;
 	cursor: pointer;
+}
+
+.opencode-tool summary {
 	font-size: var(--font-ui-small);
 }
 
+.opencode-tool-icon,
+.opencode-disclosure-icon {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+	--icon-size: var(--icon-xs);
+	--icon-stroke: var(--icon-xs-stroke-width);
+	color: var(--text-muted);
+}
+
+.opencode-disclosure-glyph,
+.opencode-disclosure-chevron {
+	display: inline-flex;
+	align-items: center;
+}
+
+/* A fold shows its own icon at rest and a chevron while hovered, focused, or open. */
+.opencode-disclosure-chevron {
+	display: none;
+}
+
+.opencode-disclosure-summary:hover .opencode-disclosure-glyph,
+.opencode-disclosure-summary:focus-visible .opencode-disclosure-glyph,
+details[open] > .opencode-disclosure-summary .opencode-disclosure-glyph {
+	display: none;
+}
+
+.opencode-disclosure-summary:hover .opencode-disclosure-chevron,
+.opencode-disclosure-summary:focus-visible .opencode-disclosure-chevron,
+details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron {
+	display: inline-flex;
+}
+
+details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
+	transform: rotate(90deg);
+}
+
 .opencode-tool-name {
-	flex: 1;
+	flex: 0 0 auto;
 	font-weight: var(--font-medium);
 }
 
 .opencode-tool-status {
+	flex: 0 0 auto;
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 }
@@ -239,24 +367,44 @@
 }
 
 .opencode-tool-status.is-completed {
-	color: var(--text-success);
+	color: var(--text-muted);
 }
 
 .opencode-tool-status.is-failed {
 	color: var(--text-error);
 }
 
+.opencode-tool-preview {
+	flex: 1 1 auto;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.opencode-tool-preview[hidden] {
+	display: none;
+}
+
 .opencode-tool-body {
-	padding: 0 var(--size-4-2) var(--size-4-2);
+	padding: var(--size-4-1) 0;
+}
+
+.opencode-tool-body p {
+	margin: var(--size-4-1) 0;
+	font-size: var(--font-ui-smaller);
 }
 
 .opencode-tool-body pre {
 	max-height: 18em;
+	margin: 0 0 var(--size-4-1);
 	overflow: auto;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-	background-color: var(--background-primary);
-	padding: var(--size-4-1);
+	background-color: var(--background-secondary);
+	padding: var(--size-4-1) var(--size-4-2);
 	border-radius: var(--radius-s);
 	font-size: var(--font-ui-smaller);
 }
@@ -266,7 +414,7 @@
 		var(--font-ui-small) * var(--line-height-tight) + var(--size-4-1) * 2
 	);
 	flex: 0 0 auto;
-	padding: var(--size-4-2) var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-4);
 	background-color: transparent;
 }
 

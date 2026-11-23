@@ -179,6 +179,8 @@ export class ChatRenderer {
 		this.conversation = new ConversationRenderer(this.messagesEl, {
 			createMarkdown: (container): MarkdownLike => new MarkdownBlock(
 				{ app: this.app, component: opening, sourcePath: VAULT_ROOT_SOURCE }, container),
+			modelLabel: (model) => this.modelLabel(model),
+			agentLabel: (agent) => this.agentLabel(agent),
 		});
 		const environment: LinkEnvironment = {
 			resolve: (linkpath, sourcePath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath),
@@ -285,6 +287,17 @@ export class ChatRenderer {
 	private executionLabel(execution: string): string {
 		return execution === 'running' ? 'Executing' : execution === 'succeeded' ? 'Answered'
 			: execution === 'failed' ? 'Failed' : execution === 'interrupted' ? 'Stopped' : 'Ready';
+	}
+
+	/** Resolve display names from the refreshed catalog; fall back to the message's IDs. */
+	private modelLabel(model: ModelRef): string {
+		const match = this.state?.models?.find((item) =>
+			item.providerID === model.providerID && (item.modelID ?? item.id) === model.id);
+		return match ? `${match.providerID} · ${match.name}` : `${model.providerID} · ${model.id}`;
+	}
+
+	private agentLabel(agent: string): string {
+		return this.state?.agents?.find((item) => item.id === agent)?.name || agent;
 	}
 
 	private updateConversations(): void {

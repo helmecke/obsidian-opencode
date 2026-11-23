@@ -688,8 +688,81 @@ succeeded, and `npm run lint` reported 0 errors and the same 2 pre-existing
 warnings (declarative settings API; sentence case for **OpenCode 2 executable
 path**).
 
+## Document-like transcript (2026-11-23)
+
+The transcript now reads as one Markdown note: a quoted prompt aside, one
+centered reading column, continuous native Markdown for answers, a faint
+end-of-run footnote, and compact inline folds for reasoning, tools, shell,
+compaction, and injected text. Routine success and selection records stay out
+of the transcript; failures remain visible. Protocol, persistence, composer
+controls, permissions, forms, and links are unchanged.
+
+Live acceptance in a disposable test vault (Obsidian 1.15.1, Electron 43.8.9,
+Node 24.22.1, managed OpenCode 2.3.2) observed:
+
+- A long answer containing a heading, paragraphs, bulleted and numbered lists,
+  a blockquote, a fenced code block, and a three-row table rendered as one
+  document in the light and dark themes. The prompt read as a quoted aside,
+  only turns added extra space, the footnote was faint, and no horizontal
+  scrolling appeared in the full-width tab or the 300 px sidebar (264 px
+  content with equal scroll and client widths).
+- A real shell tool entry showed the muted wrench icon, name, duration
+  (`0.2s`), and a single-line input preview truncated at 80 characters. Its
+  input and result stayed plain text when expanded, and the fold opened by
+  mouse click and by keyboard Enter through CDP without widening the column.
+- A reasoning fold used the same row shape with a brain icon, the name
+  **Reasoning**, and a one-line preview of its text. Hover through CDP swapped
+  the icon for a right-pointing chevron, and an open fold kept the chevron
+  turned down. Reasoning and tool folds showed no separator rule after the
+  border was removed.
+- A successful run ended with `opencode · Tidepool Alpha Free · build · 26.7s`
+  in the transcript and `Connected · Managed service · Answered` in the
+  composer. A deliberately unavailable command model produced
+  `Execution failed. Model unavailable: missing-provider/missing-model` and
+  `Connected · Managed service · Failed`; stopping a run produced
+  `Execution interrupted.` and `Stopped`. Selection-change records were absent.
+- Reloading the plugin and reopening the saved conversation restored the same
+  prompts, answers, footnotes, folds, and failure line without replaying a
+  prompt. No console or plugin errors were captured.
+- The failed-run check used a project-local command fixture with a missing
+  model to induce a real service error without touching the shared registration
+  or spending on an external provider. The fixture was removed after
+  acceptance; the disposable session retains its failed transcript. The
+  transcript failure line and composer status were therefore verified against
+  a real service error, not a mocked DOM.
+
+### Readable line length (2026-11-23)
+
+The transcript and the composer card follow Obsidian's **Readable line length**
+setting instead of always capping themselves at the note measure. The view
+mirrors the native `is-readable-line-width` class from
+`Vault.getConfig("readableLineLength")`, updates on the vault's `config-changed`
+event, and uses the same `--file-line-width` measure as Markdown views
+(Obsidian's default is `700px`). The installed `app.css` was checked first:
+Markdown views receive the class from that setting and cap `.cm-sizer` at
+`--file-line-width`, so the plugin only reuses the class and the variable, not
+the host declarations.
+
+Live check in the disposable test vault with the same build:
+
+- With the setting on, the view carried `is-readable-line-width`, the
+  transcript content measured 688 px inside the pane's 1252 px content box
+  (the 700 px measure less the scrollbar), and the composer card measured
+  700 px. Their left edges lined up exactly; the card's right edge sat one
+  scrollbar width past the text.
+- Turning the setting off through the vault config removed the class without
+  reopening the view. The transcript filled the pane (1208 px with the 16 px
+  inset) and the composer card spanned it at 1220 px, still sharing the same
+  left edge. A screenshot showed no horizontal scrolling, and the toolbar kept
+  its spacing.
+- Overriding `--file-line-width` with `500px` narrowed the transcript to 488 px
+  and the composer card to 500 px, confirming that themes and snippets
+  retuning the measure reach both. The setting was restored to on afterwards,
+  and no console or plugin errors were captured.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-23 | `streamline-chat-transcript` | 15/15 | 216 passing | pass | `openspec/changes/archive/2026-11-23-streamline-chat-transcript` |
 | 2026-11-23 | `add-composer-slash-commands` | 19/19 | 207 passing | pass | `openspec/changes/archive/2026-11-23-add-composer-slash-commands` |
 | 2026-11-22 | `reuse-obsidian-ui-styles` | 14/14 | 163 passing | pass | `openspec/changes/archive/2026-11-22-reuse-obsidian-ui-styles` |
 | 2026-11-22 | `add-composer-note-linking` | 9/9 | 161 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-note-linking` |

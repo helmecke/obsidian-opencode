@@ -1,5 +1,5 @@
 import { Component, ItemView, Scope } from 'obsidian';
-import type { WorkspaceLeaf } from 'obsidian';
+import type { Events, WorkspaceLeaf } from 'obsidian';
 import type { ConnectionCoordinator } from '../opencode/connection';
 import { ConnectionError } from '../opencode/errors';
 import { OpenCodeApiCompatibilityError, OpenCodeCompatibilityError } from '../opencode/compatibility';
@@ -10,6 +10,12 @@ import { ChatRenderer } from './chat-renderer';
 import type { ChatViewHandlers } from './chat-renderer';
 
 export const CHAT_VIEW_TYPE = 'opencode-chat';
+
+// Obsidian's own views read this setting through `Vault.getConfig`, which is not
+// part of the published typings but stays the only source for the value.
+interface ConfigurableVault {
+	getConfig?(key: string): unknown;
+}
 
 export class ChatView extends ItemView {
 	private opening?: Component;
@@ -58,6 +64,8 @@ export class ChatView extends ItemView {
 		opening.register(() => this.connection.signal.removeEventListener('abort', close));
 		this.contentEl.empty();
 		this.contentEl.addClass('opencode-chat');
+		this.applyReadableLineWidth();
+		this.watchReadableLineWidth(opening);
 		const renderer = new ChatRenderer(this.app, this.handlers());
 		this.renderer = renderer;
 		renderer.mount(this.contentEl, opening, this.scope!);
@@ -74,6 +82,25 @@ export class ChatView extends ItemView {
 		if (this.opening) this.removeChild(this.opening);
 		this.contentEl.empty();
 		this.contentEl.removeClass('opencode-chat');
+		this.contentEl.removeClass('is-readable-line-width');
+	}
+
+	/** Mirror Obsidian's readable-line-length setting with its native class. */
+	private applyReadableLineWidth(): void {
+		const vault = this.app.vault as typeof this.app.vault & ConfigurableVault;
+		const enabled = typeof vault.getConfig === 'function'
+			? vault.getConfig('readableLineLength') !== false
+			: true;
+		this.contentEl.toggleClass('is-readable-line-width', enabled);
+	}
+
+	private watchReadableLineWidth(opening: Component): void {
+		const vault = this.app.vault;
+		if (typeof vault.on !== 'function') return;
+		// Vault's typed events leave out `config-changed`; the base event API carries it.
+		opening.registerEvent((vault as unknown as Events).on('config-changed', (key) => {
+			if (key === 'readableLineLength') this.applyReadableLineWidth();
+		}));
 	}
 
 	private handlers(): ChatViewHandlers {

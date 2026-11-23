@@ -39,6 +39,7 @@ export function installDom() {
 		cleanups = [];
 		children = new Set();
 		register(callback) { this.cleanups.push(callback); }
+		registerEvent(eventRef) { this.register(() => eventRef.e.offref(eventRef)); }
 		registerDomEvent(element, event, callback, options) {
 			const listener = { element, event, callback };
 			this.events.push(listener);
@@ -62,6 +63,7 @@ export function createObsidian(app, notices = [], extra = {}) {
 		cleanups = [];
 		children = new Set();
 		register(callback) { this.cleanups.push(callback); }
+		registerEvent(eventRef) { this.register(() => eventRef.e.offref(eventRef)); }
 		registerDomEvent(element, event, callback, options) {
 			const listener = { element, event, callback };
 			this.events.push(listener);

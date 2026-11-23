@@ -196,22 +196,62 @@ test('form card keeps hidden required fields from blocking and reports unsupport
 	assert.equal(unsupportedRoot.querySelector('.opencode-form-actions button').disabled, true);
 });
 
-test('tool entries distinguish progress, success, and failure and never evaluate output HTML', () => {
+test('tool summaries show an icon, status or duration, and a one-line preview', () => {
 	const root = container();
 	const view = new ToolEntryView(root);
 	const base = { type: 'tool', id: 't', name: 'read', time: { created: 1 } };
-	view.update({ ...base, state: { status: 'running', input: { path: 'a' }, metadata: {} } });
+	view.update({ ...base, time: { created: 1, ran: 1000, completed: 1400 },
+		state: { status: 'completed', input: { path: 'notes/example.md' },
+			content: [{ type: 'text', text: '<img src=x onerror="globalThis.pwned=true">' }] } });
+	const summary = root.querySelector('summary');
+	assert.equal(root.querySelector('.opencode-tool-status').textContent, '0.4s', 'Completed tools show their duration');
+	assert.equal(root.querySelector('.opencode-tool-preview').textContent, 'notes/example.md');
+	assert.ok(root.querySelector('.opencode-tool-icon .lucide-wrench'), 'The summary carries a muted tool icon');
+	assert.ok(root.querySelector('.opencode-tool-icon .opencode-disclosure-chevron .lucide-chevron-right'),
+		'The icon gives way to a chevron on hover');
+	assert.equal(summary.querySelector('img'), null);
+	assert.match(root.textContent, /<img src=x/, 'Result output stays text');
+	assert.equal(globalThis.pwned, undefined);
+
+	view.update({ ...base, state: { status: 'running', input: { command: 'npm test' }, metadata: {} } });
 	assert.equal(root.querySelector('.opencode-tool-status').textContent, 'Running');
-	view.update({ ...base, state: { status: 'completed', input: { path: 'a' },
-		content: [{ type: 'text', text: '<img src=x onerror="globalThis.pwned=true">' }] } });
-	assert.equal(root.querySelector('.opencode-tool-status').textContent, 'Done');
-	assert.equal(root.querySelectorAll('img').length, 0);
-	assert.match(root.textContent, /<img src=x/);
-	view.update({ ...base, state: { status: 'error', input: { path: 'a' },
+	assert.ok(root.querySelector('.opencode-tool-status').classList.contains('is-running'));
+	assert.equal(root.querySelector('.opencode-tool-preview').textContent, 'npm test');
+
+	view.update({ ...base, state: { status: 'error', input: { filePath: 'notes/example.md' },
 		error: { type: 'unknown', message: 'failed safely' } } });
 	assert.equal(root.querySelector('.opencode-tool-status').textContent, 'Failed');
+	assert.ok(root.querySelector('.opencode-tool-status').classList.contains('is-failed'));
+	assert.equal(root.querySelector('.opencode-tool-preview').textContent, 'notes/example.md');
 	assert.match(root.textContent, /failed safely/);
+
+	view.update({ ...base, state: { status: 'streaming', input: '{"path":"draft' } });
+	assert.equal(root.querySelector('.opencode-tool-status').textContent, 'Preparing');
+	assert.equal(root.querySelector('.opencode-tool-preview').textContent, '{"path":"draft');
 	assert.equal(toolStatus({ state: { status: 'streaming', input: '' } }).label, 'Preparing');
 	view.dispose();
 	assert.equal(root.childElementCount, 0);
+});
+
+test('tool summaries handle missing timestamps, multiline previews, and non-string input', () => {
+	const root = container();
+	const view = new ToolEntryView(root);
+	const base = { type: 'tool', id: 't', name: 'write', time: { created: 1 } };
+
+	view.update({ ...base, state: { status: 'completed', input: { path: 'a.md' }, content: [] } });
+	assert.equal(root.querySelector('.opencode-tool-status').textContent, 'Done',
+		'Missing timestamps fall back to the status word');
+
+	view.update({ ...base, time: { created: 1, ran: 1000, completed: 1400 },
+		state: { status: 'completed', input: { command: 'line one\nline two\n' + 'x'.repeat(200) }, content: [] } });
+	const preview = root.querySelector('.opencode-tool-preview');
+	assert.equal(preview.textContent.includes('\n'), false, 'The preview is one line');
+	assert.ok(preview.textContent.endsWith('…'), 'A long preview is truncated');
+	assert.ok(preview.textContent.length <= 81);
+	assert.equal(preview.getAttribute('title'), preview.textContent);
+
+	view.update({ ...base, state: { status: 'running', input: { path: 42, count: 3, nested: { text: 'x' } }, metadata: {} } });
+	assert.equal(root.querySelector('.opencode-tool-preview').textContent, '', 'Non-string input has no preview');
+	assert.equal(root.querySelector('.opencode-tool-preview').hidden, true);
+	assert.equal(root.querySelector('.opencode-tool-status').textContent, 'Running');
 });

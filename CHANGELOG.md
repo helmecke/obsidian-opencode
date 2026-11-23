@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Present the chat transcript like a note: prompts are quoted asides in one
+  reading column that follows Obsidian's **Readable line length** setting and
+  the theme's note width, the composer card lines up with that measure, and
+  answers read as continuous native Markdown. A faint line closes each
+  assistant turn with its model, agent, and duration. Reasoning and tool
+  activity fold into compact rows with a leading icon and a one-line preview,
+  while shell commands, compaction, and injected text collapse behind short
+  labels. Routine success or selection notices no longer interrupt the
+  document. Failed or interrupted execution stays visible with its error detail.
+
 ## 1.0.0 (2026-11-23)
 
 - Initial release: native OpenCode chat in Obsidian with a shared or managed

@@ -127,7 +127,9 @@ details.
 ### Composing messages
 
 - The composer is one card. The message field sits above a bottom toolbar shared
-  by the conversation and message controls. The toolbar's left side holds the
+  by the conversation and message controls. The card follows the transcript's
+  reading column while **Readable line length** is enabled and uses the pane
+  width when it is off. The toolbar's left side holds the
   connection and execution status, the **Conversation** selector, the
   **New conversation** icon, and the **Retry discovery** icon; the **Agent** and
   **Model** selectors and the round arrow-up **Send** button follow on the right.
@@ -167,6 +169,31 @@ details.
   prompts. The catalog loads on the first `/` without blocking composing or
   sending, and a failed command keeps its text in the composer. Ctrl/Cmd+Enter
   still sends while the list is open.
+
+### Reading the transcript
+
+- The transcript reads as one Markdown note in the active Obsidian theme.
+  Prompts and answers share one centered reading column of note width while
+  **Readable line length** is enabled, and use the pane width when it is off. A
+  narrow sidebar uses the available width without horizontal scrolling.
+- Your message appears as a quoted aside with its line breaks preserved, so it
+  stays easy to find without a chat bubble. Answers read as continuous native
+  Markdown: headings, paragraphs, lists, quotes, code, and tables use Obsidian's
+  reading typography, and only turn boundaries add space.
+- One faint line after an assistant turn shows the model, agent, and elapsed
+  duration when the run provides them. Missing values are omitted, and the line
+  stays absent while the answer is still streaming.
+- Reasoning and tool activity fold into compact single-line rows with a leading
+  icon, a name, and a one-line preview. A tool row also shows its status or
+  duration. Hovering or focusing a row swaps the icon for a chevron that points
+  down while the row is open. Expanded details stay plain text, and long
+  previews truncate instead of widening the column.
+- Shell commands, compaction, and injected skill or system text stay collapsed
+  behind a short label and expand on request.
+- The transcript stays quiet about routine success and agent, model, or
+  location changes; the composer status carries the final execution state.
+  Failed or interrupted execution remains visible as a compact line with its
+  error detail.
 
 ### Running, stopping, and status
 

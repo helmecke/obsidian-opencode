@@ -201,6 +201,52 @@ test('native view renders the conversation shell and clears its content on close
 	plugin.unload();
 });
 
+test('view follows the readable line length setting and updates on config changes', async () => {
+	const { registrations, plugin } = await createShell();
+	const originalGetConfig = app.vault.getConfig;
+	const originalOn = app.vault.on;
+	let readable = true;
+	const subscriptions = [];
+	app.vault.getConfig = (key) => (key === 'readableLineLength' ? readable : undefined);
+	app.vault.on = (name, callback) => {
+		subscriptions.push({ name, callback });
+		return { e: { offref() {} } };
+	};
+	try {
+		const view = registrations.views.get('opencode-chat')({});
+		view.connection.discover = async () => emptyClient();
+		await view.onOpen();
+		assert.ok(view.contentEl.classList.contains('is-readable-line-width'), 'The setting is on by default');
+		assert.equal(subscriptions.length, 1);
+		assert.equal(subscriptions[0].name, 'config-changed');
+		readable = false;
+		subscriptions[0].callback('readableLineLength');
+		assert.equal(view.contentEl.classList.contains('is-readable-line-width'), false,
+			'Turning the setting off releases the transcript to the pane width');
+		readable = true;
+		subscriptions[0].callback('strictLineBreaks');
+		assert.equal(view.contentEl.classList.contains('is-readable-line-width'), false,
+			'Unrelated settings do not change the transcript measure');
+		subscriptions[0].callback('readableLineLength');
+		assert.ok(view.contentEl.classList.contains('is-readable-line-width'));
+		await view.onClose();
+		assert.equal(view.contentEl.classList.contains('is-readable-line-width'), false,
+			'Closing removes the native measure class');
+		readable = false;
+		await view.onOpen();
+		assert.equal(view.contentEl.classList.contains('is-readable-line-width'), false,
+			'Reopening reads the current setting');
+		assert.equal(subscriptions.length, 2, 'Reopening installs one subscription, not duplicates');
+		await view.onClose();
+		plugin.unload();
+	} finally {
+		if (originalGetConfig) app.vault.getConfig = originalGetConfig;
+		else delete app.vault.getConfig;
+		if (originalOn) app.vault.on = originalOn;
+		else delete app.vault.on;
+	}
+});
+
 test('opening failures provide fixed feedback without leaking underlying errors', async () => {
 	const { registrations, workspace, notices } = await createShell();
 	workspace.getLeaf = () => { throw new Error('private diagnostic'); };

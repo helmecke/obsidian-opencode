@@ -1,5 +1,7 @@
-import type { SessionMessageAssistant, SessionMessageInfo } from '@opencode/client';
+import type { ModelRef, SessionMessageAssistant, SessionMessageInfo } from '@opencode/client';
 import type { PendingPrompt } from '../state/prompt-coordinator';
+import { createDisclosureIcon } from './disclosure-icon';
+import { durationBetween } from './duration';
 import { ToolEntryView } from './tool-entry';
 import type { ToolEntry } from './tool-entry';
 
@@ -10,6 +12,16 @@ export interface MarkdownLike {
 
 export interface ConversationOptions {
 	createMarkdown(container: HTMLElement): MarkdownLike;
+	/** Display name for a model; the renderer falls back to the message's IDs. */
+	modelLabel?(model: ModelRef): string;
+	/** Display name for an agent; the renderer falls back to the message's agent ID. */
+	agentLabel?(agent: string): string;
+}
+
+interface FootnoteInfo {
+	readonly model?: string;
+	readonly agent?: string;
+	readonly duration?: string;
 }
 
 interface Part {
@@ -17,6 +29,7 @@ interface Part {
 	readonly markdown?: MarkdownLike;
 	readonly tool?: ToolEntry;
 	readonly kind: string;
+	readonly preview?: HTMLElement;
 	signature: string;
 }
 
@@ -26,24 +39,90 @@ interface Entry {
 	readonly parts: Map<string, Part>;
 	readonly markdowns: Set<MarkdownLike>;
 	readonly tools: Set<ToolEntry>;
-	kind: 'user' | 'assistant' | 'notice';
+	kind: 'user' | 'assistant' | 'notice' | 'disclosure';
 	signature: string;
+	footnote?: HTMLElement;
+	footnoteSignature: string;
 }
 
-function textOf(message: SessionMessageInfo): string {
-	if ('text' in message && typeof message.text === 'string') return message.text;
-	if ('description' in message && typeof message.description === 'string') return message.description;
-	if (message.type === 'compaction') {
-		const status = message.status;
-		return status === 'running' ? 'Compacting the conversation…'
-			: status === 'failed' ? `Compaction failed: ${message.error.message}` : 'Conversation compacted.';
-	}
+const suppressedTypes = new Set(['agent-switched', 'model-switched', 'location-switched']);
+
+/** Routine records stay out of the document; the composer carries the execution state. */
+function isSuppressed(message: SessionMessageInfo): boolean {
+	if (message.type === 'idle') return message.outcome === 'succeeded';
+	return suppressedTypes.has(message.type);
+}
+
+function oneLine(text: string, max: number): string {
+	const collapsed = text.replace(/\s+/g, ' ').trim();
+	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
+}
+
+const maxPreviewCharacters = 80;
+
+/** Strip the most visible Markdown syntax so the collapsed row reads like a tool summary. */
+function reasoningPreview(text: string): string {
+	const plain = text
+		.replace(/^#{1,6}\s+/gm, '')
+		.replace(/^\s*[-*+]\s+/gm, '')
+		.replace(/^\s*\d+[.)]\s+/gm, '')
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+		.replace(/[*_`~]/g, '');
+	return oneLine(plain, maxPreviewCharacters);
+}
+
+function setPreview(preview: HTMLElement, text: string): void {
+	preview.setText(text);
+	preview.hidden = text.length === 0;
+	if (text) preview.setAttribute('title', text);
+	else preview.removeAttribute('title');
+}
+
+function compactionText(message: Extract<SessionMessageInfo, { type: 'compaction' }>): string {
+	if (message.status === 'running') return 'Compacting the conversation…';
+	if (message.status === 'failed') return `Compaction failed: ${message.error.message}`;
+	return 'Conversation compacted.';
+}
+
+function outcomeText(message: Extract<SessionMessageInfo, { type: 'idle' }>): string {
+	const heading = message.outcome === 'interrupted' ? 'Execution interrupted.' : 'Execution failed.';
+	const detail = message.error?.message?.trim();
+	return detail ? `${heading} ${detail}` : heading;
+}
+
+function disclosureOf(message: SessionMessageInfo): { label: string; body: string } {
 	if (message.type === 'shell') {
 		const output = message.output?.output;
-		return output ? `${message.command}\n\n${output}` : message.command;
+		return { label: `Shell · ${oneLine(message.command, 60)}`,
+			body: output ? `${message.command}\n\n${output}` : message.command };
 	}
-	if (message.type === 'idle') return `Execution ${message.outcome}.`;
-	return message.type;
+	if (message.type === 'skill') {
+		return { label: `Skill · ${oneLine(message.name, 40)}`, body: message.text };
+	}
+	if (message.type === 'synthetic' || message.type === 'system') {
+		const text = 'text' in message && typeof message.text === 'string' ? message.text : '';
+		return { label: message.type === 'synthetic' ? 'Synthetic note' : 'System note', body: text };
+	}
+	const text = 'text' in message && typeof message.text === 'string' ? message.text : '';
+	return { label: 'System note', body: text };
+}
+
+function entryLabel(message: SessionMessageInfo): string {
+	if (message.type === 'user') return 'You';
+	if (message.type === 'assistant') return 'OpenCode';
+	if (message.type === 'idle') return 'Execution outcome';
+	if (message.type === 'compaction') return 'Compaction';
+	if (message.type === 'shell') return 'Shell';
+	if (message.type === 'skill') return 'Skill';
+	if (message.type === 'synthetic') return 'Synthetic note';
+	return 'System note';
+}
+
+function entryKind(message: SessionMessageInfo): Entry['kind'] {
+	if (message.type === 'user') return 'user';
+	if (message.type === 'assistant') return 'assistant';
+	if (message.type === 'idle' || message.type === 'compaction') return 'notice';
+	return 'disclosure';
 }
 
 function partKey(part: SessionMessageAssistant['content'][number], index: number): string {
@@ -56,8 +135,10 @@ export class ConversationRenderer {
 	constructor(private readonly container: HTMLElement, private readonly options: ConversationOptions) {}
 
 	render(messages: readonly SessionMessageInfo[], pending?: PendingPrompt): void {
-		const desired: { id: string; message?: SessionMessageInfo; prompt?: PendingPrompt }[] = [];
-		for (const message of messages) desired.push({ id: message.id, message });
+		const visible = messages.filter((message) => !isSuppressed(message));
+		const footnotes = this.footnotesFor(visible);
+		const desired: { id: string; message?: SessionMessageInfo; prompt?: PendingPrompt; footnote?: FootnoteInfo }[] = [];
+		for (const message of visible) desired.push({ id: message.id, message, footnote: footnotes.get(message.id) });
 		if (pending && !messages.some((message) => message.id === pending.id)) {
 			desired.push({ id: `pending:${pending.id}`, prompt: pending });
 		}
@@ -70,7 +151,7 @@ export class ConversationRenderer {
 		for (const item of desired) {
 			const entry = item.prompt ? this.promptEntry(item.id, item.prompt)
 				: this.entries.get(item.id) ?? this.createEntry(item.id, item.message!);
-			if (item.message) this.updateEntry(entry, item.message);
+			if (item.message) this.updateEntry(entry, item.message, item.footnote);
 			this.container.appendChild(entry.root);
 		}
 	}
@@ -81,14 +162,14 @@ export class ConversationRenderer {
 	}
 
 	private createEntry(id: string, message: SessionMessageInfo): Entry {
+		const kind = entryKind(message);
 		const root = this.container.createDiv({ cls: `opencode-message opencode-message-${message.type}` });
-		const body = root.createDiv({ cls: 'opencode-message-body' });
+		root.setAttribute('role', 'group');
+		root.setAttribute('aria-label', entryLabel(message));
+		const body = root.createDiv({ cls: `opencode-message-body opencode-message-body-${kind}` });
 		const entry: Entry = { root, body, parts: new Map(), markdowns: new Set(), tools: new Set(),
-			kind: message.type === 'user' ? 'user' : message.type === 'assistant' ? 'assistant' : 'notice', signature: '' };
+			kind, signature: '', footnoteSignature: '' };
 		this.entries.set(id, entry);
-		if (message.type === 'user' || message.type === 'assistant') {
-			root.createDiv({ cls: 'opencode-message-role', text: message.type === 'user' ? 'You' : 'OpenCode' });
-		}
 		return entry;
 	}
 
@@ -101,30 +182,32 @@ export class ConversationRenderer {
 			return existing;
 		}
 		const root = this.container.createDiv({ cls: `opencode-message opencode-message-user opencode-prompt-${pending.phase}` });
-		root.createDiv({ cls: 'opencode-message-role', text: 'You' });
-		const body = root.createDiv({ cls: 'opencode-message-body' });
-		body.createDiv({ cls: 'opencode-message-text', text: pending.text });
+		root.setAttribute('role', 'group');
+		root.setAttribute('aria-label', 'You');
+		const body = root.createDiv({ cls: 'opencode-message-body opencode-message-body-user' });
+		this.renderPrompt(body, pending.text);
 		root.createDiv({ cls: 'opencode-prompt-status', text: pending.phase === 'uncertain' ? 'Not confirmed' : 'Sending…' });
-		const entry: Entry = { root, body, parts: new Map(), markdowns: new Set(), tools: new Set(), kind: 'user', signature: '' };
+		root.toggleClass('is-uncertain', pending.phase === 'uncertain');
+		const entry: Entry = { root, body, parts: new Map(), markdowns: new Set(), tools: new Set(),
+			kind: 'user', signature: pending.text, footnoteSignature: '' };
 		this.entries.set(id, entry);
 		return entry;
 	}
 
-	private updateEntry(entry: Entry, message: SessionMessageInfo): void {
+	private updateEntry(entry: Entry, message: SessionMessageInfo, footnote?: FootnoteInfo): void {
 		if (entry.kind === 'notice') {
-			const text = textOf(message);
-			if (entry.signature !== text) {
-				entry.signature = text;
-				entry.body.empty();
-				entry.body.createDiv({ cls: 'opencode-message-notice', text });
-			}
+			this.updateNotice(entry, message);
+			return;
+		}
+		if (entry.kind === 'disclosure') {
+			this.updateDisclosure(entry, message);
 			return;
 		}
 		if (message.type === 'user') {
 			if (entry.signature !== message.text) {
 				entry.signature = message.text;
 				entry.body.empty();
-				entry.body.createDiv({ cls: 'opencode-message-text', text: message.text });
+				this.renderPrompt(entry.body, message.text);
 			}
 			return;
 		}
@@ -144,7 +227,10 @@ export class ConversationRenderer {
 				entry.parts.set(key, part);
 			}
 			if (content.type === 'tool') part.tool?.update(content);
-			else part.markdown?.set(content.text, completed);
+			else {
+				part.markdown?.set(content.text, completed);
+				if (part.preview) setPreview(part.preview, reasoningPreview(content.text));
+			}
 			entry.body.appendChild(part.root);
 		}
 		for (const [key, part] of entry.parts) {
@@ -154,19 +240,101 @@ export class ConversationRenderer {
 			part.root.remove();
 			entry.parts.delete(key);
 		}
+		this.syncFootnote(entry, footnote);
+	}
+
+	private renderPrompt(container: HTMLElement, text: string): void {
+		const frame = container.createDiv({ cls: 'opencode-prompt markdown-rendered' });
+		frame.createEl('blockquote', { cls: 'opencode-prompt-quote', text });
+	}
+
+	private updateNotice(entry: Entry, message: SessionMessageInfo): void {
+		const text = message.type === 'idle' ? outcomeText(message)
+			: message.type === 'compaction' ? compactionText(message) : '';
+		const signature = `${message.type}:${text}`;
+		if (entry.signature === signature) return;
+		entry.signature = signature;
+		entry.body.empty();
+		if (message.type === 'idle') {
+			const outcome = entry.body.createDiv({ cls: `opencode-outcome is-${message.outcome}` });
+			outcome.createSpan({ cls: 'opencode-outcome-text', text });
+		} else {
+			entry.body.createDiv({ cls: 'opencode-notice', text });
+		}
+	}
+
+	private updateDisclosure(entry: Entry, message: SessionMessageInfo): void {
+		const content = disclosureOf(message);
+		const signature = `${content.label}\n${content.body}`;
+		if (entry.signature === signature) return;
+		entry.signature = signature;
+		entry.root.setAttribute('aria-label', content.label);
+		entry.body.empty();
+		const details = entry.body.createEl('details', { cls: 'opencode-disclosure' });
+		details.createEl('summary', { text: content.label });
+		const body = details.createDiv({ cls: 'opencode-disclosure-body' });
+		body.createEl('pre', { cls: 'opencode-disclosure-text', text: content.body });
+	}
+
+	private syncFootnote(entry: Entry, footnote?: FootnoteInfo): void {
+		const text = [footnote?.model, footnote?.agent, footnote?.duration].filter(Boolean).join(' · ');
+		if (!text) {
+			entry.footnote?.remove();
+			entry.footnote = undefined;
+			entry.footnoteSignature = '';
+			return;
+		}
+		if (entry.footnoteSignature === text && entry.footnote) return;
+		entry.footnoteSignature = text;
+		entry.footnote ??= entry.root.createDiv({ cls: 'opencode-message-footnote' });
+		entry.footnote.setText(text);
+	}
+
+	/** One footnote per contiguous assistant run, on its final message. */
+	private footnotesFor(messages: readonly SessionMessageInfo[]): Map<string, FootnoteInfo> {
+		const footnotes = new Map<string, FootnoteInfo>();
+		let index = 0;
+		while (index < messages.length) {
+			const first = messages[index];
+			if (!first || first.type !== 'assistant') { index++; continue; }
+			let last = first;
+			let next = index + 1;
+			while (next < messages.length && messages[next]?.type === 'assistant') {
+				last = messages[next] as SessionMessageAssistant;
+				next++;
+			}
+			const info = this.footnoteFor(first, last);
+			if (info) footnotes.set(last.id, info);
+			index = next;
+		}
+		return footnotes;
+	}
+
+	private footnoteFor(first: SessionMessageAssistant, last: SessionMessageAssistant): FootnoteInfo | undefined {
+		if (last.time.completed === undefined) return undefined;
+		const duration = durationBetween(first.time.created, last.time.completed);
+		const model = last.model
+			? this.options.modelLabel?.(last.model)?.trim() || `${last.model.providerID} · ${last.model.id}` : '';
+		const agent = last.agent ? this.options.agentLabel?.(last.agent)?.trim() || last.agent : '';
+		if (!model && !agent && !duration) return undefined;
+		return { model: model || undefined, agent: agent || undefined, duration: duration || undefined };
 	}
 
 	private createMarkdownPart(entry: Entry, key: string, kind: string): Part {
 		const root = entry.body.createDiv({ cls: `opencode-part opencode-part-${kind}` });
 		let container = root;
+		let preview: HTMLElement | undefined;
 		if (kind === 'reasoning') {
 			const details = root.createEl('details', { cls: 'opencode-reasoning' });
-			details.createEl('summary', { text: 'Reasoning' });
-			container = details.createDiv();
+			const summary = details.createEl('summary', { cls: 'opencode-disclosure-summary' });
+			createDisclosureIcon(summary, 'brain');
+			summary.createSpan({ cls: 'opencode-reasoning-name', text: 'Reasoning' });
+			preview = summary.createSpan({ cls: 'opencode-reasoning-preview' });
+			container = details.createDiv({ cls: 'opencode-reasoning-body' });
 		}
 		const markdown = this.options.createMarkdown(container);
 		entry.markdowns.add(markdown);
-		return { root, markdown, kind, signature: '' };
+		return { root, markdown, kind, preview, signature: '' };
 	}
 
 	private createTool(entry: Entry, key: string): Part {
