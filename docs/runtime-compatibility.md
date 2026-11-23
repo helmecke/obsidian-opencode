@@ -1,5 +1,44 @@
 # Runtime compatibility gate
 
+## Current support policy
+
+| Component | Requirement or evidence |
+| --- | --- |
+| OpenCode runtime eligibility | Stable releases `>=2.2.2 <3.0.0`, subject to required API/event compatibility checks |
+| Bundled `@opencode/client` | Pinned to `2.2.2`; not a bundled OpenCode executable |
+| Obsidian | Minimum `1.14.5` in the manifest; historical transport probe on `1.14.5`, production connection probe on `1.15.1` |
+| Tested desktop runtime | Windows; latest production connection probe: Electron `43.8.4`, embedded Node `24.22.1` |
+
+Version eligibility is not a claim that every 2.x release has been tested.
+Valid SemVer build metadata (for example `2.3.2+build.1`) does not change
+eligibility. Prereleases, versions below `2.2.2` or at/above `3.0.0`, prefixes,
+leading-zero release numbers, whitespace, and missing/malformed versions are
+rejected. An eligible version must also satisfy the required API and event
+contracts. Unsupported endpoints or incompatible responses produce an
+**Incompatible OpenCode API** error and keep sends and decisions disabled.
+
+Individually observed evidence is narrower: **2.2.2** passed the historical
+Electron transport experiment; **2.3.2** passed the validated production
+discovery/authentication/connection-event probe in both host Node and Obsidian
+Electron, followed by the full in-Obsidian acceptance workflow on 2026-11-22
+(streamed answer, links, tools, permission card, form, agent/model changes,
+stop, close/reopen, and plugin disable). That workflow did not force an
+OS-level mid-stream socket drop; stream-end recovery is covered by deterministic
+tests. The [client contract review](client-contract-review.md) is source
+evidence, not a live acceptance result or identification of your installed
+OpenChamber.
+
+An incompatible shared service is left untouched: the plugin does not restart,
+replace, or reconfigure it. Do not downgrade a shared service just to match the
+plugin; coordinate lifecycle changes with other connected clients.
+
+The earlier disposable-vault transport experiment verified authenticated API
+access and a live `server.connected` event using in-process Node HTTP with a Web
+stream bridge; renderer `fetch` failed in that runtime. The 2026-11-22
+acceptance run used the installed production plugin; details and remaining
+limitations are below. Older Obsidian versions, macOS, Linux, and mobile have no
+claimed test coverage; mobile is unsupported.
+
 ## Compatibility revision investigation (2026-11-22, incomplete)
 
 ### Latest live findings
@@ -35,13 +74,10 @@
   reported by the form card, which blocks submission instead of sending a
   partial answer. Generic envelopes are still checked at the transport boundary.
 
-The implementation now admits stable releases
-`>=2.2.2 <3.0.0` and valid SemVer build metadata; prereleases, malformed values,
-prefixes, whitespace, leading-zero release components, and unsafe integers are
-rejected. Eligibility is separate from required API/event compatibility.
-Automated boundary/non-replacement tests and the production Electron gate cover
-this policy. This range does not claim individual testing of every eligible
-release.
+The implementation admits the policy summarized above. Eligibility is separate
+from required API/event compatibility. Automated boundary/non-replacement tests
+and the production Electron gate cover this policy. This range does not claim
+individual testing of every eligible release.
 
 - Compared the installed pinned 2.2.2 package with the published
   `@opencode/client@2.3.2` npm archive (SHA-1
@@ -110,15 +146,13 @@ generator as well as stable identity/reconciliation. Full live conversation,
 permission, form, and lifecycle acceptance was recorded on 2026-11-22; see
 [Live Electron acceptance](#live-electron-acceptance-2026-11-22) below.
 
-The Bash `obsidian` wrapper's request did not return and the user cancelled it;
-that cancellation is not recorded as an Obsidian failure. Direct
-`node:child_process.execFile` invocation of
-`C:\Program Files\Obsidian\Obsidian.com` with `windowsHide: true` and a bounded
+A CLI wrapper request did not return and was cancelled; that cancellation is
+not recorded as an Obsidian failure. Direct `node:child_process.execFile`
+invocation of the Obsidian executable with `windowsHide: true` and a bounded
 timeout successfully returned vault-targeted `eval` results. No global CLI or
 Obsidian configuration was changed by these checks.
 
-The approved disposable vault remains
-`C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`.
+Manual checks used a disposable vault outside this repository.
 
 The older exact-version statements below are historical verification records,
 superseded by the current eligibility policy above.
@@ -197,16 +231,14 @@ for subsequent tasks.
 ## Electron verification
 
 Node success alone does **not** establish Electron compatibility. The runtime
-probes below test the approved vault directly. The initial version policy is
+probes below target a disposable vault directly. The initial version policy is
 defined above; production discovery and non-destructive startup remain pending.
 
-The user approved the disposable Windows vault path
-`C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`.
 The installed OpenCode executable reports `opencode v2.2.2`.
 
 ### Electron probe results
 
-The approved vault is open and the CLI is working. Observed versions:
+The disposable vault is open and the CLI is working. Observed versions:
 
 | Component | Version |
 | --- | --- |
@@ -217,7 +249,7 @@ The approved vault is open and the CLI is working. Observed versions:
 | Installed OpenCode / pinned client | 2.2.2 / 2.2.2 |
 
 Bundled `scripts/runtime-probe.mjs` as ES2021 CommonJS with Node built-ins
-external, placed the output at `.obsidian/runtime-probe.cjs` in the approved
+external, placed the output at `.obsidian/runtime-probe.cjs` in a disposable
 vault, and invoked its `run()` through the vault-targeted Obsidian CLI.
 This is a standalone developer probe, not an installed/enabled plugin.
 
@@ -240,7 +272,7 @@ This is a standalone developer probe, not an installed/enabled plugin.
 ### Successful in-process Node transport
 
 Bundled `scripts/node-transport-probe.mjs` to
-`.obsidian/node-transport-probe.cjs` in the approved vault and invoked `run()`
+`.obsidian/node-transport-probe.cjs` in a disposable vault and invoked `run()`
 through the vault-targeted CLI. Observed:
 
 - Reads the standard local registration using the client's `fallback()` path.
@@ -406,9 +438,9 @@ remain untracked.
 
 ### Live Electron acceptance (2026-11-22)
 
-Observed in `C:\Users\Jakob\AppData\Local\Temp\opencode\obsidian-test-vault`
-with Obsidian 1.15.1, Electron 43.8.4, embedded Node 24.22.1, and an
-externally managed OpenCode service reporting 2.3.2:
+Observed in a disposable test vault with Obsidian 1.15.1, Electron 43.8.4,
+embedded Node 24.22.1, and an externally managed OpenCode service reporting
+2.3.2:
 
 - Discovery and authenticated reuse succeeded. Automatic startup remained
   absent. Setting `XDG_STATE_HOME` to an empty test directory produced the fixed
@@ -484,12 +516,12 @@ Automated coverage added in `tests/managed-runtime.test.mjs`:
 change. Lint has no errors and two warnings (declarative settings API and sentence
 case for the **OpenCode 2 executable path** label).
 
-The manual acceptance in task 5.2 was performed on 2026-11-22 in the approved
-disposable vault with the installed plugin, Obsidian's process environment, and
-the npm-installed `opencode v2.3.2` executable. Observations:
+The manual acceptance in task 5.2 was performed on 2026-11-22 in a disposable
+test vault with the locally built plugin, Obsidian's process environment, and a
+locally installed `opencode v2.3.2` executable. Observations:
 
 - With `XDG_STATE_HOME` pointed at an empty directory (so discovery saw no
-  registration), opening chat resolved the npm native binary, started a managed
+  registration), opening chat resolved the native binary, started a managed
   process, and showed **Connected · Managed service**. The recorded managed PID
   was alive and the real shared `service.json` stayed byte-identical.
 - On reload, the real shared registration pointed at a dead PID. Discovery
@@ -517,7 +549,7 @@ shared service was stopped, started, or replaced.
 
 The chat composer now pairs square brackets and completes vault Markdown notes
 after `[[`. The reference stays plain prompt text; no file attachment is added.
-Live acceptance in the approved disposable vault (Obsidian 1.15.1, Electron
+Live acceptance in a disposable test vault (Obsidian 1.15.1, Electron
 43.8.4, Node 24.22.1) observed:
 
 - `[[` opened an inline list for duplicate-basename notes, with the basename and
@@ -590,7 +622,7 @@ send shortcut while the inline list is open.
 Automated verification: `npm test` passed **183 tests**, `npm run build`
 succeeded, and `npm run lint` reported 0 errors and 2 pre-existing warnings
 (declarative settings API; sentence case for **OpenCode 2 executable path**).
-The manual smoke test in the approved disposable vault confirmed that `$`
+The manual smoke test in a disposable test vault confirmed that `$`
 completion filters and inserts a skill, the sent prompt retains `$name` and
 carries the skill attachment, and `[[` completion and Mod+Enter sending still
 work.
@@ -633,7 +665,7 @@ Supported API surface for this feature:
   rather than API incompatibility. Other failures still use the existing
   incompatibility gate.
 
-Live acceptance in the approved disposable vault (Obsidian 1.15.1, Electron
+Live acceptance in a disposable test vault (Obsidian 1.15.1, Electron
 43.8.9, Node 24.22.1) observed:
 
 - Typing `/` opened the popover with the full catalog; each row showed

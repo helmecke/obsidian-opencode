@@ -29,7 +29,7 @@ that implementation.
 | Artefact | Version | How it was established |
 | --- | --- | --- |
 | Pinned client | 2.2.2 | `node_modules/@opencode/client/package.json`; installed by the repository `package-lock.json` |
-| Published client | 2.3.2 | Extracted npm archive at `C:/Users/Jakob/AppData/Local/Temp/opencode/package`; byte-identical to `npm pack @opencode/client@2.3.2` (SHA-1 `39f211db5f0f5ea7d098f554fd29f91affd70762`) |
+| Published client | 2.3.2 | Extracted npm archive, byte-identical to `npm pack @opencode/client@2.3.2` (SHA-1 `39f211db5f0f5ea7d098f554fd29f91affd70762`) |
 | Schema/protocol | 2.2.2 installed | Transitive packages of the pinned client |
 | Server source | `v2.2.2`…`v2.3.2` | Raw upstream files from `github.com/anomalyco/opencode` at each tag |
 
