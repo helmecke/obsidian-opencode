@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 (2026-11-23)
 
+- Initial release: native OpenCode chat in Obsidian with a shared or managed
+  local service, streamed Markdown answers, vault link navigation, tool
+  activity, permission decisions, agent forms, and conversation recovery.
 - Reuse Obsidian's native icon buttons, form controls, settings rows, warning
   callouts, and markdown presentation so the chat follows the active theme and
   accessibility updates more closely.
