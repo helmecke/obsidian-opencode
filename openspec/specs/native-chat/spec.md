@@ -119,8 +119,12 @@ The transcript SHALL read as one continuous Markdown document in the active Obsi
 - **THEN** those blocks use native Markdown typography and block spacing, with no extra gap between individual parts and space added only between turns
 
 #### Scenario: Supporting detail stays quiet
-- **WHEN** an assistant message contains reasoning or tool activity
-- **THEN** reasoning and tool activity appear as collapsed single-line disclosures inside the document flow that expand on request without adding a framed widget
+- **WHEN** an assistant message contains tool activity, or contains reasoning while **Show reasoning** is enabled
+- **THEN** that activity appears as a collapsed single-line disclosure inside the document flow that expands on request without adding a framed widget
+
+#### Scenario: Reasoning hidden
+- **WHEN** an assistant message contains reasoning while **Show reasoning** is disabled
+- **THEN** the transcript omits the reasoning disclosure entirely and keeps the answer text and tool activity visible
 
 #### Scenario: Fold affordance
 - **WHEN** a reasoning or tool disclosure is shown
@@ -155,3 +159,18 @@ The transcript SHALL omit routine successful execution records and selection-cha
 #### Scenario: Shell and compaction records
 - **WHEN** the conversation contains a shell or compaction record
 - **THEN** the record's command and output or its summary remain available without displacing the answer
+
+### Requirement: Reasoning visibility setting
+The plugin SHALL provide a **Show reasoning** setting that is off by default. While it is off, reasoning SHALL be absent from the transcript. Changing the setting SHALL update an open chat view without a plugin reload or conversation reselection.
+
+#### Scenario: Default off
+- **WHEN** the plugin runs with no stored choice for **Show reasoning**, including a new install or an existing install upgraded from a version without the setting
+- **THEN** the transcript shows no reasoning row, icon, preview, or body for live or restored conversations
+
+#### Scenario: Opt in
+- **WHEN** the user enables **Show reasoning**
+- **THEN** reasoning appears in the open transcript and in later answers as collapsed disclosures, while every non-reasoning part keeps its current presentation
+
+#### Scenario: Disable while open
+- **WHEN** the user disables **Show reasoning** while an open transcript shows reasoning
+- **THEN** the reasoning rows disappear from that view immediately and the answer text, tool activity, footnotes, notices, and execution status remain

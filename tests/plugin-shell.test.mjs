@@ -49,7 +49,7 @@ const app = {
 };
 
 async function createShell(data = {}) {
-	const registrations = { views: new Map(), commands: [], ribbons: [] };
+	const registrations = { views: new Map(), commands: [], ribbons: [], settingTabs: [], settingControls: [] };
 	const leaves = [];
 	const revealed = [];
 	const notices = [];
@@ -69,14 +69,42 @@ async function createShell(data = {}) {
 		},
 		revealLeaf: async (leaf) => { revealed.push(leaf); },
 	};
-	const obsidian = createObsidian(app, notices);
+	class Setting {
+		constructor() { registrations.settingControls.push(this); }
+		setName(name) { this.name = name; return this; }
+		setDesc(description) { this.description = description; return this; }
+		addText(callback) {
+			const control = {
+				value: undefined,
+				change: undefined,
+				setPlaceholder(value) { control.placeholder = value; return control; },
+				setValue(value) { control.value = value; return control; },
+				onChange(change) { control.change = change; return control; },
+			};
+			callback(control);
+			this.text = control;
+			return this;
+		}
+		addToggle(callback) {
+			const control = {
+				value: undefined,
+				change: undefined,
+				setValue(value) { control.value = value; return control; },
+				onChange(change) { control.change = change; return control; },
+			};
+			callback(control);
+			this.toggle = control;
+			return this;
+		}
+	}
+	const obsidian = createObsidian(app, notices, { Setting });
 	const obsidianWithApp = {
 		...obsidian,
 		Plugin: class extends obsidian.Component {
 			app = { workspace, vault: { adapter: { getBasePath: () => 'C:\\Vault' } } };
 			async loadData() { return data; }
 			async saveData(value) { saved.push(value); }
-			addSettingTab() {}
+			addSettingTab(tab) { registrations.settingTabs.push(tab); }
 			registerView(type, factory) { registrations.views.set(type, factory); }
 			addCommand(command) { registrations.commands.push(command); }
 			addRibbonIcon(icon, title, callback) { registrations.ribbons.push({ icon, title, callback }); }
@@ -245,6 +273,134 @@ test('view follows the readable line length setting and updates on config change
 		if (originalOn) app.vault.on = originalOn;
 		else delete app.vault.on;
 	}
+});
+
+test('Show reasoning applies to an open transcript without reopening the view or reconnecting', async () => {
+	const { plugin, registrations, leaves, saved } = await createShell({
+		selectedSession: { id: 'old', directory: 'C:\\Vault' },
+	});
+	const view = registrations.views.get('opencode-chat')({});
+	leaves.push({ type: 'opencode-chat', view });
+	const fixture = interactionClient();
+	fixture.client.message.list = async () => ({ data: [{
+		id: 'reasoning-message', type: 'assistant', agent: 'plan', model: { providerID: 'p', id: 'm1' },
+		time: { created: 10, completed: 20 },
+		content: [
+			{ type: 'reasoning', text: 'Weigh the options first.' },
+			{ type: 'tool', id: 'tool-1', name: 'read', executed: true,
+				state: { status: 'running', input: { filePath: 'Notes/Example.md' }, metadata: {} },
+				time: { created: 11 } },
+			{ type: 'text', text: 'Visible answer.' },
+		],
+	}], cursor: {} });
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+
+	const tab = registrations.settingTabs.at(-1);
+	tab.containerEl = { empty() {} };
+	tab.display();
+	const row = registrations.settingControls.find((control) => control.name === 'Show reasoning');
+	assert.ok(row, 'The settings tab exposes Show reasoning');
+	assert.equal(row.toggle.value, false, 'An upgraded install starts with reasoning hidden');
+	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null);
+	assert.match(view.messagesEl.textContent, /Visible answer\./);
+
+	const reads = () => fixture.calls.filter((call) => call[0] === 'messages').length;
+	const before = reads();
+	const toolDetails = view.messagesEl.querySelector('details.opencode-tool');
+	assert.ok(toolDetails, 'The tool part renders before the toggle');
+	toolDetails.open = true;
+	Object.defineProperty(view.messagesEl, 'scrollHeight', { configurable: true, value: 1000 });
+	Object.defineProperty(view.messagesEl, 'clientHeight', { configurable: true, value: 500 });
+	view.messagesEl.scrollTop = 200;
+	await row.toggle.change(true);
+	assert.equal(saved.at(-1).showReasoning, true, 'The preference is persisted');
+	const shown = view.messagesEl.querySelector('details.opencode-reasoning');
+	assert.ok(shown, 'Enabling adds reasoning to the already open transcript');
+	assert.equal(shown.open, false, 'It stays folded');
+	assert.equal(shown.querySelector('.opencode-reasoning-preview').textContent, 'Weigh the options first.');
+	assert.match(view.messagesEl.textContent, /Visible answer\./);
+	assert.equal(reads(), before, 'The toggle re-renders without reading the service');
+	assert.equal(view.messagesEl.querySelector('details.opencode-tool'), toolDetails,
+		'The tool row keeps its element');
+	assert.equal(toolDetails.open, true, 'Other expanded disclosures stay open');
+	assert.equal(view.messagesEl.scrollTop, 200, 'The scroll position is preserved');
+
+	await row.toggle.change(false);
+	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null,
+		'Disabling removes the reasoning row immediately');
+	assert.match(view.messagesEl.textContent, /Visible answer\./);
+	assert.equal(view.messagesEl.querySelector('details.opencode-tool'), toolDetails,
+		'The tool row survives disabling');
+	assert.equal(toolDetails.open, true, 'The expanded tool row stays open');
+	assert.equal(view.messagesEl.scrollTop, 200, 'Disabling does not scroll the transcript');
+	assert.equal(reads(), before, 'Disabling performs no network I/O');
+
+	await row.toggle.change(true);
+	await view.onClose();
+	await view.onOpen();
+	await wait();
+	assert.ok(view.messagesEl.querySelector('details.opencode-reasoning'),
+		'Reopening the view follows the stored preference');
+	plugin.unload();
+});
+
+test('the Show reasoning toggle is harmless before chat opens and with no conversation', async () => {
+	const { plugin, registrations } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	const tab = registrations.settingTabs.at(-1);
+	tab.containerEl = { empty() {} };
+	tab.display();
+	const row = registrations.settingControls.find((control) => control.name === 'Show reasoning');
+	await assert.doesNotReject(row.toggle.change(true), 'Toggling with no open view does nothing');
+	assert.equal(view.messagesEl, undefined, 'No renderer was created by the toggle');
+
+	view.connection.discover = async () => emptyClient();
+	await view.onOpen();
+	await row.toggle.change(false);
+	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null);
+	assert.match(view.conversationSelect.textContent, /No conversations yet/);
+	await view.onClose();
+	plugin.unload();
+});
+
+test('another conversation and non-chat leaves follow the stored reasoning preference', async () => {
+	const { plugin, registrations, leaves } = await createShell({
+		selectedSession: { id: 'old', directory: 'C:\\Vault' },
+	});
+	const view = registrations.views.get('opencode-chat')({});
+	const otherView = { getViewType: () => 'markdown' };
+	leaves.push({ type: 'opencode-chat', view }, { type: 'markdown', view: otherView });
+	const fixture = interactionClient();
+	const assistant = (id, thought, answer) => ({
+		id, type: 'assistant', agent: 'plan', model: { providerID: 'p', id: 'm1' },
+		time: { created: 10, completed: 20 },
+		content: [{ type: 'reasoning', text: thought }, { type: 'text', text: answer }],
+	});
+	fixture.client.message.list = async ({ sessionID }) => ({ data: [sessionID === 'old'
+		? assistant('old-answer', 'Old thought.', 'Old answer.')
+		: assistant('new-answer', 'New thought.', 'New answer.')], cursor: {} });
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+
+	const tab = registrations.settingTabs.at(-1);
+	tab.containerEl = { empty() {} };
+	tab.display();
+	const row = registrations.settingControls.find((control) => control.name === 'Show reasoning');
+	await row.toggle.change(true);
+	assert.ok(view.messagesEl.querySelector('.opencode-reasoning'));
+
+	view.conversationSelect.value = 'new';
+	view.conversationSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await wait();
+	assert.match(view.messagesEl.textContent, /New answer\./);
+	assert.equal(view.messagesEl.querySelector('.opencode-reasoning-preview').textContent, 'New thought.',
+		'A newly selected conversation reads the same live preference');
+	assert.equal(leaves[1].view, otherView, 'A non-chat leaf is not touched');
+	await view.onClose();
+	plugin.unload();
 });
 
 test('opening failures provide fixed feedback without leaking underlying errors', async () => {
@@ -792,6 +948,7 @@ test('plugin wires the filesystem vault path, persisted selection and authoritat
 	await first.onOpen();
 	assert.equal(loads, 2);
 	assert.equal(first.sessions.state.messages[0].id, 'm2');
-	assert.deepEqual(saved.at(-1), { executablePath: 'opencode', autoStart: true, selectedSession: { id: 'saved', directory: 'C:\\Vault' } });
+	assert.deepEqual(saved.at(-1), { executablePath: 'opencode', autoStart: true, showReasoning: false,
+		selectedSession: { id: 'saved', directory: 'C:\\Vault' } });
 	plugin.unload();
 });

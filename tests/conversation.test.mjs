@@ -17,6 +17,8 @@ const { ConversationRenderer } = module.exports;
 const container = () => document.createElement('div');
 const text = (value) => [{ type: 'text', text: value }];
 const reasoning = (value) => ({ type: 'reasoning', text: value });
+const tool = (id, input = { filePath: 'Notes/Example.md' }) => ({ type: 'tool', id, name: 'read', executed: true,
+	state: { status: 'running', input, metadata: {} }, time: { created: 10 } });
 const user = (id, value) => ({ id, type: 'user', text: value, time: { created: 0 } });
 const assistant = (id, content, time, model = { providerID: 'openai', id: 'gpt-5' }, agent = 'build') =>
 	({ id, type: 'assistant', agent, model, time, content });
@@ -64,7 +66,7 @@ test('entries use a quoted prompt aside with accessible labels and no visible ro
 
 test('reasoning folds look like tool rows with an icon, one-line preview, and chevron affordance', () => {
 	const target = container();
-	const view = renderer(target);
+	const view = renderer(target, { showReasoning: () => true });
 	view.render([assistant('a1', [reasoning('## Plan\n\n**Check** the `renderer` first.\n\nThen verify.'), ...text('Answer.')],
 		{ created: 1000, completed: 2000 })]);
 	const details = target.querySelector('details.opencode-reasoning');
@@ -88,6 +90,73 @@ test('reasoning folds look like tool rows with an icon, one-line preview, and ch
 		'The preview updates in place while streaming');
 	view.render([assistant('a1', [reasoning('   '), ...text('Answer.')], { created: 1000, completed: 2000 })]);
 	assert.equal(target.querySelector('.opencode-reasoning-preview').hidden, true, 'An empty preview is hidden');
+});
+
+test('reasoning stays out of the transcript unless the setting is enabled', () => {
+	for (const options of [{}, { showReasoning: () => false }]) {
+		const target = container();
+		renderer(target, options).render([
+			assistant('a1', [reasoning('Private deliberation.'), ...text('The answer.')],
+				{ created: 1000, completed: 2000 }),
+		]);
+		assert.equal(target.querySelector('.opencode-reasoning'), null, 'No reasoning disclosure exists');
+		assert.equal(target.querySelector('.opencode-part-reasoning'), null, 'No empty reasoning part is left behind');
+		assert.equal(target.textContent.includes('Private deliberation.'), false,
+			'Neither the preview nor the body reaches the DOM');
+		assert.match(target.textContent, /The answer\./, 'The answer text still renders');
+		assert.equal(target.querySelector('.opencode-message-footnote').textContent,
+			'openai · gpt-5 · build · 1.0s', 'The footnote is unchanged');
+	}
+});
+
+test('toggling reasoning live removes and recreates the disclosure around answers and tools', () => {
+	const target = container();
+	let show = true;
+	const markdowns = [];
+	const createMarkdown = (parent) => {
+		const el = parent.createDiv({ cls: 'opencode-markdown markdown-rendered' });
+		const record = {
+			el,
+			disposed: 0,
+			set(value) { el.setText(value); },
+			dispose() { record.disposed++; el.empty(); },
+		};
+		markdowns.push(record);
+		return record;
+	};
+	const view = new ConversationRenderer(target, { createMarkdown, showReasoning: () => show });
+	const message = (thought) => assistant('a1', [reasoning(thought), tool('t1'), ...text('Answer.')],
+		{ created: 1000, completed: 2000 });
+
+	view.render([message('First thought.')]);
+	const details = target.querySelector('details.opencode-reasoning');
+	assert.ok(details, 'Enabled reasoning renders the disclosure');
+	assert.equal(details.querySelector('.opencode-reasoning-preview').textContent, 'First thought.');
+	const reasoningMarkdown = markdowns.find((record) =>
+		record.el.closest('.opencode-reasoning-body') && record.disposed === 0);
+	assert.ok(reasoningMarkdown, 'The reasoning body has its own Markdown');
+	assert.equal(reasoningMarkdown.el.textContent, 'First thought.');
+	assert.ok(target.querySelector('details.opencode-tool'), 'The tool part renders');
+
+	show = false;
+	view.render([message('First thought. Continued.')]);
+	assert.equal(target.querySelector('.opencode-reasoning'), null, 'The disclosure disappears on the next render');
+	assert.equal(reasoningMarkdown.disposed, 1, 'Its Markdown is disposed rather than kept hidden');
+	assert.ok(target.querySelector('details.opencode-tool'), 'The tool part stays');
+	assert.match(target.textContent, /Answer\./, 'The answer text stays');
+	assert.equal(markdowns.filter((record) => record.disposed === 0).length, 1,
+		'Only the answer Markdown stays live');
+
+	show = true;
+	view.render([message('First thought. Continued.')]);
+	const recreated = target.querySelector('details.opencode-reasoning');
+	assert.ok(recreated, 'Enabling again recreates the disclosure');
+	assert.equal(recreated.querySelector('.opencode-reasoning-preview').textContent, 'First thought. Continued.',
+		'The preview shows the accumulated text');
+	assert.equal(recreated.querySelector('.opencode-reasoning-body').textContent, 'First thought. Continued.',
+		'The recreated body shows the accumulated reasoning Markdown');
+	assert.ok(target.querySelector('details.opencode-tool'), 'The tool part is not recreated away');
+	assert.match(target.textContent, /Answer\./);
 });
 
 test('a pending prompt keeps the quoted shape and its status line', () => {

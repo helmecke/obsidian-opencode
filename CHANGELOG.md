@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reasoning is hidden by default. Enable **Settings → OpenCode → Show
+  reasoning** to show it as a folded row with a one-line preview that expands to
+  the full Markdown; the change applies to an open chat immediately.
 - Present the chat transcript like a note: prompts are quoted asides in one
   reading column that follows Obsidian's **Readable line length** setting and
   the theme's note width, the composer card lines up with that measure, and

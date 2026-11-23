@@ -16,6 +16,8 @@ export interface ConversationOptions {
 	modelLabel?(model: ModelRef): string;
 	/** Display name for an agent; the renderer falls back to the message's agent ID. */
 	agentLabel?(agent: string): string;
+	/** Whether reasoning parts are shown; read on every render so a toggle applies live. */
+	showReasoning?(): boolean;
 }
 
 interface FootnoteInfo {
@@ -218,6 +220,9 @@ export class ConversationRenderer {
 		for (let index = 0; index < assistant.content.length; index++) {
 			const content = assistant.content[index];
 			if (!content) continue;
+			// Hidden reasoning stays out before its key or part exists, so no summary,
+			// icon, preview, or body reaches the DOM. The key sweep removes one rendered earlier.
+			if (content.type === 'reasoning' && !this.options.showReasoning?.()) continue;
 			const key = partKey(content, index);
 			keys.add(key);
 			let part = entry.parts.get(key);

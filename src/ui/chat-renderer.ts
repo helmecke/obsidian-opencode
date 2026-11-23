@@ -53,7 +53,8 @@ export class ChatRenderer {
 	private conversation?: ConversationRenderer;
 	private signatures = { sessions: '', errors: '' };
 
-	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers) {}
+	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers,
+		private readonly showReasoning?: () => boolean) {}
 
 	get statusElement(): HTMLElement | undefined { return this.statusEl; }
 	get retryElement(): HTMLButtonElement | undefined { return this.retryButton; }
@@ -181,6 +182,7 @@ export class ChatRenderer {
 				{ app: this.app, component: opening, sourcePath: VAULT_ROOT_SOURCE }, container),
 			modelLabel: (model) => this.modelLabel(model),
 			agentLabel: (agent) => this.agentLabel(agent),
+			showReasoning: this.showReasoning,
 		});
 		const environment: LinkEnvironment = {
 			resolve: (linkpath, sourcePath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath),

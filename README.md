@@ -83,6 +83,17 @@ executable is rejected with a fixed error and is never launched.
 There is no server-URL, service-password, or provider-key setting. Automatic
 startup never writes the shared service registration.
 
+### Show reasoning
+
+**Settings → OpenCode → Show reasoning** is off by default. While it is off, the
+transcript omits model reasoning entirely: no summary row, icon, preview, or
+body, for live and reopened conversations alike. When it is on, reasoning
+appears as a collapsed row with a one-line preview that expands to its full
+Markdown, in the same way as tool activity. Changes apply to an open chat
+immediately, without reloading the plugin or reselecting the conversation. The
+setting controls presentation only: OpenCode still produces reasoning, and the
+plugin never stores it.
+
 ## Open the chat
 
 Select the **OpenCode** ribbon action or run **OpenCode: Open chat** from the
@@ -183,10 +194,11 @@ details.
 - One faint line after an assistant turn shows the model, agent, and elapsed
   duration when the run provides them. Missing values are omitted, and the line
   stays absent while the answer is still streaming.
-- Reasoning and tool activity fold into compact single-line rows with a leading
-  icon, a name, and a one-line preview. A tool row also shows its status or
-  duration. Hovering or focusing a row swaps the icon for a chevron that points
-  down while the row is open. Expanded details stay plain text, and long
+- Tool activity folds into a compact single-line row with a leading icon, a
+  name, and a one-line preview. A tool row also shows its status or duration.
+  When **Show reasoning** is enabled, reasoning uses the same folded row; it is
+  hidden by default. Hovering or focusing a row swaps the icon for a chevron that
+  points down while the row is open. Expanded details stay plain text, and long
   previews truncate instead of widening the column.
 - Shell commands, compaction, and injected skill or system text stay collapsed
   behind a short label and expand on request.
@@ -232,9 +244,10 @@ duplicated. Use **Reconcile and retry**, or **Return text to editor** to edit th
 retained text.
 
 OpenCode owns the transcript and execution. The plugin stores only the
-executable-path setting, the automatic-startup preference, the selected session
-ID plus its vault directory, and a transient record of a managed process PID for
-orphan cleanup; it does not duplicate transcripts or store service credentials.
+executable-path setting, the automatic-startup preference, the reasoning-display
+preference, the selected session ID plus its vault directory, and a transient
+record of a managed process PID for orphan cleanup; it does not duplicate
+transcripts or store service credentials.
 
 ## Markdown and vault links
 

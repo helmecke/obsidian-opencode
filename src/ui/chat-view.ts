@@ -23,7 +23,8 @@ export class ChatView extends ItemView {
 	private viewError?: string;
 	private loadingOptions = false;
 	constructor(leaf: WorkspaceLeaf, private readonly connection: ConnectionCoordinator,
-		private readonly sessions: SessionCoordinator, private readonly synchronization: SynchronizationCoordinator) {
+		private readonly sessions: SessionCoordinator, private readonly synchronization: SynchronizationCoordinator,
+		private readonly showReasoning: () => boolean) {
 		super(leaf);
 		this.scope = new Scope(this.app.scope);
 	}
@@ -66,7 +67,7 @@ export class ChatView extends ItemView {
 		this.contentEl.addClass('opencode-chat');
 		this.applyReadableLineWidth();
 		this.watchReadableLineWidth(opening);
-		const renderer = new ChatRenderer(this.app, this.handlers());
+		const renderer = new ChatRenderer(this.app, this.handlers(), this.showReasoning);
 		this.renderer = renderer;
 		renderer.mount(this.contentEl, opening, this.scope!);
 		opening.register(this.synchronization.subscribe(() => this.refresh()));
@@ -128,6 +129,12 @@ export class ChatView extends ItemView {
 			loadSkills: () => this.synchronization.loadSkills(),
 			loadCommands: () => this.synchronization.loadCommands(),
 		};
+	}
+
+	/** Re-render from the current synchronization state after a plugin setting changes. */
+	refreshFromSettings(): void {
+		if (!this.opening) return;
+		this.renderer?.refresh(this.synchronization.state, this.viewError);
 	}
 
 	private refresh(): void {

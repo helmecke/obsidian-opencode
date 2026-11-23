@@ -760,8 +760,30 @@ Live check in the disposable test vault with the same build:
   retuning the measure reach both. The setting was restored to on afterwards,
   and no console or plugin errors were captured.
 
+### Show reasoning (2026-11-23)
+
+Reasoning is now an opt-in **Show reasoning** setting, off by default and read
+live by an open transcript. The protocol, tool rows, footnotes, execution
+status, and stored data beyond one optional boolean are unchanged.
+
+Live acceptance in the disposable test vault with the final local build,
+confirmed by the user:
+
+- An existing install whose plugin data predates the setting opened with
+  reasoning hidden: no reasoning row, icon, preview, or body, while answers and
+  tool rows kept their presentation.
+- Enabling **Settings → OpenCode → Show reasoning** added folded reasoning rows
+  to the already open transcript without reopening the view or reloading the
+  plugin. Each row showed a one-line preview and expanded to its Markdown.
+- Disabling it removed the reasoning rows immediately; answers and tool rows
+  stayed, and the view kept its scroll position and expanded tool disclosures.
+- Reopening chat and selecting another conversation followed the stored value,
+  and the light and dark themes plus a narrow sidebar were unaffected.
+- No accepted deviation, console error, or plugin error was reported.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-23 | `add-reasoning-visibility-setting` | 13/13 | 224 passing | pass | `openspec/changes/archive/2026-11-23-add-reasoning-visibility-setting` |
 | 2026-11-23 | `streamline-chat-transcript` | 15/15 | 216 passing | pass | `openspec/changes/archive/2026-11-23-streamline-chat-transcript` |
 | 2026-11-23 | `add-composer-slash-commands` | 19/19 | 207 passing | pass | `openspec/changes/archive/2026-11-23-add-composer-slash-commands` |
 | 2026-11-22 | `reuse-obsidian-ui-styles` | 14/14 | 163 passing | pass | `openspec/changes/archive/2026-11-22-reuse-obsidian-ui-styles` |

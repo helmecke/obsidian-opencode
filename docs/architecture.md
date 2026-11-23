@@ -73,6 +73,7 @@ Plugin data holds only:
 
 - the executable-path override;
 - the automatic-startup preference;
+- the reasoning-display preference;
 - the selected session ID and its vault directory;
 - a transient managed-process PID and token for orphan cleanup.
 

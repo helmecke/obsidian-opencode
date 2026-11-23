@@ -6,6 +6,7 @@ export interface ManagedOrphan { pid: number; token: string }
 export interface OpenCodeSettings {
 	executablePath: string;
 	autoStart: boolean;
+	showReasoning: boolean;
 	selectedSession?: SessionSelection;
 	managedOrphan?: ManagedOrphan;
 }
@@ -18,6 +19,7 @@ export function loadSettings(value: unknown): OpenCodeSettings {
 	const settings: OpenCodeSettings = {
 		executablePath: typeof path === 'string' && !unsafeText.test(path) ? path : '',
 		autoStart: record.autoStart !== false,
+		showReasoning: record.showReasoning === true,
 	};
 	const selected = record.selectedSession;
 	if (selected && typeof selected === 'object' && 'id' in selected && 'directory' in selected
@@ -37,7 +39,7 @@ export function loadSettings(value: unknown): OpenCodeSettings {
 
 export class OpenCodeSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: Plugin, private readonly settings: OpenCodeSettings,
-		private readonly save: () => Promise<void>) { super(app, plugin); }
+		private readonly save: () => Promise<void>, private readonly onChange?: () => void) { super(app, plugin); }
 
 	display(): void {
 		this.containerEl.empty();
@@ -57,6 +59,15 @@ export class OpenCodeSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.settings.autoStart = value;
 					await this.save();
+				}));
+		new Setting(this.containerEl)
+			.setName('Show reasoning')
+			.setDesc('Show model reasoning in the transcript as a collapsed row with a one-line preview. Hidden by default, and changes apply to open chats immediately.')
+			.addToggle((toggle) => toggle.setValue(this.settings.showReasoning)
+				.onChange(async (value) => {
+					this.settings.showReasoning = value;
+					await this.save();
+					this.onChange?.();
 				}));
 	}
 }

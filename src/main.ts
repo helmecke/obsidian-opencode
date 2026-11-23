@@ -46,13 +46,22 @@ export default class OpenCodePlugin extends Plugin {
 		const synchronization = new SynchronizationCoordinator(connection, sessions);
 		this.register(() => connection.dispose());
 		this.register(() => { void runtime.dispose(); });
-		this.addSettingTab(new OpenCodeSettingTab(this.app, this, settings, save));
-		this.registerView(CHAT_VIEW_TYPE, (leaf) => new ChatView(leaf, connection, sessions, synchronization));
+		this.addSettingTab(new OpenCodeSettingTab(this.app, this, settings, save,
+			() => this.refreshChatViews()));
+		this.registerView(CHAT_VIEW_TYPE, (leaf) =>
+			new ChatView(leaf, connection, sessions, synchronization, () => settings.showReasoning));
 		this.addRibbonIcon('message-square', 'Open chat', () => openChat(this.app));
 		this.addCommand({
 			id: 'open-chat',
 			name: 'Open chat',
 			callback: () => openChat(this.app),
 		});
+	}
+
+	/** Settings changes apply to already open chats without network I/O. */
+	private refreshChatViews(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(CHAT_VIEW_TYPE)) {
+			if (leaf.view instanceof ChatView) leaf.view.refreshFromSettings();
+		}
 	}
 }
