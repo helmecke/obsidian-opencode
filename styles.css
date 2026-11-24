@@ -5,6 +5,8 @@
  * - `setting-item` rows (info/name/description/control/error, is-invalid)
  * - `callout` containers (title/icon/title-inner/content, data-callout)
  * - `markdown-rendered` for rendered answers
+ * - `markdown-preview-view` on the transcript, for reading typography, note
+ *   margins, and block spacing
  *
  * The `.opencode-*` rules below are chat-specific structures: composer card and
  * borderless textarea, one reading column, quoted prompt aside, end-of-run
@@ -20,9 +22,6 @@
 	height: 100%;
 	min-height: 0;
 	padding: 0;
-	color: var(--text-normal);
-	background-color: var(--background-primary);
-	font-size: var(--font-ui-medium);
 }
 
 /* The pane header title doubles as the conversation title and inline editor. */
@@ -135,24 +134,54 @@
 	margin: var(--size-4-2) 0;
 }
 
+/*
+ * The transcript carries Obsidian's reading-view class, so the host supplies
+ * text font, size, line height, block spacing, note margins, and a stable
+ * scrollbar gutter. Only the chat's own layout is kept: it is the flex child
+ * that scrolls, and the host's `height: 100%` would otherwise overflow the
+ * composer's column.
+ */
 .opencode-chat-messages {
 	flex: 1;
 	min-height: 0;
+	height: auto;
 	overflow-y: auto;
-	padding-block: var(--size-4-3);
-	padding-inline: var(--size-4-4);
 	overflow-wrap: anywhere;
+}
+
+/*
+ * One document, one spacing step: the theme's own paragraph spacing separates
+ * prose blocks, a tool or reasoning group, and turns alike. A group still has no
+ * margin between its own rows, so a long run of folds reads as one quiet block
+ * rather than a stack of paragraphs.
+ */
+.opencode-chat-messages .opencode-part-text + .opencode-part-text {
+	margin-top: var(--p-spacing);
+}
+
+.opencode-chat-messages .opencode-part-text + :is(.opencode-part-tool, .opencode-part-reasoning),
+.opencode-chat-messages :is(.opencode-part-tool, .opencode-part-reasoning) + .opencode-part-text {
+	margin-top: var(--p-spacing);
+}
+
+/* A server-side message split can land on a group edge; the gap survives it. */
+.opencode-chat-messages > .opencode-message:has(> .opencode-message-body > :is(.opencode-part-tool, .opencode-part-reasoning):nth-last-child(1 of .opencode-part))
+	+ .opencode-message:has(> .opencode-message-body > .opencode-part-text:first-child),
+.opencode-chat-messages > .opencode-message:has(> .opencode-message-body > .opencode-part-text:nth-last-child(1 of .opencode-part))
+	+ .opencode-message:has(> .opencode-message-body > :is(.opencode-part-tool, .opencode-part-reasoning):first-child) {
+	margin-top: var(--p-spacing);
 }
 
 /*
  * Readable line length. Obsidian toggles `is-readable-line-width` on its
  * Markdown views from the same setting and caps them at `--file-line-width`;
  * the transcript and the composer follow that class so themes and snippets
- * stay in charge of the measure. The scroll container keeps the full pane
+ * stay in charge of the measure. The note margin is the floor, so the column
+ * never gets wider than a note. The scroll container keeps the full pane
  * width, so the scrollbar stays at the pane edge.
  */
 .opencode-chat.is-readable-line-width {
-	--opencode-line-inset: max(var(--size-4-4), calc((100% - var(--file-line-width, 700px)) / 2));
+	--opencode-line-inset: max(var(--file-margins-x), calc((100% - var(--file-line-width, 700px)) / 2));
 }
 
 .opencode-chat.is-readable-line-width .opencode-chat-messages,
@@ -174,17 +203,22 @@
 
 /* The prompt is a passage in the document, not a chat bubble. */
 .opencode-message-user:not(:first-child) {
-	margin-top: var(--size-4-5);
+	margin-top: var(--p-spacing);
 }
 
+/*
+ * The prompt is its own block in the document, not a quotation: the callout type
+ * carries the title and tint. The host zeroes a callout's margins when it is the
+ * only child of a `markdown-rendered` frame, so the space after a prompt belongs
+ * to the turn boundary, next to the rule that spaces the turns above it.
+ */
 .opencode-prompt {
 	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
-.opencode-prompt-quote {
-	margin-block: 0;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
+.opencode-chat-messages .opencode-message-user + .opencode-message-assistant {
+	margin-top: var(--p-spacing);
 }
 
 .opencode-message-footnote {
@@ -457,7 +491,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 		var(--font-ui-small) * var(--line-height-tight) + var(--size-4-1) * 2
 	);
 	flex: 0 0 auto;
-	padding: var(--size-4-2) var(--size-4-4);
+	padding: var(--size-4-2) var(--file-margins-x);
 	background-color: transparent;
 }
 

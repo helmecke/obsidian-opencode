@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Answers now read with the theme's own reading typography: text size, line
+  height, paragraph spacing, note margins, and reading width come from the
+  theme's reading view, so a theme or snippet that changes how notes read
+  changes the chat too. Paragraphs in an answer are no longer butt-joined, a run
+  of tool or reasoning rows stays one tight block, and the chat view stops
+  repainting the pane's text colour and background.
+- Your message is now a **You** callout instead of a quotation: a titled block
+  with a leading icon and the theme's callout tint, separated from what follows
+  by the same spacing as the rest of the transcript. Line breaks are preserved.
 - Vault links in chat answers now follow Obsidian's mouse modifiers: a plain
   click reuses a note tab, Cmd/Ctrl-click opens a new tab beside the chat,
   Cmd/Ctrl+Alt-click collects notes in a sticky group to the right of the chat,

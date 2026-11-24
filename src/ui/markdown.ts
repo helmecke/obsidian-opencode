@@ -76,6 +76,7 @@ export class MarkdownBlock {
 		if (previous) this.host.component.removeChild(previous);
 		try {
 			await MarkdownRenderer.render(this.host.app, text, this.el, this.host.sourcePath, child);
+			if (!this.disposed && this.generation === generation) this.markListBullets();
 		} catch {
 			if (!this.disposed && this.generation === generation) {
 				this.el.setText('Unable to render this part of the answer.');
@@ -84,6 +85,27 @@ export class MarkdownBlock {
 		if (this.disposed || this.generation !== generation) {
 			this.host.component.removeChild(child);
 			if (this.child === child) this.child = undefined;
+		}
+	}
+
+	/**
+	 * Obsidian paints a note's bullets from `has-list-bullet` plus one injected
+	 * `span.list-bullet` per item, and adds both only while building a reading
+	 * view. Reproduce that structure for rendered lists so the transcript's
+	 * bullets match a note's colour, size, and radius. Ordered and task lists keep
+	 * their own markers.
+	 */
+	private markListBullets(): void {
+		for (const list of Array.from(this.el.querySelectorAll('ul'))) {
+			if (list.classList.contains('contains-task-list')) continue;
+			if (list.querySelector(':scope > li.task-list-item')) continue;
+			list.classList.add('has-list-bullet');
+			for (const item of Array.from(list.children)) {
+				if (item.tagName !== 'LI') continue;
+				if (item.firstElementChild?.classList.contains('list-bullet')) continue;
+				const bullet = item.createSpan({ cls: 'list-bullet' });
+				item.prepend(bullet);
+			}
 		}
 	}
 

@@ -45,16 +45,18 @@ test('entries use a quoted prompt aside with accessible labels and no visible ro
 	const userEntry = target.querySelector('.opencode-message-user');
 	assert.equal(userEntry.getAttribute('role'), 'group');
 	assert.equal(userEntry.getAttribute('aria-label'), 'You');
-	const quote = userEntry.querySelector('blockquote.opencode-prompt-quote');
-	assert.ok(quote, 'The prompt is a native blockquote');
-	assert.equal(quote.textContent, 'Plan the note.\n  Keep indentation.');
-	assert.ok(userEntry.querySelector('.opencode-prompt.markdown-rendered'), 'The native quote rule is available');
+	const callout = userEntry.querySelector('.callout[data-callout="prompt"]');
+	assert.ok(callout, 'The prompt is a prompt-type callout');
+	assert.ok(callout.querySelector('.callout-icon .svg-icon'), 'The callout title carries an icon');
+	assert.equal(callout.querySelector('.callout-title-inner').textContent, 'You');
+	assert.equal(callout.querySelector('.callout-content .opencode-prompt-text').textContent,
+		'Plan the note.\n  Keep indentation.');
+	assert.ok(userEntry.querySelector('.opencode-prompt.markdown-rendered'), 'Native Markdown rules apply around the prompt');
 	const userBody = userEntry.querySelector('.opencode-message-body');
 	assert.ok(userBody.classList.contains('opencode-message-body'));
 	assert.ok(userBody.classList.contains('opencode-message-body-user'));
-	assert.equal(target.querySelectorAll('.opencode-message-role').length, 0, 'No visible role elements');
-	assert.equal(userEntry.textContent.includes('You'), false);
-	assert.equal(target.querySelectorAll('blockquote').length, 1, 'Answers are not quoted');
+	assert.equal(target.querySelectorAll('.opencode-message-role').length, 0, 'No separate role elements');
+	assert.equal(target.querySelectorAll('blockquote').length, 0, 'Neither prompt nor answers are quoted');
 
 	const assistantEntries = target.querySelectorAll('.opencode-message-assistant');
 	assert.equal(assistantEntries.length, 2);
@@ -159,12 +161,12 @@ test('toggling reasoning live removes and recreates the disclosure around answer
 	assert.match(target.textContent, /Answer\./);
 });
 
-test('a pending prompt keeps the quoted shape and its status line', () => {
+test('a pending prompt keeps the callout shape and its status line', () => {
 	const target = container();
 	const view = renderer(target);
 	view.render([], { id: 'pending-1', phase: 'sending', text: 'Draft\n  prompt' });
-	const quote = target.querySelector('blockquote.opencode-prompt-quote');
-	assert.equal(quote.textContent, 'Draft\n  prompt');
+	const prompt = target.querySelector('.callout[data-callout="prompt"] .opencode-prompt-text');
+	assert.equal(prompt.textContent, 'Draft\n  prompt');
 	assert.equal(target.querySelector('.opencode-prompt-status').textContent, 'Sending…');
 	assert.equal(target.querySelector('.opencode-message-user').classList.contains('is-uncertain'), false);
 

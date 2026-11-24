@@ -1,4 +1,5 @@
 import type { ModelRef, SessionMessageAssistant, SessionMessageInfo } from '@opencode/client';
+import { setIcon } from 'obsidian';
 import type { PendingPrompt } from '../state/prompt-coordinator';
 import { createDisclosureIcon } from './disclosure-icon';
 import { durationBetween } from './duration';
@@ -250,7 +251,13 @@ export class ConversationRenderer {
 
 	private renderPrompt(container: HTMLElement, text: string): void {
 		const frame = container.createDiv({ cls: 'opencode-prompt markdown-rendered' });
-		frame.createEl('blockquote', { cls: 'opencode-prompt-quote', text });
+		const callout = frame.createDiv({ cls: 'callout' });
+		callout.setAttribute('data-callout', 'prompt');
+		const title = callout.createDiv({ cls: 'callout-title' });
+		setIcon(title.createDiv({ cls: 'callout-icon' }), 'pencil');
+		title.createDiv({ cls: 'callout-title-inner', text: 'You' });
+		callout.createDiv({ cls: 'callout-content' })
+			.createEl('p', { cls: 'opencode-prompt-text', text });
 	}
 
 	private updateNotice(entry: Entry, message: SessionMessageInfo): void {

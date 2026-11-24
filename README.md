@@ -204,10 +204,11 @@ details.
   Prompts and answers share one centered reading column of note width while
   **Readable line length** is enabled, and use the pane width when it is off. A
   narrow sidebar uses the available width without horizontal scrolling.
-- Your message appears as a quoted aside with its line breaks preserved, so it
-  stays easy to find without a chat bubble. Answers read as continuous native
-  Markdown: headings, paragraphs, lists, quotes, code, and tables use Obsidian's
-  reading typography, and only turn boundaries add space.
+- Your message appears as its own labelled block titled **You**, with a leading
+  icon, the theme's callout tint, and its line breaks preserved, so it stays easy
+  to find without a chat bubble. Answers read as continuous native Markdown:
+  headings, paragraphs, lists, quotes, code, and tables use Obsidian's reading
+  typography, and only turn boundaries add space.
 - One faint line after an assistant turn shows the model, agent, and elapsed
   duration when the run provides them. Missing values are omitted, and the line
   stays absent while the answer is still streaming.

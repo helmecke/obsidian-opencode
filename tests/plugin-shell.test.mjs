@@ -179,6 +179,9 @@ test('native view renders the conversation shell and clears its content on close
 	assert.ok(view.retryButton.classList.contains('clickable-icon'), 'Retry discovery uses the native icon-button surface');
 	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
 	assert.ok(view.messagesEl);
+	assert.ok(view.messagesEl.classList.contains('markdown-preview-view'),
+		'The transcript carries Obsidian\'s reading-view class for reading typography');
+	assert.ok(view.messagesEl.classList.contains('opencode-chat-messages'));
 	assert.ok(view.composer);
 	assert.ok(view.interactionsEl);
 	assert.equal(view.sessions.state.selected, undefined, 'Opening shows a draft without a server session');

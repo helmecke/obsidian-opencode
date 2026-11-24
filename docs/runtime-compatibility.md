@@ -835,8 +835,80 @@ per-chat-tab scope, reserved note-tab selection, and the focus fallback. Live
 Obsidian acceptance of each modifier row is still pending and is not claimed
 here.
 
+## Reading-view typography (2026-11-24)
+
+The transcript now carries Obsidian's `markdown-preview-view` class, so answers
+take the host's reading typography instead of the interface text they inherited
+before. Measured live in the development vault on a loaded conversation, before
+and after the change:
+
+| | Before | After | A note's reading view |
+| --- | --- | --- | --- |
+| Text font | `--font-interface` | `--font-text` | `--font-text` |
+| Text size | 15px | 16px | 16px |
+| Line height | 19.5px (1.3) | 24px (1.5) | 24px (1.5) |
+| Block padding | 12px / 16px | 32px (`--file-margins`) | 32px |
+| Inline measure at a 1852px pane | 501px inset | 501px inset (850px column) | 850px column |
+| Scrollbar gutter | default | `stable` | `stable` |
+
+One spacing step governs the transcript: `var(--p-spacing)` (16px here)
+separates prose blocks, a tool or reasoning group from the prose around it, and
+both sides of a prompt, including where a server-side message split lands on a
+group edge. No plugin spacing token remains. Rows inside a group still get no
+margin, so a run of tool folds reads as one block instead of a stack of
+paragraphs. Accepted trade-off: a turn break now measures the same as a
+paragraph break, and the turn is signalled by its callout and the run footnote
+rather than by extra space. With **Readable line length** off, the
+transcript and composer both measured 32px inline padding and stayed aligned.
+The view root no longer declares text colour, background, or base font size;
+both were read from the pane after the change.
+
+The user prompt is now a prompt-type callout rather than a blockquote: measured
+live at 12px/12px/12px/24px padding, 4px radius, the host default callout tint,
+a blue **You** title with a pencil icon, and `white-space: pre-wrap` preserved.
+Its outer margin is not usable: the host zeroes `:first-child`/`:last-child`
+margins and the callout is the only child of its `markdown-rendered` frame, so
+the `margin: 1em 0` that `.callout` declares never applies. The turn boundary
+therefore carries the space instead, using the same `--p-spacing` step as prose:
+measured 16px above and 16px below a prompt. The box, title colour, and padding come from
+the host callout rules.
+
+Deviation from the documented check: no disposable test vault exists on this
+machine, so the live pass ran in the development vault where the plugin is
+already installed (`main.js`, `manifest.json`, and `styles.css` copied and the
+plugin reloaded). The disposable-vault pass remains outstanding, as does the
+representation check with a non-default theme.
+
+The list markers needed the same treatment. Obsidian draws a note's bullet as a
+`.list-bullet::after` on a span it injects while building a reading-view preview,
+with `has-list-bullet` on the list and `list-style-type` set to a zero-width
+space; `MarkdownRenderer.render` returns none of that. The transcript now
+reproduces the structure, measured side by side in the vault:
+
+| | Chat bullet | Note bullet |
+| --- | --- | --- |
+| List class | `has-list-bullet` | `has-list-bullet` |
+| Bullet spans | 4 of 4 items | 4 of 4 items |
+| Marker colour | `#ababab` (`--list-marker-color`) | `#ababab` |
+| Marker size | 4.8px | 4.8px |
+| Marker radius | 50% | 50% |
+
+Ordered lists keep their numbers and task lists keep their checkboxes; both are
+asserted rather than assumed.
+
+Automated coverage: `tests/plugin-shell.test.mjs` asserts the reading-view class
+on the transcript; `tests/conversation.test.mjs` asserts the prompt callout type,
+icon, title, preserved newlines, and that no blockquote renders for the prompt or
+the answer; `tests/markdown.test.mjs` asserts the list pass on a final and on a
+throttled render, the nested list, and that ordered and task lists are left
+alone; and `tests/style-contract.test.mjs` asserts that the root declares layout
+only, that the transcript defers padding to the host, that prose seams, detail
+groups and turns use `--p-spacing` with no plugin spacing token, that a group's
+rows stay tight, and that the reading measure uses `--file-margins-x`.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-24 | `adopt-reading-view-typography` | 16/16 | 260 passing | pass | `openspec/changes/archive/2026-11-24-adopt-reading-view-typography` |
 | 2026-11-24 | `chat-link-stack` | 12/12 | 253 passing | pass | `openspec/changes/archive/2026-11-24-chat-link-stack` |
 | 2026-11-24 | `refactor-session-management` | 20/20 | 242 passing | pass | `openspec/changes/archive/2026-11-24-refactor-session-management` |
 | 2026-11-23 | `add-reasoning-visibility-setting` | 13/13 | 224 passing | pass | `openspec/changes/archive/2026-11-23-add-reasoning-visibility-setting` |

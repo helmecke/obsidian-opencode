@@ -125,7 +125,7 @@ export class ChatRenderer {
 	private build(): void {
 		if (!this.contentEl) return;
 		this.errorEl = this.contentEl.createDiv({ cls: 'opencode-chat-errors' });
-		this.messagesEl = this.contentEl.createDiv({ cls: 'opencode-chat-messages' });
+		this.messagesEl = this.contentEl.createDiv({ cls: 'opencode-chat-messages markdown-preview-view' });
 		this.interactions = new ChatInteractionsPanel(
 			this.contentEl.createDiv({ cls: 'opencode-chat-interactions' }), this.handlers);
 

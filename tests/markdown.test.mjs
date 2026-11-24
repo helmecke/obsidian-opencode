@@ -155,6 +155,70 @@ test('internal anchor clicks are intercepted before MarkdownRenderer and forward
 	assert.equal(originalTarget, null);
 });
 
+test('rendered lists take the host bullet markup and leave other lists alone', async () => {
+	const original = obsidian.MarkdownRenderer.render;
+	obsidian.MarkdownRenderer.render = async (_app, _markdown, el) => {
+		const nestedItem = document.createElement('li');
+		nestedItem.textContent = 'Nested';
+		const nested = document.createElement('ul');
+		nested.appendChild(nestedItem);
+		const first = document.createElement('li');
+		first.textContent = 'One';
+		first.appendChild(nested);
+		const second = document.createElement('li');
+		second.textContent = 'Two';
+		const list = document.createElement('ul');
+		list.append(first, second);
+
+		const orderedItem = document.createElement('li');
+		orderedItem.textContent = 'First';
+		const ordered = document.createElement('ol');
+		ordered.appendChild(orderedItem);
+
+		const checkbox = document.createElement('input');
+		checkbox.type = 'checkbox';
+		checkbox.checked = true;
+		const taskItem = document.createElement('li');
+		taskItem.className = 'task-list-item';
+		taskItem.append(checkbox, document.createTextNode(' Done'));
+		const tasks = document.createElement('ul');
+		tasks.className = 'contains-task-list';
+		tasks.appendChild(taskItem);
+
+		el.append(list, ordered, tasks);
+	};
+	const parent = new Component();
+	const root = document.createElement('div');
+	const clock = timerFixture();
+	const block = new MarkdownBlock({ app: {}, component: parent, sourcePath: '' }, root, clock.timer);
+	try {
+		block.set('# lists', true);
+		await tick();
+		const lists = root.querySelectorAll('ul');
+		assert.ok(lists[0].classList.contains('has-list-bullet'), 'A bullet list takes the host class');
+		assert.deepEqual([...lists[0].children].map((item) => item.firstElementChild?.className),
+			['list-bullet', 'list-bullet'], 'Each top-level item starts with the host bullet span');
+		assert.ok(lists[1].classList.contains('has-list-bullet'), 'A nested list gets its own class');
+		assert.equal(lists[1].firstElementChild?.firstElementChild?.className, 'list-bullet');
+		const ordered = root.querySelector('ol');
+		assert.equal(ordered.className, '', 'Ordered lists keep their numbers');
+		assert.equal(ordered.querySelector('.list-bullet'), null);
+		const tasks = root.querySelector('.contains-task-list');
+		assert.equal(tasks.className, 'contains-task-list', 'Task lists keep their own markup');
+		assert.equal(tasks.querySelector('.list-bullet'), null);
+		assert.ok(tasks.querySelector('.task-list-item input[type="checkbox"]'), 'Task checkboxes survive');
+
+		block.set('# lists while streaming');
+		clock.run();
+		await tick();
+		assert.ok(root.querySelector('ul.has-list-bullet'),
+			'A throttled streaming render takes the host markups too');
+	} finally {
+		block.dispose();
+		obsidian.MarkdownRenderer.render = original;
+	}
+});
+
 test('markdown renders are batched during streaming and immediate on final text', async () => {
 	const clock = timerFixture();
 	const parent = new Component();
