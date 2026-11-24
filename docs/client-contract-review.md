@@ -88,6 +88,7 @@ apart from the differences listed in section 7.
 | Interrupt | `session.interrupt` | `POST /api/session/{sessionID}/interrupt` | Response `{ interrupted: boolean }`; no `data` wrapper |
 | Switch agent | `session.switchAgent` | `POST /api/session/{sessionID}/agent` body `{ agent }` | 204 |
 | Switch model | `session.switchModel` | `POST /api/session/{sessionID}/model` body `{ model }` | 204 |
+| Rename session | `session.update` | `PATCH /api/session/{sessionID}` body `{ title }` | 204; missing session is `SessionNotFoundError` |
 
 Response wrappers matter: `session.list` and `message.list` return their page as
 `{ data, cursor }`, while agent/model lists remain `{ location, data }`.
@@ -99,6 +100,20 @@ correctly reads `result.interrupted`.
 plugin reads. The validators accept extra fields and forward unknown event
 types. That is compatible with the observed additive changes. It is not a
 substitute for the live acceptance run.
+
+Rename uses `session.update` with only `sessionID` and `title`, wrapped by
+`withApiValidation` as a mutation (`request(..., true)`). A missing session keeps
+its `SessionNotFoundError`; other incompatible statuses translate to the fixed
+API-compatibility error instead of exposing the raw response. Server-side
+validation failures stay ordinary rename failures: the view shows a notice and
+keeps the previous title. The coordinator re-reads the session with
+`session.get` after a successful update, so the displayed title is
+server-confirmed rather than optimistic.
+
+A new chat stays a client-side draft; `session.create` is not called when the
+view opens. The first message creates the session once, passing the draft's
+optional local title in the create body, and then sends the prompt. This mirrors
+OpenChamber's `newSessionDraft` flow and avoids empty server sessions.
 
 ## 3. Directory encoding
 
@@ -222,6 +237,15 @@ Event transport and framing are identical between 2.2.2 and 2.3.2:
   recovery.
 - `EventIngestion` checks durable sequence monotonicity, tolerates gaps, and
   discards the projection on unsupported mutation. That remains appropriate.
+
+Selected-session metadata is intercepted before ingestion:
+
+- `session.renamed` (durable version 1) patches the snapshot's title and
+  republishes the ready state. The reducer never sees it, so a rename by another
+  client updates the header and tab without rebuilding the transcript.
+- `session.deleted` (durable version 2) marks the snapshot unavailable and
+  disposes the projection, because the deleted selection has no transcript to
+  show. Both are scoped to the selected session and its vault directory.
 
 `session.step.first-token`:
 

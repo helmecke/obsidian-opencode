@@ -781,8 +781,36 @@ confirmed by the user:
   and the light and dark themes plus a narrow sidebar were unaffected.
 - No accepted deviation, console error, or plugin error was reported.
 
+### Session management drafts and chrome (2026-11-24)
+
+Manual acceptance for `refactor-session-management` was performed by the user in
+the disposable desktop test vault with the local build (`main.js` SHA-256
+`963c53eba2a130aa07fa29a6f043dd671baba7025512d8fff9886a546f36d083`,
+OpenCode 2.3.2, Obsidian 1.15.1). The user reported all checks passing:
+
+- Opening chat showed a **New conversation** draft and created no server
+  session. Sending the first message created exactly one session and sent the
+  message to it.
+- A draft renamed before sending kept that title on the created session.
+- The draft showed its configured default agent and model, reused the last
+  selected model and variant, and allowed changing agent, model, and thinking
+  before the first send.
+- The pane header and tab showed the draft/session title. Inline rename
+  committed with Enter or blur, Escape restored the previous title, and an
+  empty title was ignored.
+- The native `opencode / sessions / title` breadcrumbs worked: **opencode**
+  started a new draft, **sessions** opened the switcher, and the parent
+  breadcrumbs collapsed while editing and returned afterwards.
+- The document menu and tab menu offered **Switch conversation…**, **New
+  conversation**, and **Rename conversation…**; switching and creating behaved
+  as expected.
+- Switching conversations while one was executing kept the previous session
+  running; closing the view did not interrupt execution.
+- No deviations, console errors, or plugin errors were reported.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-24 | `refactor-session-management` | 20/20 | 242 passing | pass | `openspec/changes/archive/2026-11-24-refactor-session-management` |
 | 2026-11-23 | `add-reasoning-visibility-setting` | 13/13 | 224 passing | pass | `openspec/changes/archive/2026-11-23-add-reasoning-visibility-setting` |
 | 2026-11-23 | `streamline-chat-transcript` | 15/15 | 216 passing | pass | `openspec/changes/archive/2026-11-23-streamline-chat-transcript` |
 | 2026-11-23 | `add-composer-slash-commands` | 19/19 | 207 passing | pass | `openspec/changes/archive/2026-11-23-add-composer-slash-commands` |

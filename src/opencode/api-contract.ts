@@ -126,6 +126,7 @@ export function withApiValidation(client: Client): Client {
 		},
 		session: {
 			...client.session,
+			update: (input, options) => request(() => client.session.update(input, options), true),
 			switchAgent: (input, options) => request(() => client.session.switchAgent(input, options), true),
 			switchModel: (input, options) => request(() => client.session.switchModel(input, options), true),
 			interrupt: (input, options) => guarded(() => client.session.interrupt(input, options), (value) => {

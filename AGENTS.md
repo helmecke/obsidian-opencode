@@ -60,7 +60,7 @@ your real vault. Never commit generated `main.js`, probe bundles, or
 - **Credentials**: service authentication is transient. Never persist or log
   credentials, transcripts, drafts, or vault contents. Plugin data is limited to
   the executable path, automatic-startup preference, reasoning-display
-  preference, selected session ID and directory, and the managed orphan record.
+  preference, last selected model and variant, and the managed orphan record.
 - **No workarounds**: do not edit the registration, change CORS, weaken
   authentication, patch the bundled client, or globally replace `fetch` to fix a
   connection.

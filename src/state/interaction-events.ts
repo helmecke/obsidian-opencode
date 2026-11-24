@@ -60,6 +60,23 @@ export function applyInteractionEvent(event: V2Event, selected: SessionInfo,
 			return { handled: true, patch: { snapshot: { ...state.snapshot,
 				selected: { ...selected, model: event.data.model } } } };
 		}
+		case 'session.renamed': {
+			if (event.data.sessionID !== selected.id || !state.snapshot) return { handled: false };
+			const title = event.data.title;
+			return { handled: true, patch: { snapshot: { ...state.snapshot,
+				sessions: state.snapshot.sessions.map((entry) => entry.id === selected.id
+					? { ...entry, title } : entry),
+				selected: { ...selected, title } } } };
+		}
+		case 'session.deleted': {
+			if (event.data.sessionID !== selected.id) return { handled: false };
+			const snapshot = state.snapshot ?? { sessions: [], messages: [] };
+			return { handled: true, patch: {
+				snapshot: { ...snapshot,
+					sessions: snapshot.sessions.filter((entry) => entry.id !== selected.id),
+					selected: undefined, messages: [], empty: 'unavailable' },
+				conversation: undefined, permissions: [], forms: [], pendingPrompt: undefined } };
+		}
 		case 'session.inbox.delivered':
 		case 'session.inbox.enqueued':
 		case 'session.inbox.cancelled': {

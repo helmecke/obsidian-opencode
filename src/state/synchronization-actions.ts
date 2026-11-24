@@ -13,8 +13,10 @@ export interface SynchronizationActionHost {
 	readonly sessions: SessionCoordinator;
 	readonly state: SynchronizationState;
 	readonly canOperate: boolean;
+	readonly canCompose: boolean;
 	assertReady(): void;
 	getPrompt(): PromptCoordinator | undefined;
+	rememberModel(model: ModelRef): void;
 	publishReady(patch: Partial<SynchronizationState>): void;
 	rejectIncompatible(error: unknown): boolean;
 	recover(): void;
@@ -49,7 +51,10 @@ export class SynchronizationActions {
 
 	/** Server-backed selectors; failures are displayed without blocking the conversation. */
 	async loadOptions(): Promise<void> {
-		this.host.assertReady();
+		if (!this.host.canCompose) {
+			this.host.assertReady();
+			return;
+		}
 		try {
 			const client = await this.host.connection.connect();
 			const signal = this.host.connection.signal;
@@ -57,7 +62,7 @@ export class SynchronizationActions {
 				client.agent.list({ location: { directory: this.host.sessions.vaultRoot } }, { signal }),
 				client.model.list({ location: { directory: this.host.sessions.vaultRoot } }, { signal }),
 			]);
-			if (!this.host.canOperate) return;
+			if (!this.host.canCompose) return;
 			this.host.publishReady({
 				agents: agents.data.filter((agent) => !agent.hidden && agent.mode !== 'subagent'),
 				models: models.data.filter((model) => model.enabled),
@@ -65,7 +70,7 @@ export class SynchronizationActions {
 			});
 		} catch (error) {
 			if (this.host.rejectIncompatible(error)) return;
-			if (this.host.canOperate) this.host.publishReady({ optionsError: actionMessages.options });
+			if (this.host.canCompose) this.host.publishReady({ optionsError: actionMessages.options });
 		}
 	}
 
@@ -172,30 +177,30 @@ export class SynchronizationActions {
 	}
 
 	private async fetchSkills(): Promise<void> {
-		if (!this.host.canOperate) return;
+		if (!this.host.canCompose) return;
 		try {
 			const client = await this.host.connection.connect();
 			const result = await client.skill.list(
 				{ location: { directory: this.host.sessions.vaultRoot } },
 				{ signal: this.host.connection.signal });
-			if (this.host.canOperate) this.host.publishReady({ skills: result.data });
+			if (this.host.canCompose) this.host.publishReady({ skills: result.data });
 		} catch {
 			// Skills are optional; an incompatible or failed catalog must not gate chat.
-			if (this.host.canOperate) this.host.publishReady({ skills: [] });
+			if (this.host.canCompose) this.host.publishReady({ skills: [] });
 		}
 	}
 
 	private async fetchCommands(): Promise<void> {
-		if (!this.host.canOperate) return;
+		if (!this.host.canCompose) return;
 		try {
 			const client = await this.host.connection.connect();
 			const result = await client.command.list(
 				{ location: { directory: this.host.sessions.vaultRoot } },
 				{ signal: this.host.connection.signal });
-			if (this.host.canOperate) this.host.publishReady({ commands: result.data });
+			if (this.host.canCompose) this.host.publishReady({ commands: result.data });
 		} catch {
 			// Commands are optional; a failure must leave `/name` usable as prompt text.
-			if (this.host.canOperate) this.host.publishReady({ commands: [] });
+			if (this.host.canCompose) this.host.publishReady({ commands: [] });
 		}
 	}
 
@@ -260,6 +265,20 @@ export class SynchronizationActions {
 	}
 
 	async setAgent(agent: string): Promise<void> {
+		if (!this.host.state.snapshot?.selected) {
+			if (!this.host.canCompose) {
+				this.host.assertReady();
+				return;
+			}
+			try {
+				const snapshot = await this.host.sessions.setDraftAgent(agent);
+				this.host.publishReady({ snapshot, actionError: undefined });
+			} catch (error) {
+				this.host.rejectIncompatible(error);
+				if (this.host.canCompose) this.host.publishReady({ actionError: actionMessages.agent });
+			}
+			return;
+		}
 		this.host.assertReady();
 		const sessionID = this.host.state.snapshot?.selected?.id;
 		if (!sessionID) return;
@@ -276,6 +295,21 @@ export class SynchronizationActions {
 	}
 
 	async setModel(model: ModelRef): Promise<void> {
+		if (!this.host.state.snapshot?.selected) {
+			if (!this.host.canCompose) {
+				this.host.assertReady();
+				return;
+			}
+			try {
+				const snapshot = await this.host.sessions.setDraftModel(model);
+				this.host.rememberModel(model);
+				this.host.publishReady({ snapshot, actionError: undefined });
+			} catch (error) {
+				this.host.rejectIncompatible(error);
+				if (this.host.canCompose) this.host.publishReady({ actionError: actionMessages.model });
+			}
+			return;
+		}
 		this.host.assertReady();
 		const sessionID = this.host.state.snapshot?.selected?.id;
 		if (!sessionID) return;
@@ -286,6 +320,7 @@ export class SynchronizationActions {
 				...(model.variant ? { variant: model.variant } : {}),
 			} }, { signal: this.host.connection.signal });
 			const snapshot = await this.host.sessions.refreshSelected();
+			this.host.rememberModel(snapshot.selected?.model ?? model);
 			this.host.publishReady({ snapshot, actionError: undefined });
 		} catch (error) {
 			if (this.host.rejectIncompatible(error)) return;

@@ -22,6 +22,7 @@ const actions = (client) => [
 	() => client.session.form.cancel({ sessionID: 's', formID: 'f' }),
 	() => client.session.switchAgent({ sessionID: 's', agent: 'build' }),
 	() => client.session.switchModel({ sessionID: 's', model: { providerID: 'p', id: 'm' } }),
+	() => client.session.update({ sessionID: 's', title: 'Synthetic' }),
 	() => client.session.prompt({ sessionID: 's', id: 'prompt', text: 'synthetic' }),
 ];
 

@@ -1,4 +1,4 @@
-import type { ModelRef, V2Event } from '@opencode/client';
+import type { AgentInfo, ModelInfo, ModelRef, V2Event } from '@opencode/client';
 import type { ConnectionCoordinator } from '../opencode/connection';
 import type { SessionCoordinator, SessionSnapshot } from '../opencode/sessions';
 import { SessionError } from '../opencode/sessions';
@@ -16,6 +16,12 @@ import type { Policy, SynchronizationState } from './synchronization-model';
 export type { SynchronizationState } from './synchronization-model';
 export type { InteractionBusy } from './synchronization-model';
 
+export interface DraftPreferences {
+	/** Last model chosen by the user, used when the default agent has no model. */
+	lastModel?(): ModelRef | undefined;
+	rememberModel?(model: ModelRef): void;
+}
+
 /** Plugin-owned, live-only recovery. Never retries a prompt, decision, or execution. */
 export class SynchronizationCoordinator {
 	private value: SynchronizationState = { phase: 'inactive', attempt: 0, permissions: [], forms: [] };
@@ -27,6 +33,8 @@ export class SynchronizationCoordinator {
 	private timeout?: unknown;
 	private pending?: Promise<void>;
 	private failures = 0;
+	private materializing?: Promise<boolean>;
+	private preferences: DraftPreferences = {};
 	private readonly policy: Policy;
 	private readonly actions: SynchronizationActions;
 	private readonly unsubscribeConnection: () => void;
@@ -52,6 +60,25 @@ export class SynchronizationCoordinator {
 		return { ...base, conversation };
 	}
 	get canOperate(): boolean { return this.state.phase === 'ready' && this.state.snapshot?.selected !== undefined; }
+	/** A ready draft (or selected session) can compose; an unavailable selection cannot. */
+	get canCompose(): boolean {
+		if (this.state.phase !== 'ready' || !this.state.snapshot) return false;
+		return this.state.snapshot.selected !== undefined || this.state.snapshot.empty !== 'unavailable';
+	}
+
+	/** Publish a session metadata change confirmed by the session coordinator. */
+	refreshSession(): void {
+		this.publishReady({ snapshot: this.sessions.state });
+	}
+
+	/** Wire persisted draft preferences (last used model) after construction. */
+	useDraftPreferences(preferences: DraftPreferences): void {
+		this.preferences = preferences;
+	}
+
+	rememberModel(model: ModelRef): void {
+		this.preferences.rememberModel?.(model);
+	}
 	assertReady(): void {
 		if (!this.canOperate) throw new Error('Conversation is synchronizing. Retry when connected.');
 		if (this.value.interactionBusy) throw new Error('Wait for the current decision to finish.');
@@ -66,6 +93,11 @@ export class SynchronizationCoordinator {
 		if (this.value.phase === 'inactive') return this.start();
 		if (this.value.phase === 'ready') { this.cancelAttempt(); return this.start(); }
 		return this.pending ?? Promise.resolve();
+	}
+	/** Opening a chat view starts a blank local draft, not an empty server session. */
+	async openDraft(): Promise<void> {
+		await this.sessions.beginDraft();
+		return this.open();
 	}
 	/** Explicit retry only; it cannot admit or replay an application operation. */
 	retry(): Promise<void> {
@@ -100,8 +132,42 @@ export class SynchronizationCoordinator {
 		return this.actions.loadCommands();
 	}
 
-	sendMessage(text: string): Promise<boolean> {
+	async sendMessage(text: string): Promise<boolean> {
+		if (!this.sessions.selectedID) {
+			const snapshot = this.state.snapshot;
+			if (!snapshot || snapshot.empty === 'unavailable') {
+				if (this.state.phase === 'ready') {
+					this.publishReady({ actionError: 'Select or start a conversation before sending a message.' });
+				}
+				return false;
+			}
+			if (!(await this.materializeDraft())) return false;
+		}
 		return this.actions.sendMessage(text);
+	}
+
+	/** The first turn creates the server session; until then the draft is client-only. */
+	private materializeDraft(): Promise<boolean> {
+		if (this.materializing) return this.materializing;
+		const pending = this.createDraftSession();
+		this.materializing = pending;
+		return pending;
+	}
+
+	private async createDraftSession(): Promise<boolean> {
+		try {
+			await this.sessions.create();
+			await this.open();
+			return this.canOperate && this.prompt !== undefined;
+		} catch (error) {
+			if (this.rejectIncompatible(error)) return false;
+			if (this.state.phase === 'ready') {
+				this.publishReady({ actionError: 'Unable to start the conversation. Retry.' });
+			}
+			return false;
+		} finally {
+			this.materializing = undefined;
+		}
 	}
 
 	retryPrompt(): Promise<void> {
@@ -205,7 +271,7 @@ export class SynchronizationCoordinator {
 			await ready;
 			for (let pass = 0; pass < this.policy.snapshotPasses && this.current(controller); pass++) {
 				buffer = []; characters = 0; overflow = false;
-				const snapshot = await this.sessions.open(signal);
+				let snapshot = await this.sessions.open(signal);
 				if (!this.current(controller)) return;
 				const location = { directory: this.sessions.vaultRoot };
 				// Required selector contracts must succeed before admitting sends or decisions.
@@ -213,6 +279,12 @@ export class SynchronizationCoordinator {
 					client.agent.list({ location }, { signal }), client.model.list({ location }, { signal }),
 				]);
 				if (!this.current(controller)) return;
+				const agentCatalog = agents.data.filter((agent) => !agent.hidden && agent.mode !== 'subagent');
+				const modelCatalog = models.data.filter((model) => model.enabled);
+				if (!snapshot.selected) {
+					snapshot = await this.resolveDraftDefaults(snapshot, client, agentCatalog, modelCatalog, signal);
+					if (!this.current(controller)) return;
+				}
 				const selected = snapshot.selected;
 				const input = selected && { sessionID: selected.id };
 				const [active, permissions, forms] = input ? await Promise.all([
@@ -240,12 +312,85 @@ export class SynchronizationCoordinator {
 				this.clearTimeout();
 				this.publish({ phase: 'ready', attempt: this.failures, snapshot, permissions, forms,
 					pendingPrompt: this.prompt?.pending, actionError: this.value.actionError,
-					agents: agents.data.filter((agent) => !agent.hidden && agent.mode !== 'subagent'),
-					models: models.data.filter((model) => model.enabled) });
+					agents: agentCatalog, models: modelCatalog });
 				return;
 			}
 			throw new Error('Snapshot overlap');
 		} finally { signal.removeEventListener('abort', rejectConnected); }
+	}
+
+	/**
+	 * A draft shows the server's configured default agent and model rather than
+	 * placeholder labels. Explicit draft choices are never replaced.
+	 */
+	private async resolveDraftDefaults(snapshot: SessionSnapshot, client: Awaited<ReturnType<ConnectionCoordinator['connect']>>,
+		agents: readonly AgentInfo[], models: readonly ModelInfo[], signal: AbortSignal): Promise<SessionSnapshot> {
+		if (snapshot.selected || snapshot.empty === 'unavailable'
+			|| (snapshot.draftAgent && snapshot.draftModel)) return snapshot;
+		const location = { directory: this.sessions.vaultRoot };
+		let agentName: string | undefined;
+		let configuredModel: ModelRef | undefined;
+		try {
+			const config = await client.config.get({ location }, { signal });
+			for (const entry of config) {
+				if (entry.type !== 'document') continue;
+				const info = entry.info;
+				if (!info) continue;
+				if (typeof info.default_agent === 'string' && info.default_agent.trim()) {
+					agentName = info.default_agent.trim();
+				}
+				configuredModel = this.configuredModelRef(info.model) ?? configuredModel;
+			}
+		} catch {
+			// Defaults are optional; the catalog fallback keeps a draft usable.
+		}
+		if (signal.aborted) return snapshot;
+		let serverModel: ModelRef | undefined;
+		try {
+			const result = await client.model.default({ location }, { signal });
+			serverModel = this.catalogModelRef(result?.data, models);
+		} catch {
+			// The endpoint is optional; config and catalog fallbacks still apply.
+		}
+		if (signal.aborted) return snapshot;
+		const chosenAgent = (agentName
+			? agents.find((agent) => agent.id === agentName || agent.name === agentName) : undefined)
+			?? agents.find((agent) => agent.id === 'build' || agent.name.toLowerCase() === 'build') ?? agents[0];
+		const remembered = this.usableModelRef(this.preferences.lastModel?.(), models);
+		const model = chosenAgent?.model ?? configuredModel ?? remembered ?? serverModel
+			?? this.catalogModelRef(models[0], models);
+		return this.sessions.applyDraftDefaults(chosenAgent?.id, model);
+	}
+
+	private usableModelRef(model: ModelRef | undefined, models: readonly ModelInfo[]): ModelRef | undefined {
+		if (!model) return undefined;
+		const match = models.find((entry) => entry.providerID === model.providerID
+			&& (entry.modelID ?? entry.id) === model.id);
+		return match && match.enabled !== false ? model : undefined;
+	}
+
+	private configuredModelRef(value: unknown): ModelRef | undefined {
+		if (typeof value === 'string') {
+			const separator = value.indexOf('/');
+			if (separator <= 0 || separator === value.length - 1) return undefined;
+			return { providerID: value.slice(0, separator), id: value.slice(separator + 1) };
+		}
+		if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+		const record = value as Record<string, unknown>;
+		if (typeof record.providerID !== 'string' || typeof record.model !== 'string') return undefined;
+		return { providerID: record.providerID, id: record.model,
+			...(typeof record.variant === 'string' && record.variant ? { variant: record.variant } : {}) };
+	}
+
+	private catalogModelRef(value: ModelInfo | null | undefined, models: readonly ModelInfo[]): ModelRef | undefined {
+		if (!value) return undefined;
+		const providerID = value.providerID;
+		const id = value.modelID ?? value.id;
+		if (typeof providerID !== 'string' || typeof id !== 'string' || !providerID || !id) return undefined;
+		const match = models.find((model) => model.providerID === providerID
+			&& (model.modelID ?? model.id) === id);
+		if (match?.enabled === false) return undefined;
+		return { providerID, id };
 	}
 
 	/**
@@ -259,7 +404,15 @@ export class SynchronizationCoordinator {
 		const update = applyInteractionEvent(event, selected, this.value);
 		if (!update.handled) return false;
 		if (update.resync) this.resync();
-		else if (update.patch) this.publishReady(update.patch);
+		else if (update.patch) {
+			if (update.patch.snapshot?.selected === undefined) {
+				// A deleted selection has no authoritative transcript to project.
+				this.ingestion?.dispose();
+				this.ingestion = undefined;
+				this.prompt = undefined;
+			}
+			this.publishReady(update.patch);
+		}
 		return true;
 	}
 

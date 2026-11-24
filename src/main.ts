@@ -42,8 +42,15 @@ export default class OpenCodePlugin extends Plugin {
 			const current = this.app.vault.adapter;
 			if (!(current instanceof FileSystemAdapter)) throw new Error('Desktop vault required');
 			return current.getBasePath();
-		}, settings, save);
+		});
 		const synchronization = new SynchronizationCoordinator(connection, sessions);
+		synchronization.useDraftPreferences({
+			lastModel: () => settings.lastModel,
+			rememberModel: (model) => {
+				settings.lastModel = model;
+				void save();
+			},
+		});
 		this.register(() => connection.dispose());
 		this.register(() => { void runtime.dispose(); });
 		this.addSettingTab(new OpenCodeSettingTab(this.app, this, settings, save,

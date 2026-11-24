@@ -142,6 +142,29 @@ test('authentication, transport, cancellation, and missing-session errors are pr
 	})).session.get({ sessionID: 'one' }), (error) => error._tag === 'SessionNotFoundError');
 });
 
+test('session.update is wrapped so unsupported statuses translate to API incompatibility', async (t) => {
+	const requests = [];
+	const origin = await server(t, (req, res) => {
+		const url = new URL(req.url, 'http://localhost');
+		requests.push([req.method, url.pathname]);
+		if (url.pathname === '/api/session/one') return res.writeHead(204).end();
+		json(res, { message: 'unknown endpoint' }, 404);
+	});
+	await withApiValidation(OpenCode.make({ baseUrl: origin }))
+		.session.update({ sessionID: 'one', title: 'Renamed' });
+	assert.ok(requests.some(([method, path]) => method !== 'GET' && path === '/api/session/one'),
+		'Rename reaches the session update route');
+
+	const unsupported = await server(t, (_req, res) => json(res, { message: 'private upstream detail' }, 405));
+	await rejectsApi(withApiValidation(OpenCode.make({ baseUrl: unsupported }))
+		.session.update({ sessionID: 'one', title: 'Renamed' }), 'private upstream detail');
+
+	const missing = await server(t, (_req, res) => json(res, { _tag: 'SessionNotFoundError', sessionID: 'one' }, 404));
+	await assert.rejects(withApiValidation(OpenCode.make({ baseUrl: missing }))
+		.session.update({ sessionID: 'one', title: 'Renamed' }),
+	(error) => error._tag === 'SessionNotFoundError');
+});
+
 test('discovery returns the validated client for later required requests', async (t) => {
 	let listBody = page([session('one')]);
 	const origin = await server(t, (req, res) => {

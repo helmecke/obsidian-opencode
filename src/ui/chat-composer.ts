@@ -87,7 +87,7 @@ export class ChatComposer {
 			if (model) this.handlers.setModel(model);
 		});
 		this.variantSelectEl.addEventListener('change', () => {
-			const selected = this.lastState?.snapshot?.selected?.model;
+			const selected = this.lastState?.snapshot?.selected?.model ?? this.lastState?.snapshot?.draftModel;
 			if (!selected) return;
 			const variant = this.variantSelectEl.value;
 			this.handlers.setModel({
@@ -136,11 +136,14 @@ export class ChatComposer {
 		this.lastState = state;
 		const pending = state.pendingPrompt;
 		const running = state.conversation?.execution === 'running';
+		const selected = state.snapshot?.selected;
+		const draft = state.snapshot !== undefined && selected === undefined && state.snapshot.empty !== 'unavailable';
+		const canCompose = state.phase === 'ready' && (selected !== undefined || draft);
 		this.composer.disabled = state.phase === 'disposed';
 		this.stopButtonEl.hidden = !running;
 		this.sendButtonEl.hidden = running;
 		setNativeDisabled(this.stopButtonEl, state.phase !== 'ready' || !running);
-		setNativeDisabled(this.sendButtonEl, state.phase !== 'ready' || !state.snapshot?.selected
+		setNativeDisabled(this.sendButtonEl, !canCompose
 			|| state.interactionBusy !== undefined
 			|| (pending !== undefined && pending.phase !== 'admitted') || this.composer.value.trim().length === 0);
 		this.updateAgentOptions(state);
@@ -181,7 +184,7 @@ export class ChatComposer {
 
 	private updateAgentOptions(state: SynchronizationState): void {
 		const agents = state.agents ?? [];
-		const selected = state.snapshot?.selected?.agent ?? '';
+		const selected = state.snapshot?.selected?.agent ?? state.snapshot?.draftAgent ?? '';
 		const signature = JSON.stringify([agents.map((agent) => [agent.id, agent.name]), selected, state.phase]);
 		if (signature !== this.signatures.agents) {
 			this.signatures.agents = signature;
@@ -198,7 +201,7 @@ export class ChatComposer {
 
 	private updateModelOptions(state: SynchronizationState): void {
 		const models = state.models ?? [];
-		const selected = state.snapshot?.selected?.model;
+		const selected = state.snapshot?.selected?.model ?? state.snapshot?.draftModel;
 		const signature = JSON.stringify([models.map((model) => [model.providerID, model.modelID, model.name]),
 			selected, state.phase]);
 		if (signature !== this.signatures.models) {

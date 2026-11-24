@@ -17,18 +17,26 @@ const liveEvents = { subscribe: ({ signal }) => ({ async *[Symbol.asyncIterator]
 	yield { type: 'server.connected' };
 	if (!signal.aborted) await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
 } }) };
-const emptyClient = () => ({
-	event: liveEvents,
-	agent: { list: async () => ({ data: [] }) },
-	model: { list: async () => ({ data: [] }) },
-	permission: { list: async () => [] },
-	command: { list: async () => ({ data: [] }) },
-	session: {
-		list: async () => ({ data: [], cursor: {} }),
-		active: async () => ({}),
-		form: { list: async () => [] },
-	},
-});
+const emptyClient = () => {
+	let created = 0;
+	return {
+		event: liveEvents,
+		agent: { list: async () => ({ data: [] }) },
+		model: { list: async () => ({ data: [] }) },
+		permission: { list: async () => [] },
+		command: { list: async () => ({ data: [] }) },
+		message: { list: async () => ({ data: [], cursor: {} }) },
+		session: {
+			list: async () => ({ data: [], cursor: {} }),
+			get: async ({ sessionID }) => ({ id: sessionID, location: { directory: 'C:\\Vault' },
+				time: { created: 1, updated: 1 } }),
+			create: async ({ location }) => ({ id: `empty-${++created}`, location,
+				time: { created: 1, updated: 1 } }),
+			active: async () => ({}),
+			form: { list: async () => [] },
+		},
+	};
+};
 
 const app = {
 	workspace: {
@@ -121,7 +129,8 @@ async function createShell(data = {}) {
 	const plugin = new module.exports.default();
 	plugin.app.vault.adapter = new obsidianWithApp.FileSystemAdapter();
 	await plugin.onload();
-	return { plugin, registrations, leaves, revealed, notices, workspace, saved };
+	return { plugin, registrations, leaves, revealed, notices, workspace, saved,
+		Menu: obsidianWithApp.Menu, modals: obsidianWithApp.modals };
 }
 
 test('enabling registers native chat entrypoints without service or demo side effects', async () => {
@@ -153,10 +162,14 @@ test('command opens a native tab and ribbon reveals the same leaf, including in 
 test('native view renders the conversation shell and clears its content on close', async () => {
 	const { registrations, plugin } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
+	const headerContainer = view.containerEl.createDiv({ cls: 'view-header-title-container' });
+	const headerParent = headerContainer.createDiv({ cls: 'view-header-title-parent' });
+	headerContainer.createDiv({ cls: 'view-header-title' });
+	view.leaf.tabHeaderInnerTitleEl = view.containerEl.createDiv({ cls: 'workspace-tab-header-inner-title' });
 	view.connection.discover = async () => emptyClient();
 	await view.onOpen();
 	assert.equal(view.getViewType(), 'opencode-chat');
-	assert.equal(view.getDisplayText(), 'OpenCode');
+	assert.equal(view.getDisplayText(), 'New conversation');
 	assert.equal(view.getIcon(), 'message-square');
 	assert.ok(view.contentEl.classList.contains('opencode-chat'));
 	assert.match(view.statusEl.textContent, /Connected · Shared service/);
@@ -168,6 +181,13 @@ test('native view renders the conversation shell and clears its content on close
 	assert.ok(view.messagesEl);
 	assert.ok(view.composer);
 	assert.ok(view.interactionsEl);
+	assert.equal(view.sessions.state.selected, undefined, 'Opening shows a draft without a server session');
+	assert.equal(view.containerEl.querySelector('.view-header-title').textContent, 'New conversation');
+	assert.deepEqual([...headerParent.querySelectorAll('.view-header-breadcrumb')].map((item) => item.textContent),
+		['opencode', 'sessions'], 'The header shows the native breadcrumb trail');
+	assert.equal(headerParent.querySelectorAll('.view-header-breadcrumb-separator').length, 2);
+	assert.equal(headerParent.querySelector('.view-header-breadcrumb').getAttribute('aria-label'), 'New conversation');
+	assert.equal(view.leaf.tabHeaderInnerTitleEl.textContent, 'New conversation');
 	const card = view.contentEl.querySelector('.opencode-composer-card');
 	assert.ok(card, 'The composer renders as one card');
 	assert.equal(card.parentElement.classList.contains('opencode-chat-composer'), true);
@@ -180,19 +200,10 @@ test('native view renders the conversation shell and clears its content on close
 	assert.notEqual(card.firstElementChild, meta, 'The meta group is not a separate row above the message field');
 	assert.ok(meta.contains(view.statusEl), 'Status lives in the composer toolbar');
 	assert.ok(meta.contains(view.retryButton), 'Retry discovery lives in the composer toolbar');
-	assert.ok(meta.contains(view.conversationSelect), 'Conversation selector lives in the composer toolbar');
-	assert.ok(meta.contains(view.newButton), 'New conversation lives in the composer toolbar');
 	assert.equal(view.statusEl.getAttribute('role'), 'status');
 	assert.equal(view.statusEl.getAttribute('aria-live'), 'polite');
-	assert.equal(view.conversationSelect.getAttribute('aria-label'), 'Conversation');
-	assert.equal(view.conversationSelect.title, 'Conversation');
-	assert.equal(meta.querySelector('.opencode-chat-select-label'), null, 'The conversation select has no visible label');
-	assert.equal(view.newButton.getAttribute('aria-label'), 'New conversation');
-	assert.ok(view.newButton.classList.contains('clickable-icon'), 'New conversation uses the native icon-button surface');
-	assert.ok(view.newButton.querySelector('.lucide-message-square-plus'), 'New conversation uses the message-square-plus icon');
-	assert.equal(view.retryButton.getAttribute('aria-label'), 'Retry discovery');
-	assert.ok(view.retryButton.classList.contains('clickable-icon'), 'Retry discovery uses the native icon-button surface');
-	assert.ok(view.retryButton.querySelector('.lucide-refresh-cw'), 'Retry discovery uses the refresh-cw icon');
+	assert.equal(card.querySelector('.opencode-chat-select, [aria-label="Conversation"], [aria-label="New conversation"]'), null,
+		'Conversation controls are not in the composer');
 	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0,
 		'The transcript is not preceded by separate header rows');
 	assert.equal(view.sendButton.getAttribute('aria-label'), 'Send message');
@@ -218,11 +229,12 @@ test('native view renders the conversation shell and clears its content on close
 	assert.deepEqual(classes.filter((name) => /attach|voice|microphone|shield|command|skill/.test(name)), []);
 	await view.onOpen();
 	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0);
+	assert.equal(view.sessions.state.selected, undefined, 'Reopening returns to a fresh draft');
+	assert.equal(headerParent.querySelectorAll('.view-header-breadcrumb').length, 2, 'Reopen does not duplicate breadcrumbs');
 	const reopenedMeta = view.contentEl.querySelector('.opencode-composer-toolbar-start > .opencode-composer-meta');
 	assert.ok(reopenedMeta?.contains(view.statusEl));
 	assert.ok(reopenedMeta?.contains(view.retryButton));
-	assert.ok(reopenedMeta?.contains(view.conversationSelect));
-	assert.ok(reopenedMeta?.contains(view.newButton));
+	assert.equal(reopenedMeta?.querySelector('.opencode-chat-select'), null);
 	await view.onClose();
 	assert.equal(view.contentEl.childElementCount, 0);
 	assert.equal(view.contentEl.classList.contains('opencode-chat'), false);
@@ -296,6 +308,7 @@ test('Show reasoning applies to an open transcript without reopening the view or
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
+	await selectSession(view, 'old');
 
 	const tab = registrations.settingTabs.at(-1);
 	tab.containerEl = { empty() {} };
@@ -341,6 +354,7 @@ test('Show reasoning applies to an open transcript without reopening the view or
 	await view.onClose();
 	await view.onOpen();
 	await wait();
+	await selectSession(view, 'old');
 	assert.ok(view.messagesEl.querySelector('details.opencode-reasoning'),
 		'Reopening the view follows the stored preference');
 	plugin.unload();
@@ -360,15 +374,13 @@ test('the Show reasoning toggle is harmless before chat opens and with no conver
 	await view.onOpen();
 	await row.toggle.change(false);
 	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null);
-	assert.match(view.conversationSelect.textContent, /No conversations yet/);
+	assert.equal(view.sessions.state.selected, undefined, 'A draft has no transcript');
 	await view.onClose();
 	plugin.unload();
 });
 
 test('another conversation and non-chat leaves follow the stored reasoning preference', async () => {
-	const { plugin, registrations, leaves } = await createShell({
-		selectedSession: { id: 'old', directory: 'C:\\Vault' },
-	});
+	const { plugin, registrations, leaves } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const otherView = { getViewType: () => 'markdown' };
 	leaves.push({ type: 'opencode-chat', view }, { type: 'markdown', view: otherView });
@@ -384,6 +396,7 @@ test('another conversation and non-chat leaves follow the stored reasoning prefe
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
+	await selectSession(view, 'old');
 
 	const tab = registrations.settingTabs.at(-1);
 	tab.containerEl = { empty() {} };
@@ -392,9 +405,7 @@ test('another conversation and non-chat leaves follow the stored reasoning prefe
 	await row.toggle.change(true);
 	assert.ok(view.messagesEl.querySelector('.opencode-reasoning'));
 
-	view.conversationSelect.value = 'new';
-	view.conversationSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
-	await wait();
+	await selectSession(view, 'new');
 	assert.match(view.messagesEl.textContent, /New answer\./);
 	assert.equal(view.messagesEl.querySelector('.opencode-reasoning-preview').textContent, 'New thought.',
 		'A newly selected conversation reads the same live preference');
@@ -524,8 +535,7 @@ test('close/reopen before discovery settles updates only the current opening', a
 	const meta = view.contentEl.querySelector('.opencode-composer-toolbar-start > .opencode-composer-meta');
 	assert.ok(meta?.contains(view.statusEl));
 	assert.ok(meta?.contains(view.retryButton));
-	assert.ok(meta?.contains(view.conversationSelect));
-	assert.ok(meta?.contains(view.newButton));
+	assert.equal(meta?.querySelector('.opencode-chat-select, [aria-label="New conversation"]'), null);
 	plugin.unload();
 });
 
@@ -552,6 +562,12 @@ test('plugin unload cancels owned discovery and disposes all open view lifetimes
 });
 
 const wait = async () => { for (let i = 0; i < 40; i++) await new Promise((resolve) => setImmediate(resolve)); };
+
+async function selectSession(view, id) {
+	await view.sessions.select(id);
+	await view.synchronization.open();
+	await wait();
+}
 
 test('view-local Mod+Enter scope sends only from its composer and unregisters on close', async () => {
 	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
@@ -580,9 +596,12 @@ test('view-local Mod+Enter scope sends only from its composer and unregisters on
 
 function interactionClient() {
 	const records = new Map([
-		['old', { id: 'old', title: 'Old', location: { directory: 'C:\\Vault' }, agent: 'plan', model: { providerID: 'p', id: 'm1' } }],
-		['new', { id: 'new', title: 'New', location: { directory: 'C:\\Vault' }, agent: 'plan', model: { providerID: 'p', id: 'm1' } }],
-		['foreign', { id: 'foreign', title: 'Foreign', location: { directory: 'C:\\Other' } }],
+		['old', { id: 'old', title: 'Old', location: { directory: 'C:\\Vault' }, agent: 'plan',
+			model: { providerID: 'p', id: 'm1' }, time: { created: Date.now() - 2000, updated: Date.now() - 2000 } }],
+		['new', { id: 'new', title: 'New', location: { directory: 'C:\\Vault' }, agent: 'plan',
+			model: { providerID: 'p', id: 'm1' }, time: { created: Date.now() - 1000, updated: Date.now() - 1000 } }],
+		['foreign', { id: 'foreign', title: 'Foreign', location: { directory: 'C:\\Other' },
+			time: { created: 1, updated: 1 } }],
 	]);
 	const texts = new Map([['old', [{ id: 'old-message', type: 'user', text: 'old transcript', time: { created: 1 } }]],
 		['new', [{ id: 'new-message', type: 'user', text: 'new transcript', time: { created: 2 } }]]]);
@@ -624,9 +643,13 @@ function interactionClient() {
 		session: {
 			list: async ({ directory }) => ({ data: [...records.values()].filter((session) => session.location.directory === directory), cursor: {} }),
 			get: async ({ sessionID }) => records.get(sessionID),
-			create: async ({ location }) => {
+			create: async (input) => {
+				calls.push(['create', structuredClone(input)]);
 				created++;
-				const session = { id: `created-${created}`, title: 'Created', location, agent: 'plan', model: { providerID: 'p', id: 'm1' } };
+				const session = { id: `created-${created}`, title: input.title ?? 'Created',
+					location: input.location, agent: input.agent ?? 'plan',
+					model: input.model ?? { providerID: 'p', id: 'm1' },
+					time: { created: Date.now(), updated: Date.now() + created } };
 				records.set(session.id, session);
 				texts.set(session.id, []);
 				return session;
@@ -642,6 +665,11 @@ function interactionClient() {
 				if (input.name === 'broken') throw new Error('rejected by the service');
 			},
 			interrupt: async (input) => { calls.push(['interrupt', input]); return { interrupted: true }; },
+			update: async (input) => {
+				calls.push(['update', structuredClone(input)]);
+				const session = records.get(input.sessionID);
+				if (session) records.set(input.sessionID, { ...session, title: input.title });
+			},
 			switchAgent: async (input) => { calls.push(['switchAgent', input]); },
 			switchModel: async (input) => { calls.push(['switchModel', input]); },
 		},
@@ -649,47 +677,301 @@ function interactionClient() {
 	return { client, calls, records, texts, get created() { return created; } };
 }
 
-test('empty and unavailable selection still allow choosing or creating a conversation', async () => {
-	for (const saved of [undefined, { id: 'foreign', directory: 'C:\\Vault' }]) {
-		const { plugin, registrations } = await createShell(saved ? { selectedSession: saved } : {});
-		const view = registrations.views.get('opencode-chat')({});
-		const fixture = interactionClient();
-		view.connection.discover = async () => fixture.client;
-		await view.onOpen();
-		await wait();
-		assert.equal(view.synchronization.canOperate, false);
-		assert.equal(view.newButton.disabled, false);
-		view.conversationSelect.value = 'old';
-		view.conversationSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
-		await wait();
-		assert.equal(view.sessions.state.selected.id, 'old');
-		plugin.unload();
-	}
-	const { plugin, registrations } = await createShell();
+test('the document menu offers switch, new, and rename for both pane and tab sources', async () => {
+	const { plugin, registrations, Menu } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
-	fixture.records.clear();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
-	assert.equal(view.synchronization.canOperate, false);
-	click(view.newButton);
 	await wait();
-	assert.equal(fixture.created, 1);
+	let switched = 0;
+	let created = 0;
+	let renamed = 0;
+	view.openSwitcher = async () => { switched++; };
+	view.newConversation = async () => { created++; };
+	view.beginTitleRename = () => { renamed++; };
+	for (const source of ['more-options', 'tab-header']) {
+		const menu = new Menu();
+		view.onPaneMenu(menu, source);
+		assert.deepEqual(menu.items.map((item) => item.title),
+			['Switch conversation…', 'New conversation', 'Rename conversation…']);
+		for (const item of menu.items) item.click();
+	}
+	assert.equal(switched, 2, 'Both sources open the switcher');
+	assert.equal(created, 2, 'Both sources create a conversation');
+	assert.equal(renamed, 2, 'Both sources start a rename');
+	plugin.unload();
+});
+
+test('header breadcrumbs start a new conversation and open the session switcher', async () => {
+	const { plugin, registrations, modals } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	const container = view.containerEl.createDiv({ cls: 'view-header-title-container' });
+	const parent = container.createDiv({ cls: 'view-header-title-parent' });
+	container.createDiv({ cls: 'view-header-title' });
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	await selectSession(view, 'old');
+	assert.equal(view.sessions.state.selected.id, 'old');
+	const [root, sessions] = parent.querySelectorAll('.view-header-breadcrumb');
+	assert.equal(root.textContent, 'opencode');
+	assert.equal(root.getAttribute('aria-label'), 'New conversation');
+	assert.equal(sessions.textContent, 'sessions');
+	assert.equal(sessions.getAttribute('aria-label'), 'Switch conversation');
+
+	const title = container.querySelector('.view-header-title');
+	title.dispatchEvent(new window.Event('focus'));
+	assert.equal(parent.style.getPropertyValue('--opencode-breadcrumbs-opacity'), '0',
+		'Editing collapses the parent breadcrumbs');
+	await new Promise((resolve) => window.setTimeout(resolve, 180));
+	assert.equal(parent.parentElement, null, 'The collapsed breadcrumbs detach after the transition');
+	title.dispatchEvent(new window.Event('blur'));
+	assert.equal(parent.parentElement, container, 'Leaving the title restores the breadcrumbs');
+	assert.equal(parent.style.getPropertyValue('--opencode-breadcrumbs-opacity'), '1',
+		'The breadcrumbs expand back');
+
+	click(root);
+	await wait();
+	assert.equal(fixture.created, 0, 'opencode starts a draft without a server session');
+	assert.equal(view.sessions.state.selected, undefined);
+	assert.equal(view.getDisplayText(), 'New conversation');
+
+	sessions.dispatchEvent(new window.KeyboardEvent('keydown',
+		{ key: 'Enter', bubbles: true, cancelable: true }));
+	await wait();
+	const switcher = modals.at(-1);
+	assert.equal(switcher.isOpen, true, 'sessions opens the quick switcher');
+	assert.deepEqual(switcher.getItems().map((session) => session.id), ['new', 'old']);
+	plugin.unload();
+});
+
+test('header and tab show the session title, inline rename commits or cancels, and external renames update the chrome', async () => {
+	const { plugin, registrations, notices } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	const header = view.containerEl.createDiv({ cls: 'view-header-title' });
+	view.leaf.tabHeaderInnerTitleEl = view.containerEl.createDiv({ cls: 'workspace-tab-header-inner-title' });
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	await selectSession(view, 'old');
+	assert.equal(header.textContent, 'Old');
+	assert.equal(view.leaf.tabHeaderInnerTitleEl.textContent, 'Old');
+	assert.equal(view.getDisplayText(), 'Old');
+
+	const beginRename = () => {
+		click(header);
+		header.focus();
+		return header.getAttribute('contenteditable') === 'true' ? header : undefined;
+	};
+	assert.equal(header.getAttribute('contenteditable'), 'true', 'The title is natively editable at rest');
+	assert.equal(header.getAttribute('tabindex'), '-1');
+	assert.equal(header.getAttribute('spellcheck'), 'false');
+	let editor = beginRename();
+	assert.ok(editor, 'Clicking the header starts an inline rename');
+	header.textContent = 'Team notes';
+	header.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await wait();
+	const update = fixture.calls.find((call) => call[0] === 'update');
+	assert.deepEqual(update[1], { sessionID: 'old', title: 'Team notes' });
+	assert.equal(header.textContent, 'Team notes', 'The server-confirmed title replaces the editor');
+	assert.equal(view.leaf.tabHeaderInnerTitleEl.textContent, 'Team notes');
+	const updates = fixture.calls.filter((call) => call[0] === 'update').length;
+
+	editor = beginRename();
+	assert.ok(editor);
+	header.textContent = 'Discarded';
+	header.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'update').length, updates, 'Escape sends nothing');
+	assert.equal(header.textContent, 'Team notes');
+
+	editor = beginRename();
+	assert.ok(editor);
+	header.textContent = '   ';
+	header.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'update').length, updates, 'An empty title is rejected');
+	assert.equal(header.textContent, 'Team notes');
+
+	fixture.client.session.update = async () => { throw new Error('private upstream detail'); };
+	editor = beginRename();
+	assert.ok(editor);
+	header.textContent = 'Broken';
+	header.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await wait();
+	assert.deepEqual(notices, ['Unable to rename the conversation. Try again.']);
+	assert.equal(header.textContent, 'Team notes', 'A failed rename keeps the previous title');
+	assert.equal(notices.some((notice) => notice.includes('private')), false);
+
+	const reads = fixture.calls.filter((call) => call[0] === 'messages').length;
+	view.synchronization.applyInteraction({ id: 'rename', created: 10, type: 'session.renamed',
+		location: { directory: 'C:\\Vault' },
+		data: { sessionID: 'old', title: 'Renamed elsewhere' } });
+	await wait();
+	assert.equal(header.textContent, 'Renamed elsewhere', 'An external rename updates the header');
+	assert.equal(view.leaf.tabHeaderInnerTitleEl.textContent, 'Renamed elsewhere');
+	assert.equal(fixture.calls.filter((call) => call[0] === 'messages').length, reads,
+		'An external rename does not rebuild the transcript');
+	plugin.unload();
+});
+
+test('a new conversation is a client-side draft named locally and created on the first send', async () => {
+	const { plugin, registrations, saved, Menu } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	const header = view.containerEl.createDiv({ cls: 'view-header-title' });
+	view.leaf.tabHeaderInnerTitleEl = view.containerEl.createDiv({ cls: 'workspace-tab-header-inner-title' });
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	assert.equal(fixture.created, 0, 'Opening creates no server session');
+	assert.equal(view.getDisplayText(), 'New conversation');
+	assert.equal(view.agentSelect.disabled, false, 'The draft agent is active');
+	assert.equal(view.modelSelect.disabled, false, 'The draft model is active');
+	assert.equal(view.agentSelect.value, 'build', 'The draft shows the default agent');
+	assert.equal(view.modelSelect.value, JSON.stringify(['p', 'm1', '']), 'The draft shows the default model');
+	assert.equal(view.contentEl.querySelector('.opencode-composer-choice[data-kind="agent"] .opencode-composer-choice-label').textContent,
+		'Build');
+	assert.equal(view.contentEl.querySelector('.opencode-composer-choice[data-kind="model"] .opencode-composer-choice-label').textContent,
+		'One');
+	assert.equal(view.variantSelect.disabled, false, 'The draft thinking selector is active');
+	assert.equal(view.variantSelect.options.length, 3);
+
+	view.agentSelect.value = 'plan';
+	view.agentSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await wait();
+	view.modelSelect.value = JSON.stringify(['p', 'm2', '']);
+	view.modelSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await wait();
+	view.variantSelect.value = 'high';
+	view.variantSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await wait();
+	assert.equal(view.sessions.state.draftAgent, 'plan');
+	assert.deepEqual(view.sessions.state.draftModel, { providerID: 'p', id: 'm2', variant: 'high' });
+	assert.deepEqual(saved.at(-1)?.lastModel, { providerID: 'p', id: 'm2', variant: 'high' },
+		'The chosen model is remembered for later drafts');
+
+	click(header);
+	header.focus();
+	header.textContent = 'Release notes';
+	header.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await wait();
+	assert.equal(fixture.created, 0, 'Renaming a draft creates no server session');
+	assert.equal(fixture.calls.filter((call) => call[0] === 'update').length, 0, 'No server rename is sent');
+	assert.equal(header.textContent, 'Release notes');
+	assert.equal(view.leaf.tabHeaderInnerTitleEl.textContent, 'Release notes');
+	assert.equal(view.sessions.state.draftTitle, 'Release notes');
+
+	view.composer.value = 'hello draft';
+	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	assert.equal(view.sendButton.disabled, false, 'A draft can send');
+	view.composer.dispatchEvent(new window.KeyboardEvent('keydown',
+		{ key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+	await wait();
+	assert.equal(fixture.created, 1, 'The first send creates the session');
+	const create = fixture.calls.find((call) => call[0] === 'create');
+	assert.equal(create[1].title, 'Release notes');
+	assert.deepEqual(create[1].location, { directory: 'C:\\Vault' });
+	assert.equal(create[1].agent, 'plan');
+	assert.deepEqual(create[1].model, { id: 'm2', providerID: 'p', variant: 'high' });
 	assert.equal(view.sessions.state.selected.id, 'created-1');
-	assert.equal(view.sendButton.disabled, true, 'Empty input is not sent automatically');
-	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'true');
+	assert.equal(view.sessions.state.selected.title, 'Release notes');
+	const prompt = fixture.calls.find((call) => call[0] === 'prompt');
+	assert.equal(prompt[1].sessionID, 'created-1');
+	assert.equal(prompt[1].text, 'hello draft');
+	assert.equal(view.composer.value, '');
+
+	const menu = new Menu();
+	view.onPaneMenu(menu, 'more-options');
+	menu.items[1].click();
+	await wait();
+	assert.equal(view.sessions.state.selected, undefined);
+	assert.equal(view.agentSelect.value, 'build', 'A later draft returns to the default agent');
+	assert.equal(view.modelSelect.value, JSON.stringify(['p', 'm2', '']),
+		'A later draft reuses the remembered model');
+	assert.equal(view.variantSelect.value, 'high');
+	plugin.unload();
+});
+
+test('the switcher lists fresh sessions, marks the current one, and switching confirms unsent drafts without interrupting execution', async () => {
+	const { plugin, registrations, modals, Menu } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	const fixture = interactionClient();
+	view.connection.discover = async () => fixture.client;
+	await view.onOpen();
+	await wait();
+	await selectSession(view, 'old');
+	assert.equal(view.sessions.state.selected.id, 'old');
+
+	let menu = new Menu();
+	view.onPaneMenu(menu, 'more-options');
+	menu.items[0].click();
+	await wait();
+	const switcher = modals.at(-1);
+	assert.equal(switcher.isOpen, true);
+	assert.deepEqual(switcher.getItems().map((session) => session.id), ['new', 'old'],
+		'Fresh list, newest first, current vault only');
+	const current = switcher.getItems().find((session) => session.id === 'old');
+	const row = document.createElement('div');
+	switcher.renderSuggestion({ item: current, match: { score: 0, matches: [] } }, row);
+	assert.ok(row.classList.contains('is-current'), 'The current session is marked');
+	assert.match(row.textContent, /Old/);
+	assert.match(row.textContent, /Current/);
+	assert.match(row.textContent, /just now|min ago/);
+
+	switcher.onChooseItem(switcher.getItems().find((session) => session.id === 'new'));
+	await wait();
+	assert.equal(view.sessions.state.selected.id, 'new');
+	assert.match(view.messagesEl.textContent, /new transcript/);
+
+	view.composer.value = 'unsent draft';
+	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
+	menu = new Menu();
+	view.onPaneMenu(menu, 'more-options');
+	menu.items[0].click();
+	await wait();
+	const second = modals.at(-1);
+	second.onChooseItem(second.getItems().find((session) => session.id === 'old'));
+	await wait();
+	const confirm = modals.at(-1);
+	assert.equal(confirm.isOpen, true, 'Switching with a draft asks for confirmation');
+	click(confirm.contentEl.querySelectorAll('button')[0]);
+	await wait();
+	assert.equal(view.sessions.state.selected.id, 'new', 'Keeping the draft leaves the selection unchanged');
+	assert.equal(view.composer.value, 'unsent draft');
+
+	const interrupts = fixture.calls.filter((call) => call[0] === 'interrupt').length;
+	menu = new Menu();
+	view.onPaneMenu(menu, 'more-options');
+	menu.items[0].click();
+	await wait();
+	const third = modals.at(-1);
+	third.onChooseItem(third.getItems().find((session) => session.id === 'old'));
+	await wait();
+	const discard = modals.at(-1);
+	click(discard.contentEl.querySelectorAll('button')[1]);
+	await wait();
+	assert.equal(view.sessions.state.selected.id, 'old');
+	assert.equal(view.composer.value, '', 'Discarding clears the composer');
+	assert.match(view.messagesEl.textContent, /old transcript/);
+	assert.equal(fixture.calls.filter((call) => call[0] === 'interrupt').length, interrupts,
+		'Switching during execution does not stop the previous session');
 	plugin.unload();
 });
 
 test('conversation, agent, model, send, and stop controls use vault-scoped server state', async () => {
-	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+	const { plugin, registrations, Menu } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
-	const options = [...view.conversationSelect.options].map((option) => [option.value, option.textContent]);
-	assert.deepEqual(options, [['old', 'Old'], ['new', 'New']]);
+	await view.sessions.select('old');
+	await view.synchronization.open();
+	await wait();
 	assert.deepEqual([...view.agentSelect.options].map((option) => option.value), ['plan', 'build']);
 	assert.deepEqual([...view.modelSelect.options].map((option) => option.value).length, 2);
 	assert.deepEqual([...view.variantSelect.options].map((option) => option.value), ['', 'low', 'high']);
@@ -741,18 +1023,20 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	assert.equal(view.sendButton.disabled, true, 'Empty input disables send again');
 	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'true');
 
-	view.conversationSelect.value = 'new';
-	view.conversationSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await view.selectConversation('new');
 	await wait();
 	assert.match(view.messagesEl.textContent, /new transcript/);
 	assert.doesNotMatch(view.messagesEl.textContent, /old transcript/);
 
-	click(view.newButton);
+	const menu = new Menu();
+	view.onPaneMenu(menu, 'more-options');
+	menu.items[1].click();
 	await wait();
-	assert.equal(fixture.created, 1);
-	assert.equal(view.sessions.state.selected.id, 'created-1');
+	assert.equal(fixture.created, 0, 'New conversation stays a client-side draft');
+	assert.equal(view.sessions.state.selected, undefined);
+	assert.equal(view.getDisplayText(), 'New conversation');
 
-	await wait();
+	await selectSession(view, 'old');
 	assert.equal(view.stopButton.hidden, false, 'Stop is present while execution is running');
 	assert.equal(view.sendButton.hidden, true, 'Stop replaces Send while execution is running');
 	assert.equal(view.stopButton.disabled, false);
@@ -880,7 +1164,7 @@ test('slash completion loads the command catalog only after the first / and inse
 });
 
 test('a confirmed command clears the composer while a failed command keeps its text and reports an error', async () => {
-	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+	const { plugin, registrations } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
 	view.connection.discover = async () => fixture.client;
@@ -899,7 +1183,7 @@ test('a confirmed command clears the composer while a failed command keeps its t
 
 	await send('/review src/auth.ts');
 	assert.deepEqual(fixture.calls.find((call) => call[0] === 'command')[1],
-		{ sessionID: 'old', name: 'review', text: 'src/auth.ts' });
+		{ sessionID: 'created-1', name: 'review', text: 'src/auth.ts' });
 	assert.equal(fixture.calls.filter((call) => call[0] === 'prompt').length, 0,
 		'A known command is not sent as prompt text');
 	assert.equal(composer.value, '', 'A confirmed command clears the composer');
@@ -916,9 +1200,9 @@ test('a confirmed command clears the composer while a failed command keeps its t
 	plugin.unload();
 });
 
-test('plugin wires the filesystem vault path, persisted selection and authoritative reopen into its shared session owner', async () => {
+test('plugin opens a client-side draft and creates the server session on the first turn', async () => {
 	const { plugin, registrations, saved } = await createShell({
-		executablePath: 'opencode', selectedSession: { id: 'saved', directory: 'C:\\Vault' },
+		executablePath: 'opencode',
 		password: 'must not persist', messages: ['must not persist'],
 	});
 	const first = registrations.views.get('opencode-chat')({});
@@ -926,7 +1210,12 @@ test('plugin wires the filesystem vault path, persisted selection and authoritat
 	assert.equal(first.sessions, second.sessions);
 	let lists = 0;
 	let loads = 0;
-	const session = { id: 'saved', location: { directory: 'C:\\Vault' } };
+	let created = 0;
+	const creates = [];
+	const prompts = [];
+	const records = new Map();
+	const session = (id, title) => ({ id, title, location: { directory: 'C:\\Vault' },
+		time: { created: 1, updated: 1 } });
 	first.connection.discover = async () => ({
 		event: liveEvents,
 		agent: { list: async () => ({ data: [] }) },
@@ -935,20 +1224,47 @@ test('plugin wires the filesystem vault path, persisted selection and authoritat
 		session: {
 			active: async () => ({}),
 			form: { list: async () => [] },
-			list: async ({ directory }) => { assert.equal(directory, 'C:\\Vault'); lists++; return { data: [session], cursor: {} }; },
-			get: async () => session,
-			create: async () => assert.fail('Reopen must not create a session'),
+			list: async ({ directory }) => { assert.equal(directory, 'C:\\Vault'); lists++; return { data: [...records.values()], cursor: {} }; },
+			get: async ({ sessionID }) => records.get(sessionID),
+			create: async (input) => {
+				creates.push(structuredClone(input));
+				const createdSession = session(`saved-${++created}`, input.title);
+				records.set(createdSession.id, createdSession);
+				return createdSession;
+			},
+			prompt: async (input) => {
+				prompts.push(structuredClone(input));
+				return { id: input.id, sessionID: input.sessionID, type: 'user',
+					payload: { text: input.text }, delivery: 'queue' };
+			},
 		},
-		message: { list: async () => ({ data: [{ id: `m${++loads}`, text: 'server snapshot' }], cursor: {} }) },
+		message: { list: async ({ sessionID }) => ({ data: [{ id: `m${++loads}`, text: `snapshot ${sessionID}` }], cursor: {} }) },
 	});
 	await Promise.all([first.onOpen(), second.onOpen()]);
-	assert.equal(lists, 1);
-	assert.equal(loads, 1);
+	assert.equal(lists, 1, 'Two concurrent opens share one snapshot pass');
+	assert.equal(created, 0, 'Opening creates no server session');
+	assert.equal(loads, 0);
+	assert.equal(first.sessions.state.selected, undefined);
+	assert.equal(first.getDisplayText(), 'New conversation');
+
+	await first.sessions.setDraftTitle('First draft');
+	first.synchronization.refreshSession();
+	assert.equal(await first.synchronization.sendMessage('hello'), true);
+	assert.equal(created, 1, 'The first turn creates exactly one session');
+	assert.deepEqual(creates[0], { location: { directory: 'C:\\Vault' }, title: 'First draft' });
+	assert.equal(first.sessions.state.selected.id, 'saved-1');
+	assert.equal(prompts[0].sessionID, 'saved-1');
+	assert.equal(prompts[0].text, 'hello');
+	assert.equal(lists, 2);
+	assert.equal(loads, 2);
+
 	await first.onClose();
 	await first.onOpen();
+	assert.equal(created, 1, 'Reopening starts a draft, not another session');
+	assert.equal(first.sessions.state.selected, undefined);
+	assert.equal(first.getDisplayText(), 'New conversation');
+	assert.equal(lists, 3);
 	assert.equal(loads, 2);
-	assert.equal(first.sessions.state.messages[0].id, 'm2');
-	assert.deepEqual(saved.at(-1), { executablePath: 'opencode', autoStart: true, showReasoning: false,
-		selectedSession: { id: 'saved', directory: 'C:\\Vault' } });
+	assert.deepEqual(saved, [], 'The selected session is never persisted');
 	plugin.unload();
 });

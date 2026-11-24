@@ -31,6 +31,7 @@ function fixture(policy = {}) {
 	let snapshots = 0;
 	let invalidations = 0;
 	let selected = { id: 'one', location: { directory: root }, outcome: 'succeeded' };
+	let draftTitle;
 	let messages = [{ id: 'answer', type: 'assistant', content: [{ type: 'text', text: 'answer' }], time: { created: 1, completed: 2 } }];
 	let skills = [
 		{ id: 'skill-apply', name: 'apply', description: 'Apply a change', path: 'C:\\Vault\\skills\\apply.md', content: '# apply' },
@@ -80,15 +81,42 @@ function fixture(policy = {}) {
 	};
 	const sessions = {
 		vaultRoot: root,
-		selectedID: 'one',
+		get selectedID() { return selected?.id; },
+		get state() {
+			return { selected, draftTitle, messages, sessions: selected ? [selected] : [] };
+		},
 		async open(signal) {
 			calls.push(['snapshot', signal]); snapshots++;
-			const result = structuredClone({ selected, messages, sessions: [selected] });
+			const result = structuredClone({ selected, draftTitle, messages,
+				sessions: selected ? [selected] : [] });
 			await f.duringSnapshot?.(snapshots, signal);
 			return result;
 		},
 		async refreshSelected() {
 			calls.push('refreshSelected');
+			return structuredClone({ selected, draftTitle, messages, sessions: selected ? [selected] : [] });
+		},
+		async beginDraft() {
+			calls.push('beginDraft');
+			selected = undefined;
+			draftTitle = undefined;
+			messages = [];
+			return this.state;
+		},
+		async setDraftTitle(title) {
+			calls.push('setDraftTitle');
+			draftTitle = title;
+			return this.state;
+		},
+		applyDraftDefaults(agent, model) {
+			calls.push(['draftDefaults', agent, model]);
+			return this.state;
+		},
+		async create() {
+			calls.push('create');
+			selected = { id: 'created', location: { directory: root }, outcome: 'succeeded', title: draftTitle };
+			draftTitle = undefined;
+			messages = [];
 			return structuredClone({ selected, messages, sessions: [selected] });
 		},
 	};
@@ -119,6 +147,95 @@ test('lazy plugin-owned synchronization shares opens and subscribes before snaps
 	f.coordinator.assertReady();
 	f.lifetime.abort();
 	assert.equal(f.jobs.size, 0);
+});
+
+test('openDraft lists without creating a session and the first send materializes one with the draft title', async () => {
+	const f = fixture();
+	await f.coordinator.openDraft();
+	assert.equal(f.snapshots, 1);
+	assert.equal(f.calls.filter((call) => call === 'create').length, 0, 'Opening creates no server session');
+	assert.equal(f.coordinator.state.phase, 'ready');
+	assert.equal(f.coordinator.state.snapshot.selected, undefined);
+	assert.equal(f.coordinator.canOperate, false);
+	assert.equal(f.coordinator.canCompose, true, 'A draft can compose');
+
+	await f.sessions.setDraftTitle('Planned conversation');
+	assert.equal(await f.coordinator.sendMessage('first turn'), true);
+	assert.equal(f.calls.filter((call) => call === 'create').length, 1, 'The first send creates one session');
+	assert.deepEqual(f.calls.find((call) => call[0] === 'prompt')[1].sessionID, 'created');
+	assert.equal(f.coordinator.state.snapshot.selected.title, 'Planned conversation');
+	assert.equal(f.coordinator.canOperate, true);
+
+	f.streams.at(-1).end();
+	await tick();
+	f.run(10);
+	await tick();
+	assert.equal(f.coordinator.state.phase, 'ready');
+	assert.equal(f.calls.filter((call) => call === 'create').length, 1,
+		'Reconnecting reloads the selected session instead of creating another');
+	f.lifetime.abort();
+});
+
+test('a draft resolves the server configured default agent and model', async () => {
+	const f = fixture();
+	f.client.agent.list = async () => ({ data: [
+		{ id: 'plan', name: 'Plan', mode: 'primary', hidden: false },
+		{ id: 'build', name: 'Build', mode: 'primary', hidden: false },
+	] });
+	f.client.model.list = async () => ({ data: [
+		{ providerID: 'p', modelID: 'm1', id: 'm1', name: 'One', enabled: true, variants: [] },
+		{ providerID: 'p', modelID: 'm2', id: 'm2', name: 'Two', enabled: true, variants: [] },
+	] });
+	f.client.config = { get: async () => [{ type: 'document', info: { default_agent: 'plan' } }] };
+	f.client.model.default = async () => ({ location: { directory: root },
+		data: { providerID: 'p', modelID: 'm2', id: 'm2', name: 'Two', enabled: true, variants: [] } });
+	await f.coordinator.openDraft();
+	const defaults = f.calls.filter((call) => call[0] === 'draftDefaults').at(-1);
+	assert.deepEqual(defaults, ['draftDefaults', 'plan', { providerID: 'p', id: 'm2' }],
+		'Config agent and server default model seed the draft');
+	f.lifetime.abort();
+});
+
+test('a draft uses the remembered last model when the default agent has no model', async () => {
+	const model = (id) => ({ providerID: 'p', modelID: id, id, name: id, enabled: true, variants: [] });
+	const agents = [
+		{ id: 'plan', name: 'Plan', mode: 'primary', hidden: false },
+		{ id: 'build', name: 'Build', mode: 'primary', hidden: false },
+	];
+	const prepare = (f, config) => {
+		f.client.agent.list = async () => ({ data: agents });
+		f.client.model.list = async () => ({ data: [model('m1'), model('m2'), model('m3')] });
+		f.client.config = { get: async () => [{ type: 'document', info: config }] };
+		f.client.model.default = async () => ({ location: { directory: root }, data: model('m1') });
+	};
+	const defaultsOf = (f) => f.calls.filter((call) => call[0] === 'draftDefaults').at(-1);
+
+	const remembered = fixture();
+	prepare(remembered, { default_agent: 'plan' });
+	remembered.coordinator.useDraftPreferences({ lastModel: () => ({ providerID: 'p', id: 'm2' }) });
+	await remembered.coordinator.openDraft();
+	assert.deepEqual(defaultsOf(remembered), ['draftDefaults', 'plan', { providerID: 'p', id: 'm2' }],
+		'The remembered model beats the server default and first catalog entry');
+	remembered.lifetime.abort();
+
+	const configured = fixture();
+	prepare(configured, { default_agent: 'plan', model: { providerID: 'p', model: 'm3' } });
+	configured.coordinator.useDraftPreferences({ lastModel: () => ({ providerID: 'p', id: 'm2' }) });
+	await configured.coordinator.openDraft();
+	assert.deepEqual(defaultsOf(configured), ['draftDefaults', 'plan', { providerID: 'p', id: 'm3' }],
+		'An OpenCode configured default model outranks the remembered model');
+	configured.lifetime.abort();
+
+	const agentModel = fixture();
+	prepare(agentModel, { default_agent: 'plan', model: { providerID: 'p', model: 'm2' } });
+	agentModel.client.agent.list = async () => ({ data: [
+		{ ...agents[0], model: { providerID: 'p', id: 'm3' } }, agents[1],
+	] });
+	agentModel.coordinator.useDraftPreferences({ lastModel: () => ({ providerID: 'p', id: 'm1' }) });
+	await agentModel.coordinator.openDraft();
+	assert.deepEqual(defaultsOf(agentModel), ['draftDefaults', 'plan', { providerID: 'p', id: 'm3' }],
+		'The default agent model outranks both configured and remembered models');
+	agentModel.lifetime.abort();
 });
 
 test('live text batches publish incremental projection changes to subscribed views', async () => {
@@ -371,6 +488,33 @@ test('unrelated session events do not invalidate snapshot or live state; uncerta
 	f.coordinator.ingestion.drain();
 	assert.equal(f.coordinator.state.phase, 'retrying');
 	assert.equal(f.coordinator.state.conversation, undefined);
+	f.lifetime.abort();
+});
+
+test('session renames update the chrome without a transcript rebuild and deletion marks the selection unavailable', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	const before = f.snapshots;
+	const messages = f.coordinator.state.conversation.messages.length;
+	const renamed = event('session.renamed', { title: 'Renamed conversation' });
+	renamed.durable = { aggregateID: 'one', seq: eventID, version: 1 };
+	f.streams[0].push(renamed);
+	await tick();
+	assert.equal(f.coordinator.state.phase, 'ready');
+	assert.equal(f.coordinator.state.snapshot.selected.title, 'Renamed conversation');
+	assert.equal(f.coordinator.state.snapshot.sessions[0].title, 'Renamed conversation');
+	assert.equal(f.snapshots, before, 'A rename does not reload the transcript');
+	assert.equal(f.coordinator.state.conversation.messages.length, messages);
+
+	const deleted = event('session.deleted');
+	deleted.durable = { aggregateID: 'one', seq: eventID + 1, version: 2 };
+	f.streams[0].push(deleted);
+	await tick();
+	assert.equal(f.coordinator.state.phase, 'ready');
+	assert.equal(f.coordinator.state.snapshot.selected, undefined);
+	assert.equal(f.coordinator.state.snapshot.empty, 'unavailable');
+	assert.equal(f.coordinator.state.conversation, undefined);
+	assert.equal(f.coordinator.canOperate, false);
 	f.lifetime.abort();
 });
 

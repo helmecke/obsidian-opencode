@@ -14,6 +14,14 @@
   while shell commands, compaction, and injected text collapse behind short
   labels. Routine success or selection notices no longer interrupt the
   document. Failed or interrupted execution stays visible with its error detail.
+- Make conversations first-class documents: opening chat starts a client-side
+  **New conversation** draft and the OpenCode session is created with the first
+  message. The pane header, tab, and native `opencode / sessions / title`
+  breadcrumbs show and rename the title, the document menu offers **Switch
+  conversation…**, **New conversation**, and **Rename conversation…**, and a
+  fuzzy switcher resumes prior conversations. Draft agent, model, and thinking
+  use configured defaults, remember the last selected model, and apply to the
+  created session.
 
 ## 1.0.0 (2026-11-23)
 

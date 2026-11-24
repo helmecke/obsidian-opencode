@@ -121,29 +121,46 @@ details.
 
 ### Conversations
 
-- **New conversation** creates a session whose workspace is this vault's
-  absolute filesystem path. Creation is deduplicated when clicked repeatedly.
-  The icon button sits in the composer's bottom toolbar, next to the
-  **Conversation** selector; its name appears in a tooltip.
-- The **Conversation** list shows sessions belonging to this vault only. Choose
-  one to resume it. The last selected session is remembered. The selector is in
-  the composer's bottom toolbar and has no visible label; its name appears in a
-  tooltip.
-- Reopening chat reloads the selected conversation's authoritative messages from
-  OpenCode without creating a duplicate. If the saved conversation no longer
-  exists or was moved to another workspace, chat shows a recoverable empty state
-  and offers conversation selection or creation. It does not silently select a
-  different vault's conversation.
+- Opening chat with no chat view open starts a new conversation draft for this
+  vault's absolute filesystem path. No OpenCode session exists yet, so opening
+  chat does not leave empty sessions behind. When a chat view is already open,
+  the command reveals it without starting another conversation.
+- The OpenCode session is created with the first message sent from the draft.
+  If the draft was renamed first, that local title is applied to the created
+  session. Until then, the pane header and tab show **New conversation**.
+- A draft's **Agent**, **Model**, and **Thinking** controls start at the
+  server's configured defaults and stay editable; the choices are applied when
+  the first message creates the session. If the default agent has no model, the
+  draft reuses the model you last selected.
+- The pane header and the workspace tab show the current conversation's title.
+  A conversation without a title shows **New conversation**. Clicking the
+  header title edits it in place; Enter or leaving the field commits, Escape
+  cancels, and an empty title is ignored. A failed rename shows a notice and
+  keeps the previous title.
+- The document **⋯** menu and the tab's right-click menu offer **Switch
+  conversation…**, **New conversation**, and **Rename conversation…**.
+  **Switch conversation…** opens a fuzzy quick switcher over this vault's
+  conversations, refreshed each time it opens, newest updated first, with the
+  current conversation marked. Choosing a conversation loads its authoritative
+  messages. Cancelling leaves the current conversation selected.
+- The plugin does not restore a previously selected conversation on its own;
+  reopen a prior conversation through the switcher. If the selected conversation
+  no longer exists or was moved to another workspace, chat shows a recoverable
+  empty state and offers **Switch conversation…** or **New conversation**. It
+  does not silently select a different vault's conversation.
+- Switching conversations while one is executing continues that execution in
+  the background. Switching or creating a conversation with unsent composer
+  text asks before discarding it.
 
 ### Composing messages
 
 - The composer is one card. The message field sits above a bottom toolbar shared
-  by the conversation and message controls. The card follows the transcript's
-  reading column while **Readable line length** is enabled and uses the pane
-  width when it is off. The toolbar's left side holds the
-  connection and execution status, the **Conversation** selector, the
-  **New conversation** icon, and the **Retry discovery** icon; the **Agent** and
-  **Model** selectors and the round arrow-up **Send** button follow on the right.
+  by the status and message controls. The card follows the transcript's reading
+  column while **Readable line length** is enabled and uses the pane width when
+  it is off. The toolbar's left side holds the connection and execution status
+  and the **Retry discovery** icon; the **Agent** and **Model** selectors and
+  the round arrow-up **Send** button follow on the right. Conversation controls
+  live in the document menu, not the composer.
   A healthy connection collapses to one small icon whose tooltip carries the
   service mode and execution state; transitions and errors keep their text.
   The view has no separate header. Icon buttons show their name in a tooltip. The
@@ -245,9 +262,9 @@ retained text.
 
 OpenCode owns the transcript and execution. The plugin stores only the
 executable-path setting, the automatic-startup preference, the reasoning-display
-preference, the selected session ID plus its vault directory, and a transient
-record of a managed process PID for orphan cleanup; it does not duplicate
-transcripts or store service credentials.
+preference, the last selected model and variant, and a transient record of a
+managed process PID for orphan cleanup; it does not persist the selected
+conversation, duplicate transcripts, or store service credentials.
 
 ## Markdown and vault links
 

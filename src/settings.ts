@@ -1,13 +1,13 @@
 import { PluginSettingTab, Setting } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
+import type { ModelRef } from '@opencode/client';
 
-export interface SessionSelection { id: string; directory: string }
 export interface ManagedOrphan { pid: number; token: string }
 export interface OpenCodeSettings {
 	executablePath: string;
 	autoStart: boolean;
 	showReasoning: boolean;
-	selectedSession?: SessionSelection;
+	lastModel?: ModelRef;
 	managedOrphan?: ManagedOrphan;
 }
 
@@ -21,13 +21,17 @@ export function loadSettings(value: unknown): OpenCodeSettings {
 		autoStart: record.autoStart !== false,
 		showReasoning: record.showReasoning === true,
 	};
-	const selected = record.selectedSession;
-	if (selected && typeof selected === 'object' && 'id' in selected && 'directory' in selected
-		&& typeof selected.id === 'string' && selected.id.length > 0 && !unsafeText.test(selected.id)
-		&& typeof selected.directory === 'string' && selected.directory.length > 0 && !unsafeText.test(selected.directory)) {
-		settings.selectedSession = { id: selected.id, directory: selected.directory };
-	}
 	const orphan = record.managedOrphan;
+	const lastModel = record.lastModel;
+	if (lastModel && typeof lastModel === 'object' && 'providerID' in lastModel && 'id' in lastModel
+		&& typeof lastModel.providerID === 'string' && lastModel.providerID.length > 0 && !unsafeText.test(lastModel.providerID)
+		&& typeof lastModel.id === 'string' && lastModel.id.length > 0 && !unsafeText.test(lastModel.id)
+		&& (!('variant' in lastModel) || lastModel.variant === undefined
+			|| (typeof lastModel.variant === 'string' && !unsafeText.test(lastModel.variant)))) {
+		const variant = 'variant' in lastModel && typeof lastModel.variant === 'string' ? lastModel.variant : undefined;
+		settings.lastModel = { providerID: lastModel.providerID, id: lastModel.id,
+			...(variant ? { variant } : {}) };
+	}
 	if (orphan && typeof orphan === 'object' && 'pid' in orphan && 'token' in orphan
 		&& typeof orphan.pid === 'number' && Number.isSafeInteger(orphan.pid) && orphan.pid > 0
 		&& typeof orphan.token === 'string' && orphan.token.length > 0 && orphan.token.length <= 256

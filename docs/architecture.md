@@ -74,13 +74,35 @@ Plugin data holds only:
 - the executable-path override;
 - the automatic-startup preference;
 - the reasoning-display preference;
-- the selected session ID and its vault directory;
+- the last selected model and variant;
 - a transient managed-process PID and token for orphan cleanup.
 
-Transcripts, drafts, and service credentials are never stored. Reopening chat
-reloads authoritative messages from OpenCode. A saved session that is missing or
-belongs to another workspace produces a recoverable empty state rather than
-silently selecting a different conversation.
+The selected session is not persisted. `SessionCoordinator` keeps the selection
+or a client-side draft in its in-memory snapshot: opening chat starts a fresh
+conversation draft, and connecting or retrying reloads that snapshot's selected
+session without creating another. No server session is created until the first
+message is sent; the draft's optional local title is passed to
+`session.create` at that point. Transcripts, drafts, and service credentials are
+never stored. A selected session that is missing or belongs to another workspace
+produces a recoverable empty state rather than silently selecting a different
+conversation. Resuming a prior conversation is explicit through **Switch
+conversation…**. A draft resolves its default agent from `config.default_agent`
+(then `build`, then the first primary agent). Its model comes from the agent's
+own model, then the configured `model`, then the last model the user selected,
+then `model.default`, then the first enabled catalog model. Those selections are
+shown and can be changed in the draft, and are passed to `session.create`.
+
+## Chrome
+
+The pane header title and workspace tab mirror `ChatView.getDisplayText()`,
+which returns the selected session's title or **New conversation**. Obsidian has
+no public API to refresh a view title after open, so `ChatView` feature-detects
+the native `.view-header-title` node and the leaf's tab-title element and writes
+the text directly. The header hook also offers click-to-inline-rename; when the
+node or leaf element is absent the view degrades to the document menu's
+**Rename conversation…** action. A `session.renamed` event patches the snapshot
+and republishes, so external renames update the chrome without reloading the
+transcript. `session.deleted` marks the selection unavailable.
 
 Prompts use a stable `msg_` identity. If the connection fails before admission
 is confirmed, the draft stays in the composer as **Not confirmed**.

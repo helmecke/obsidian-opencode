@@ -58,6 +58,7 @@ export function installDom() {
 }
 
 export function createObsidian(app, notices = [], extra = {}) {
+	const modals = [];
 	class Component {
 		events = [];
 		cleanups = [];
@@ -79,7 +80,63 @@ export function createObsidian(app, notices = [], extra = {}) {
 		}
 	}
 	class ItemView extends Component {
-		constructor(leaf) { super(); this.leaf = leaf; this.app = app; this.contentEl = document.createElement('div'); }
+		constructor(leaf) {
+			super();
+			this.leaf = leaf;
+			this.app = app;
+			this.containerEl = document.createElement('div');
+			this.contentEl = document.createElement('div');
+			this.containerEl.appendChild(this.contentEl);
+		}
+	}
+	class Modal {
+		constructor(modalApp) {
+			this.app = modalApp;
+			this.containerEl = document.createElement('div');
+			this.modalEl = document.createElement('div');
+			this.titleEl = document.createElement('div');
+			this.contentEl = document.createElement('div');
+			this.modalEl.appendChild(this.titleEl);
+			this.modalEl.appendChild(this.contentEl);
+			this.containerEl.appendChild(this.modalEl);
+			this.isOpen = false;
+			modals.push(this);
+		}
+		open() { this.isOpen = true; this.onOpen(); }
+		close() { this.isOpen = false; this.onClose(); }
+		onOpen() {}
+		onClose() {}
+	}
+	class FuzzySuggestModal extends Modal {
+		constructor(modalApp) {
+			super(modalApp);
+			this.limit = 100;
+			this.inputEl = document.createElement('input');
+			this.contentEl.appendChild(this.inputEl);
+		}
+		setPlaceholder(placeholder) { this.inputEl.placeholder = placeholder; }
+		getSuggestions(query) {
+			const needle = query.toLowerCase();
+			return (this.getItems?.() ?? [])
+				.filter((item) => this.getItemText(item).toLowerCase().includes(needle))
+				.map((item) => ({ item, match: { score: 0, matches: [] } }));
+		}
+	}
+	class Menu {
+		constructor() { this.items = []; }
+		addItem(callback) {
+			const item = {
+				title: '', icon: undefined, disabled: false, click: undefined,
+				setTitle(value) { item.title = value; return item; },
+				setIcon(value) { item.icon = value; return item; },
+				setDisabled(value) { item.disabled = value; return item; },
+				onClick(callback2) { item.click = callback2; return item; },
+			};
+			callback(item);
+			this.items.push(item);
+			return this;
+		}
+		addSeparator() { return this; }
 	}
 	class AbstractInputSuggest {
 		constructor(suggestApp, textInputEl) {
@@ -127,8 +184,12 @@ export function createObsidian(app, notices = [], extra = {}) {
 		close() { this.isOpen = false; }
 	}
 	return {
+		modals,
 		Component,
 		ItemView,
+		Modal,
+		FuzzySuggestModal,
+		Menu,
 		AbstractInputSuggest,
 		prepareFuzzySearch(query) {
 			const needle = query.toLowerCase();

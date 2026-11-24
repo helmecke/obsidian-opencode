@@ -25,6 +25,56 @@
 	font-size: var(--font-ui-medium);
 }
 
+/* The pane header title doubles as the conversation title and inline editor. */
+.opencode-chat-title {
+	cursor: text;
+}
+
+.opencode-chat-title[contenteditable="true"] {
+	outline: none;
+	box-shadow: none;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.opencode-chat-breadcrumbs .view-header-breadcrumb:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+/* Match Obsidian's 150ms collapse of a note title's parent breadcrumbs. */
+.opencode-chat-breadcrumbs {
+	width: var(--opencode-breadcrumbs-width, auto);
+	opacity: var(--opencode-breadcrumbs-opacity, 1);
+	transition: opacity 150ms ease, width 150ms ease;
+}
+
+.opencode-chat-breadcrumbs.is-collapsed {
+	pointer-events: none;
+}
+
+.opencode-session-suggestion-title {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.opencode-session-suggestion-meta {
+	display: flex;
+	gap: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-session-suggestion-current {
+	color: var(--text-accent);
+	font-weight: var(--font-medium);
+}
+
+.opencode-rename-input {
+	width: 100%;
+}
+
 .opencode-composer-meta {
 	display: flex;
 	align-items: center;
@@ -74,13 +124,6 @@
 	overflow: hidden;
 	clip: rect(0 0 0 0);
 	white-space: nowrap;
-}
-
-.opencode-chat-select {
-	flex: 0 1 auto;
-	min-width: 0;
-	max-width: 13em;
-	text-overflow: ellipsis;
 }
 
 .opencode-chat-errors {
@@ -499,34 +542,6 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 }
 
 /* Match the flat, borderless vault switcher in the primary sidebar. */
-.opencode-chat-select {
-	min-width: 0;
-	height: auto;
-	padding: var(--size-4-1) var(--size-4-2);
-	border-radius: var(--radius-s);
-	background-color: transparent;
-	box-shadow: none;
-	color: var(--text-normal);
-	font-family: var(--font-interface);
-	font-size: var(--font-ui-small);
-	font-weight: var(--font-medium);
-	line-height: var(--line-height-tight);
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-.opencode-chat-select:hover:not(:disabled) {
-	background-color: var(--background-modifier-hover);
-	box-shadow: none;
-}
-
-.opencode-chat-select:focus,
-.opencode-chat-select:focus-visible {
-	box-shadow: none;
-	outline: none;
-}
-
 .opencode-composer-choice {
 	position: relative;
 	display: inline-flex;
@@ -551,7 +566,6 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	opacity: 1;
 }
 
-.opencode-chat-select:not(:hover),
 .opencode-composer-choice:not(:hover) {
 	background-color: transparent;
 }

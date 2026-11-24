@@ -189,6 +189,11 @@ export function validateEvent(value: unknown): V2Event {
 			validateModelRef(data.model);
 			break;
 		case 'session.moved': session(); break;
+		case 'session.renamed':
+			session();
+			asString(data.title);
+			break;
+		case 'session.deleted': session(); break;
 		case 'session.inbox.delivered':
 		case 'session.inbox.enqueued':
 		case 'session.inbox.cancelled':

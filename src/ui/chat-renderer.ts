@@ -17,8 +17,6 @@ const VAULT_ROOT_SOURCE = '';
 
 export interface ChatViewHandlers {
 	retryConnection(): void;
-	newConversation(): void;
-	chooseConversation(id: string): void;
 	send(): void;
 	retryPrompt(): void;
 	dismissPrompt(): void;
@@ -44,14 +42,12 @@ export class ChatRenderer {
 	private statusIconEl?: HTMLElement;
 	private statusTextEl?: HTMLElement;
 	private errorEl?: HTMLElement;
-	private conversationSelect?: HTMLSelectElement;
-	private newButton?: HTMLButtonElement;
 	private messagesEl?: HTMLElement;
 	private interactions?: ChatInteractionsPanel;
 	private composer?: ChatComposer;
 	private retryButton?: HTMLButtonElement;
 	private conversation?: ConversationRenderer;
-	private signatures = { sessions: '', errors: '' };
+	private signatures = { errors: '' };
 
 	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers,
 		private readonly showReasoning?: () => boolean) {}
@@ -60,11 +56,9 @@ export class ChatRenderer {
 	get retryElement(): HTMLButtonElement | undefined { return this.retryButton; }
 	get messagesElement(): HTMLElement | undefined { return this.messagesEl; }
 	get interactionsElement(): HTMLElement | undefined { return this.interactions?.element; }
-	get conversationSelectElement(): HTMLSelectElement | undefined { return this.conversationSelect; }
 	get agentSelectElement(): HTMLSelectElement | undefined { return this.composer?.agentSelect; }
 	get modelSelectElement(): HTMLSelectElement | undefined { return this.composer?.modelSelect; }
 	get variantSelectElement(): HTMLSelectElement | undefined { return this.composer?.variantSelect; }
-	get newButtonElement(): HTMLButtonElement | undefined { return this.newButton; }
 	get stopButtonElement(): HTMLButtonElement | undefined { return this.composer?.stopButton; }
 	get sendButtonElement(): HTMLButtonElement | undefined { return this.composer?.sendButton; }
 	get composerElement(): HTMLTextAreaElement | undefined { return this.composer?.element; }
@@ -82,7 +76,6 @@ export class ChatRenderer {
 		this.state = state;
 		this.viewError = viewError;
 		this.updateStatus();
-		this.updateConversations();
 		this.updateMessages();
 		this.interactions?.update(state);
 		this.composer?.update(state);
@@ -94,7 +87,7 @@ export class ChatRenderer {
 		this.conversation = undefined;
 		this.interactions?.dispose();
 		this.interactions = undefined;
-		this.signatures = { sessions: '', errors: '' };
+		this.signatures = { errors: '' };
 		this.contentEl = undefined;
 		this.opening = undefined;
 		this.scope = undefined;
@@ -103,8 +96,6 @@ export class ChatRenderer {
 		this.statusIconEl = undefined;
 		this.statusTextEl = undefined;
 		this.errorEl = undefined;
-		this.conversationSelect = undefined;
-		this.newButton = undefined;
 		this.messagesEl = undefined;
 		this.composer = undefined;
 		this.retryButton = undefined;
@@ -147,14 +138,6 @@ export class ChatRenderer {
 		});
 
 		const meta = this.composer.metaElement;
-		this.conversationSelect = meta.createEl('select', {
-			cls: 'opencode-chat-select',
-			attr: { 'aria-label': 'Conversation', title: 'Conversation' },
-		});
-		this.newButton = createIconButton(meta, {
-			icon: 'message-square-plus',
-			label: 'New conversation',
-		});
 		this.statusEl = meta.createDiv({
 			cls: 'opencode-chat-status',
 			attr: { role: 'status', 'aria-live': 'polite' },
@@ -190,7 +173,7 @@ export class ChatRenderer {
 			notify: (message) => { new Notice(message); },
 		};
 		attachLinkRouter(this.messagesEl, VAULT_ROOT_SOURCE, environment, opening);
-		if (!this.retryButton || !this.newButton || !this.composer) return;
+		if (!this.retryButton || !this.composer) return;
 		// AbstractInputSuggest declares an input element but only needs value, events and a rectangle.
 		const suggestions = new ComposerSuggest(
 			this.app, this.composer.element as unknown as HTMLInputElement, {
@@ -214,10 +197,6 @@ export class ChatRenderer {
 			opening.register(() => scope.unregister(sendKey));
 		}
 		opening.registerDomEvent(this.retryButton, 'click', () => this.handlers.retryConnection());
-		opening.registerDomEvent(this.newButton, 'click', () => this.handlers.newConversation());
-		opening.registerDomEvent(this.conversationSelect!, 'change', () => {
-			this.handlers.chooseConversation(this.conversationSelect!.value);
-		});
 	}
 
 	private updateStatus(): void {
@@ -300,34 +279,6 @@ export class ChatRenderer {
 
 	private agentLabel(agent: string): string {
 		return this.state?.agents?.find((item) => item.id === agent)?.name || agent;
-	}
-
-	private updateConversations(): void {
-		if (!this.state || !this.conversationSelect || !this.newButton) return;
-		const state = this.state;
-		const sessions = state.snapshot?.sessions ?? [];
-		const selected = state.snapshot?.selected?.id ?? '';
-		const signature = JSON.stringify([sessions.map((session) => [session.id, session.title ?? '']), selected,
-			state.phase === 'ready', state.snapshot?.empty]);
-		if (signature !== this.signatures.sessions) {
-			this.signatures.sessions = signature;
-			this.conversationSelect.empty();
-			if (!sessions.length) {
-				const empty = this.conversationSelect.createEl('option', { text: state.snapshot?.empty === 'unavailable'
-					? 'Saved conversation unavailable' : 'No conversations yet', value: '' });
-				empty.selected = true;
-			} else {
-				if (!selected) this.conversationSelect.createEl('option', { text: 'Choose a conversation', value: '' });
-				for (const session of sessions) {
-					this.conversationSelect.createEl('option', {
-						text: session.title || session.id, value: session.id,
-					});
-				}
-			}
-			this.conversationSelect.value = selected;
-		}
-		this.conversationSelect.disabled = state.phase !== 'ready' || sessions.length === 0;
-		setNativeDisabled(this.newButton, state.phase !== 'ready');
 	}
 
 	private updateMessages(): void {

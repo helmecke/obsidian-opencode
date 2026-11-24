@@ -74,21 +74,33 @@ test('reasoning display is opt-in and missing or non-boolean values read as off'
 });
 
 test('reasoning display does not change the parsing of the other stored fields', () => {
-	const selectedSession = { id: 'one', directory: 'C:\\Vault' };
 	const managedOrphan = { pid: 42, token: 'abc' };
 	assert.deepEqual(loadSettings({
 		executablePath: 'C:\\Program Files\\OpenCode\\opencode.exe', autoStart: false,
-		showReasoning: true, selectedSession, managedOrphan,
+		showReasoning: true, managedOrphan,
+		selectedSession: { id: 'one', directory: 'C:\\Vault' },
 	}), {
 		executablePath: 'C:\\Program Files\\OpenCode\\opencode.exe', autoStart: false,
-		showReasoning: true, selectedSession, managedOrphan,
-	});
+		showReasoning: true, managedOrphan,
+	}, 'Legacy session selection is not persisted');
 	assert.deepEqual(loadSettings({
 		executablePath: 'bad\npath', autoStart: 'no', showReasoning: 'yes',
 		selectedSession: { id: '', directory: 'C:\\Vault' },
 		managedOrphan: { pid: -1, token: 'abc' },
 	}), { executablePath: '', autoStart: true, showReasoning: false },
 	'Unknown or invalid values stay out of the stored shape');
+});
+
+test('the last selected model is validated and kept for draft defaults', () => {
+	assert.deepEqual(loadSettings({ lastModel: { providerID: 'p', id: 'm', variant: 'high' } }).lastModel,
+		{ providerID: 'p', id: 'm', variant: 'high' });
+	assert.deepEqual(loadSettings({ lastModel: { providerID: 'p', id: 'm', unexpected: 'x' } }).lastModel,
+		{ providerID: 'p', id: 'm' });
+	for (const lastModel of [undefined, null, {}, { providerID: '', id: 'm' },
+		{ providerID: 'p', id: '' }, { providerID: 'p\n', id: 'm' }, { providerID: 'p', id: 'm', variant: 1 }]) {
+		assert.equal(loadSettings({ lastModel }).lastModel, undefined,
+			`${JSON.stringify(lastModel)} is not persisted`);
+	}
 });
 
 test('settings tab shows Show reasoning unchecked, updates the setting, and saves before notifying', async () => {

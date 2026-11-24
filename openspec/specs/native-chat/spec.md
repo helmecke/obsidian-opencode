@@ -13,17 +13,6 @@ The plugin SHALL expose chat as a regular desktop Obsidian view, reachable throu
 - **WHEN** the user opens chat and moves it between a main tab and a sidebar
 - **THEN** the conversation remains usable and adopts the active Obsidian theme in both locations
 
-### Requirement: Persistent conversation selection
-The user SHALL be able to create a conversation and list and resume conversations belonging to the current vault. The plugin SHALL restore the last selected conversation when it remains available and present a recoverable empty state otherwise.
-
-#### Scenario: Reopen a conversation
-- **WHEN** the user reopens chat after selecting a conversation previously
-- **THEN** its saved messages are restored without creating a duplicate conversation
-
-#### Scenario: Previous conversation is unavailable
-- **WHEN** the saved conversation no longer exists or belongs to another workspace
-- **THEN** the plugin offers conversation selection or creation without silently selecting another vault's conversation
-
 ### Requirement: Streamed message composition
 The view SHALL offer multiline message input, explicit sending, incremental response display, and visible connection and execution states. A failed or uncertain send SHALL retain recoverable input and SHALL NOT be automatically resent with a new identity.
 
@@ -81,19 +70,19 @@ The view SHALL present the message field, send action, agent selector, model sel
 - **THEN** the composer card, its controls, and focus indicators adopt the active theme and remain legible
 
 ### Requirement: Consolidated composer controls
-The view SHALL present the conversation selector, new-conversation action, connection and execution status, and discovery retry inside the composer region. It SHALL NOT reserve separate fixed rows above the transcript for these controls. Every control SHALL remain keyboard reachable with an accessible name, and the region SHALL wrap or compact them in narrow sidebars without hiding the status.
+The view SHALL present the connection and execution status and discovery retry inside the composer region. It SHALL NOT reserve separate fixed rows above the transcript for these controls, and conversation switching, creation, and renaming SHALL be offered through the view's document menu instead of the composer. Every control SHALL remain keyboard reachable with an accessible name, and the region SHALL wrap or compact them in narrow sidebars without hiding the status.
 
 #### Scenario: Ready conversation
 - **WHEN** the chat view is ready with a service connection
-- **THEN** the composer shows the connected service mode and current execution state together with the conversation selector, new-conversation action, and Retry discovery
+- **THEN** the composer shows the connected service mode and current execution state together with Retry discovery
 
 #### Scenario: Connection failure
 - **WHEN** discovery fails or the retry budget is exhausted
 - **THEN** the composer shows the failure status and enables Retry discovery in the same region, and activating it retries discovery
 
 #### Scenario: Switch or create a conversation
-- **WHEN** the user chooses a conversation from the composer selector or activates New conversation
-- **THEN** the existing selection or creation flow runs and the composer remains the control surface for the conversation
+- **WHEN** the user chooses **Switch conversation…** or **New conversation** from the document menu
+- **THEN** the session selection or new-conversation draft flow runs and the composer remains the control surface for the conversation
 
 #### Scenario: No separate header
 - **WHEN** the chat view is rendered
@@ -101,7 +90,7 @@ The view SHALL present the conversation selector, new-conversation action, conne
 
 #### Scenario: Narrow sidebar
 - **WHEN** the view is resized to a narrow sidebar
-- **THEN** the composer meta controls wrap without horizontal scrolling and the status stays readable
+- **THEN** the composer status and retry controls wrap without horizontal scrolling and the status stays readable
 
 ### Requirement: Document-like transcript
 The transcript SHALL read as one continuous Markdown document in the active Obsidian theme. User prompts SHALL appear as quoted asides in a shared reading column that follows Obsidian's **Readable line length** setting and the theme's note width, assistant answers SHALL use native reading typography and block spacing, and supporting detail SHALL appear as collapsed inline disclosures rather than framed cards.
