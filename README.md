@@ -279,12 +279,34 @@ version does not attach the active editor as a source note.
 
 - Note names, vault-relative paths, aliases, headings, and block references use
   Obsidian's internal-link resolution.
-- Activating a resolved link opens it in a separate leaf, leaving the chat
-  conversation available.
 - An unresolved link or a contextless self-reference such as `[[#Heading]]`
   produces a non-destructive notice. It never creates or modifies a file.
 - Hover previews are deferred and not part of this version's navigation
   contract.
+
+Activating a resolved link follows Obsidian's modifier contract without
+navigating the chat or closing the conversation:
+
+| Action | Result |
+| --- | --- |
+| Click | Opens the note in an existing note tab, preferring one outside the chat's tab group; opens a new tab in the chat's tab group when no note tab is available. |
+| Cmd/Ctrl+click or middle-click | Opens the note in a new tab in the chat's current tab group. |
+| Cmd/Ctrl+Alt+click | Opens the note in the note group beside the chat. |
+| Cmd/Ctrl+Alt+Shift+click | Opens the note in a new window. |
+
+The note group is created to the right of the chat the first time you use
+Cmd/Ctrl+Alt+click. Later Cmd/Ctrl+Alt-clicks add tabs to that group. A note that
+is already open there is focused with its heading or block target applied, not
+added twice. If you close the group, the next Cmd/Ctrl+Alt+click creates a new
+one. The group belongs to that chat tab and is forgotten when the tab closes or
+the plugin reloads. New tabs follow Obsidian's **Always focus new tabs**
+preference.
+
+Every row preserves a heading or block target in the link.
+
+The note group opens as ordinary tabs. To stack them, right-click the group's
+tab header and choose **Stack notes** once; Obsidian remembers that presentation
+for the group. The plugin does not change it for you.
 
 ## Tool activity, permissions, and forms
 

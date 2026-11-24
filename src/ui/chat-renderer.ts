@@ -1,11 +1,12 @@
 import { Component, Notice, setIcon, setTooltip } from 'obsidian';
-import type { App, Scope } from 'obsidian';
+import type { App, OpenViewState, PaneType, Scope, TFile } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
 import { ConversationRenderer } from './conversation';
 import type { MarkdownLike } from './conversation';
-import { attachLinkRouter, MarkdownBlock } from './markdown';
+import { attachLinkRouter, MarkdownBlock, splitInternalLink } from './markdown';
 import type { LinkEnvironment } from './markdown';
+import { appendTab, LinkStack, reservedNoteLeaf } from './link-stack';
 import type { FormValue } from './form-card';
 import type { PermissionDecision } from './permission-card';
 import { ChatComposer } from './chat-composer';
@@ -50,7 +51,7 @@ export class ChatRenderer {
 	private signatures = { errors: '' };
 
 	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers,
-		private readonly showReasoning?: () => boolean) {}
+		private readonly showReasoning?: () => boolean, private readonly linkStack?: LinkStack) {}
 
 	get statusElement(): HTMLElement | undefined { return this.statusEl; }
 	get retryElement(): HTMLButtonElement | undefined { return this.retryButton; }
@@ -169,7 +170,7 @@ export class ChatRenderer {
 		});
 		const environment: LinkEnvironment = {
 			resolve: (linkpath, sourcePath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath),
-			open: (href, sourcePath) => { void this.app.workspace.openLinkText(href, sourcePath, true); },
+			open: (href, sourcePath, paneType) => this.openLink(href, sourcePath, paneType),
 			notify: (message) => { new Notice(message); },
 		};
 		attachLinkRouter(this.messagesEl, VAULT_ROOT_SOURCE, environment, opening);
@@ -197,6 +198,62 @@ export class ChatRenderer {
 			opening.register(() => scope.unregister(sendKey));
 		}
 		opening.registerDomEvent(this.retryButton, 'click', () => this.handlers.retryConnection());
+	}
+
+	/**
+	 * Route a link by the pointer's pane type. The chat leaf never navigates. A
+	 * plain click reuses an existing note tab, preferring one outside the chat's
+	 * group; a new tab and a plain click without a note tab are appended to the
+	 * chat's own split.
+	 */
+	private openLink(href: string, sourcePath: string, paneType: PaneType | boolean): void {
+		const workspace = this.app.workspace;
+		if (paneType === 'split') {
+			if (this.linkStack) this.linkStack.open(href, sourcePath);
+			else void workspace.openLinkText(href, sourcePath, 'split');
+			return;
+		}
+		if (paneType === 'window') {
+			void workspace.openLinkText(href, sourcePath, 'window');
+			return;
+		}
+		const newTab = paneType === 'tab' || paneType === true;
+		const file = this.linkFile(href, sourcePath);
+		if (!file) {
+			void workspace.openLinkText(href, sourcePath, newTab ? 'tab' : false);
+			return;
+		}
+		const chat = this.linkStack?.chatLeaf;
+		if (!newTab) {
+			const reserved = reservedNoteLeaf(workspace, chat);
+			if (reserved) {
+				void reserved.openFile(file, this.linkOpenState(href));
+				return;
+			}
+		}
+		// A new tab, and a plain click with no reusable note tab, belong to the
+		// split that holds the chat, not the last focused split or a new group.
+		const leaf = chat ? appendTab(workspace, chat) : undefined;
+		if (!leaf) {
+			void workspace.openLinkText(href, sourcePath, 'tab');
+			return;
+		}
+		void leaf.openFile(file, this.linkOpenState(href));
+	}
+
+	private linkFile(href: string, sourcePath: string): TFile | null {
+		const { linkpath } = splitInternalLink(href);
+		if (!linkpath) return null;
+		try {
+			return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+		} catch {
+			return null;
+		}
+	}
+
+	private linkOpenState(href: string): OpenViewState {
+		const { subpath } = splitInternalLink(href);
+		return subpath ? { active: true, eState: { subpath } } : { active: true };
 	}
 
 	private updateStatus(): void {

@@ -21,6 +21,15 @@ class Component {
 }
 const obsidian = {
 	Component,
+	Keymap: {
+		isModEvent(event) {
+			const modifier = event.metaKey || event.ctrlKey;
+			if (modifier && event.altKey && event.shiftKey) return 'window';
+			if (modifier && event.altKey) return 'split';
+			if (modifier || event.button === 1) return 'tab';
+			return false;
+		},
+	},
 	MarkdownRenderer: {
 		async render(_app, markdown, el) {
 			rendered.push(markdown);
@@ -73,14 +82,18 @@ test('link routing resolves against stable source context and rejects unresolved
 	assert.deepEqual(calls.slice(0, 2), [['Notes/Example', ''], ['Example', '']]);
 });
 
-test('internal anchor clicks are intercepted before MarkdownRenderer and open a non-chat leaf', () => {
+test('internal anchor clicks are intercepted before MarkdownRenderer and forward the pointer pane type', () => {
 	const root = document.createElement('div');
 	const opened = [];
 	const notified = [];
+	const groups = [];
 	const events = [];
 	const environment = {
 		resolve: (linkpath) => linkpath === 'Note' ? { path: 'Note.md' } : null,
-		open: (href, sourcePath) => opened.push([href, sourcePath]),
+		open: (href, sourcePath, paneType) => {
+			opened.push([href, sourcePath, paneType]);
+			if (paneType === 'split') groups.push(href);
+		},
 		notify: (message) => notified.push(message),
 	};
 	attachLinkRouter(root, '', environment, { registerDomEvent: (_el, event, callback) => events.push([event, callback]) });
@@ -99,16 +112,46 @@ test('internal anchor clicks are intercepted before MarkdownRenderer and open a 
 	handler(click);
 	assert.equal(prevented, true);
 	assert.equal(stopped, true);
-	assert.deepEqual(opened, [['Note#Heading', '']]);
+	assert.deepEqual(opened, [['Note#Heading', '', false]], 'A plain click forwards no pane type');
 	assert.deepEqual(notified, []);
+	assert.deepEqual(groups, [], 'A plain click never creates the note group');
+
+	const modifierClicks = [
+		['tab', { ctrlKey: true }],
+		['tab', { button: 1 }],
+		['split', { ctrlKey: true, altKey: true }],
+		['window', { ctrlKey: true, altKey: true, shiftKey: true }],
+	];
+	for (const [paneType, init] of modifierClicks) {
+		const event = new window.MouseEvent('click', { bubbles: true, cancelable: true, ...init });
+		Object.defineProperty(event, 'target', { value: anchor });
+		handler(event);
+		assert.deepEqual(opened.at(-1), ['Note#Heading', '', paneType]);
+	}
+	assert.deepEqual(groups, ['Note#Heading'], 'Only the split modifier reaches the note group');
+
 	const missing = document.createElement('a');
 	missing.className = 'internal-link';
 	missing.setAttribute('data-href', 'Missing');
 	root.appendChild(missing);
-	const missingClick = new window.MouseEvent('click', { bubbles: true, cancelable: true });
+	const openedBeforeUnresolved = opened.length;
+	const missingClick = new window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true, altKey: true });
 	Object.defineProperty(missingClick, 'target', { value: missing });
 	handler(missingClick);
 	assert.deepEqual(notified, [UNRESOLVED_LINK]);
+	assert.equal(opened.length, openedBeforeUnresolved, 'An unresolved click never opens');
+	assert.deepEqual(groups, ['Note#Heading'], 'An unresolved click never creates the note group');
+
+	const contextless = document.createElement('a');
+	contextless.className = 'internal-link';
+	contextless.setAttribute('data-href', '#Heading');
+	root.appendChild(contextless);
+	const contextlessClick = new window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true, altKey: true });
+	Object.defineProperty(contextlessClick, 'target', { value: contextless });
+	handler(contextlessClick);
+	assert.deepEqual(notified, [UNRESOLVED_LINK, CONTEXTLESS_LINK]);
+	assert.equal(opened.length, openedBeforeUnresolved, 'A contextless click never opens');
+	assert.deepEqual(groups, ['Note#Heading'], 'A contextless click never creates the note group');
 	assert.equal(originalTarget, null);
 });
 

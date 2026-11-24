@@ -1,5 +1,5 @@
-import { Component, MarkdownRenderer } from 'obsidian';
-import type { App } from 'obsidian';
+import { Component, Keymap, MarkdownRenderer } from 'obsidian';
+import type { App, PaneType } from 'obsidian';
 
 export interface Timer {
 	set(callback: () => void, delay: number): unknown;
@@ -113,8 +113,8 @@ export function splitInternalLink(raw: string): InternalLinkTarget {
 export interface LinkEnvironment {
 	/** Obsidian metadata resolution; never creates a file. */
 	resolve(linkpath: string, sourcePath: string): { readonly path: string } | null;
-	/** Non-chat-leaf navigation preserving heading/block subpaths. */
-	open(href: string, sourcePath: string): void;
+	/** Non-chat-leaf navigation preserving heading/block subpaths and the pointer's pane type. */
+	open(href: string, sourcePath: string, paneType: PaneType | boolean): void;
 	notify(message: string): void;
 }
 
@@ -157,8 +157,9 @@ export function attachLinkRouter(container: HTMLElement, sourcePath: string,
 		event.stopPropagation();
 		const decision = decideInternalLink(raw, sourcePath, environment);
 		if (decision.kind === 'unresolved') { environment.notify(decision.message); return; }
-		// Always a separate leaf: navigating the chat leaf would hide the conversation.
-		environment.open(decision.href, sourcePath);
+		// Never navigate the chat leaf: the destination comes from the pointer,
+		// using the same modifier translation as Obsidian's own link handler.
+		environment.open(decision.href, sourcePath, Keymap.isModEvent(event));
 	}, { capture: true });
 }
 

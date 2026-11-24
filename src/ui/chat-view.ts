@@ -8,6 +8,7 @@ import type { SessionCoordinator } from '../opencode/sessions';
 import type { SynchronizationCoordinator, SynchronizationState } from '../state/synchronization';
 import { ChatRenderer } from './chat-renderer';
 import type { ChatViewHandlers } from './chat-renderer';
+import { LinkStack } from './link-stack';
 import { ConfirmDiscardModal, RenameSessionModal, SessionSwitcherModal } from './session-switcher';
 
 export const CHAT_VIEW_TYPE = 'opencode-chat';
@@ -25,6 +26,7 @@ interface TabTitleLeaf {
 export class ChatView extends ItemView {
 	private opening?: Component;
 	private renderer?: ChatRenderer;
+	private linkStack?: LinkStack;
 	private viewError?: string;
 	private loadingOptions = false;
 	private titleEditing = false;
@@ -76,7 +78,12 @@ export class ChatView extends ItemView {
 		this.contentEl.addClass('opencode-chat');
 		this.applyReadableLineWidth();
 		this.watchReadableLineWidth(opening);
-		const renderer = new ChatRenderer(this.app, this.handlers(), this.showReasoning);
+		const linkStack = new LinkStack(this.app, this.leaf);
+		this.linkStack = linkStack;
+		opening.register(() => {
+			if (this.linkStack === linkStack) this.linkStack = undefined;
+		});
+		const renderer = new ChatRenderer(this.app, this.handlers(), this.showReasoning, linkStack);
 		this.renderer = renderer;
 		renderer.mount(this.contentEl, opening, this.scope!);
 		opening.register(this.synchronization.subscribe(() => this.refresh()));

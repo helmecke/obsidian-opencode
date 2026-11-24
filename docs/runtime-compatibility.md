@@ -808,8 +808,36 @@ OpenCode 2.3.2, Obsidian 1.15.1). The user reported all checks passing:
   running; closing the view did not interrupt execution.
 - No deviations, console errors, or plugin errors were reported.
 
+## Chat link modifier navigation (2026-11-24)
+
+Chat answers now follow Obsidian's pointer modifiers instead of always opening a
+new tab. A plain click reuses an existing note tab, preferring one outside the
+chat's tab group, and otherwise opens a tab beside the chat; Cmd/Ctrl+click
+always opens a new tab in the chat's current tab group. Cmd/Ctrl+Alt+click opens
+in one sticky note group beside the chat, and Cmd/Ctrl+Alt+Shift+click opens a
+new window. The router uses the public `Keymap.isModEvent(event)` translation and
+never navigates the chat leaf.
+
+Known limitation: the **Always focus new tabs** preference is read through
+`app.vault.getConfig('focusNewTab')`, which Obsidian's published typings and
+plugin API do not declare. The read is runtime-guarded. When the method is
+missing or throws, the plugin focuses the opened document, which matches the
+default preference. An explicit `false` opens a new group document in the
+background; an existing group tab is still focused. The note group is remembered
+in memory only, so a plugin reload or Obsidian restart starts a fresh group
+rather than adopting an existing one.
+
+Automated coverage: `tests/markdown.test.mjs` asserts that each pane type reaches
+the router's open callback and that unresolved or contextless links neither open
+nor create a group. `tests/link-stack.test.mjs` covers first-use creation,
+appending, dedupe with heading and block subpaths, recreation after close,
+per-chat-tab scope, reserved note-tab selection, and the focus fallback. Live
+Obsidian acceptance of each modifier row is still pending and is not claimed
+here.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-24 | `chat-link-stack` | 12/12 | 253 passing | pass | `openspec/changes/archive/2026-11-24-chat-link-stack` |
 | 2026-11-24 | `refactor-session-management` | 20/20 | 242 passing | pass | `openspec/changes/archive/2026-11-24-refactor-session-management` |
 | 2026-11-23 | `add-reasoning-visibility-setting` | 13/13 | 224 passing | pass | `openspec/changes/archive/2026-11-23-add-reasoning-visibility-setting` |
 | 2026-11-23 | `streamline-chat-transcript` | 15/15 | 216 passing | pass | `openspec/changes/archive/2026-11-23-streamline-chat-transcript` |
