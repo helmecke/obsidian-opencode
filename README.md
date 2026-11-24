@@ -218,6 +218,10 @@ details.
   hidden by default. Hovering or focusing a row swaps the icon for a chevron that
   points down while the row is open. Expanded details stay plain text, and long
   previews truncate instead of widening the column.
+- A delegated subagent's report appears where it occurred as an Obsidian embed,
+  titled with the agent and task description and rendered as Markdown with its
+  links. A cancelled report says so in the title. Other injected skill or system
+  text stays collapsed.
 - Shell commands, compaction, and injected skill or system text stay collapsed
   behind a short label and expand on request.
 - The transcript stays quiet about routine success and agent, model, or

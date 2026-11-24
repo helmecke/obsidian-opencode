@@ -42,7 +42,7 @@ interface Entry {
 	readonly parts: Map<string, Part>;
 	readonly markdowns: Set<MarkdownLike>;
 	readonly tools: Set<ToolEntry>;
-	kind: 'user' | 'assistant' | 'notice' | 'disclosure';
+	kind: 'user' | 'assistant' | 'notice' | 'disclosure' | 'embed';
 	signature: string;
 	footnote?: HTMLElement;
 	footnoteSignature: string;
@@ -59,6 +59,43 @@ function isSuppressed(message: SessionMessageInfo): boolean {
 function oneLine(text: string, max: number): string {
 	const collapsed = text.replace(/\s+/g, ' ').trim();
 	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
+}
+
+interface SubagentResult {
+	readonly caption: string;
+	readonly body: string;
+}
+
+/** Metadata values are untrusted JSON; anything but a string is treated as absent. */
+function metadataText(metadata: { readonly [key: string]: unknown } | undefined, key: string): string {
+	const value = metadata?.[key];
+	return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Remove the service's one outer envelope, leaving the report Markdown untouched. */
+function stripSubagentWrapper(text: string): string {
+	return text
+		.replace(/^\s*<subagent\b[^>]*>/i, '')
+		.replace(/<\/subagent>\s*$/i, '')
+		.trim();
+}
+
+/** A subagent result is recognized only from the record's metadata, never its text. */
+function subagentResult(message: SessionMessageInfo): SubagentResult | undefined {
+	if (message.type !== 'synthetic' || typeof message.text !== 'string') return undefined;
+	const metadata = message.metadata;
+	if (!metadata || metadata.source !== 'subagent') return undefined;
+	const agent = metadataText(metadata, 'agent');
+	// The service puts the task description on the record; some payloads also carry it in metadata.
+	const recordDescription = typeof message.description === 'string' ? message.description.trim() : '';
+	const description = metadataText(metadata, 'description') || recordDescription;
+	const state = metadataText(metadata, 'state');
+	const caption = [
+		agent ? `${agent} subagent` : 'Subagent',
+		description ? oneLine(description, maxPreviewCharacters) : '',
+		state && state !== 'completed' ? 'cancelled' : '',
+	].filter(Boolean).join(' · ');
+	return { caption, body: stripSubagentWrapper(message.text) };
 }
 
 const maxPreviewCharacters = 80;
@@ -117,13 +154,14 @@ function entryLabel(message: SessionMessageInfo): string {
 	if (message.type === 'compaction') return 'Compaction';
 	if (message.type === 'shell') return 'Shell';
 	if (message.type === 'skill') return 'Skill';
-	if (message.type === 'synthetic') return 'Synthetic note';
+	if (message.type === 'synthetic') return subagentResult(message)?.caption ?? 'Synthetic note';
 	return 'System note';
 }
 
 function entryKind(message: SessionMessageInfo): Entry['kind'] {
 	if (message.type === 'user') return 'user';
 	if (message.type === 'assistant') return 'assistant';
+	if (subagentResult(message)) return 'embed';
 	if (message.type === 'idle' || message.type === 'compaction') return 'notice';
 	return 'disclosure';
 }
@@ -166,7 +204,8 @@ export class ConversationRenderer {
 
 	private createEntry(id: string, message: SessionMessageInfo): Entry {
 		const kind = entryKind(message);
-		const root = this.container.createDiv({ cls: `opencode-message opencode-message-${message.type}` });
+		const rootClass = `opencode-message opencode-message-${message.type}${kind === 'embed' ? ' opencode-message-subagent' : ''}`;
+		const root = this.container.createDiv({ cls: rootClass });
 		root.setAttribute('role', 'group');
 		root.setAttribute('aria-label', entryLabel(message));
 		const body = root.createDiv({ cls: `opencode-message-body opencode-message-body-${kind}` });
@@ -200,6 +239,10 @@ export class ConversationRenderer {
 	private updateEntry(entry: Entry, message: SessionMessageInfo, footnote?: FootnoteInfo): void {
 		if (entry.kind === 'notice') {
 			this.updateNotice(entry, message);
+			return;
+		}
+		if (entry.kind === 'embed') {
+			this.updateEmbed(entry, message);
 			return;
 		}
 		if (entry.kind === 'disclosure') {
@@ -273,6 +316,25 @@ export class ConversationRenderer {
 		} else {
 			entry.body.createDiv({ cls: 'opencode-notice', text });
 		}
+	}
+
+	private updateEmbed(entry: Entry, message: SessionMessageInfo): void {
+		const result = subagentResult(message);
+		if (!result) return;
+		const signature = `${result.caption}\n${result.body}`;
+		if (entry.signature === signature) return;
+		entry.signature = signature;
+		entry.root.setAttribute('aria-label', result.caption);
+		for (const markdown of entry.markdowns) markdown.dispose();
+		entry.markdowns.clear();
+		entry.body.empty();
+		const embed = entry.body.createDiv({ cls: 'internal-embed markdown-embed inline-embed is-loaded' });
+		embed.createDiv({ cls: 'embed-title markdown-embed-title', text: result.caption });
+		const content = embed.createDiv({ cls: 'markdown-embed-content' });
+		const preview = content.createDiv({ cls: 'markdown-preview-view markdown-rendered' });
+		const markdown = this.options.createMarkdown(preview);
+		entry.markdowns.add(markdown);
+		markdown.set(result.body, true);
 	}
 
 	private updateDisclosure(entry: Entry, message: SessionMessageInfo): void {

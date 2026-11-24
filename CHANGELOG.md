@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Delegated subagent reports now appear where they occurred as a native Markdown
+  embed titled with the agent and task description, instead of a collapsed
+  **Synthetic note**. The report keeps its Markdown and links, a cancelled result
+  says so in the title, and other injected text stays collapsed.
 - Answers now read with the theme's own reading typography: text size, line
   height, paragraph spacing, note margins, and reading width come from the
   theme's reading view, so a theme or snippet that changes how notes read

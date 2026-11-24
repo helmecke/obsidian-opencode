@@ -57,6 +57,10 @@ test('both sides of a prompt use the same spacing step as prose', () => {
 		'The plugin keeps no spacing token of its own');
 });
 
+test('a subagent embed is separated from the flow by the paragraph step', () => {
+	assert.match(ruleBody('.opencode-message-subagent'), /margin-block: var\(--p-spacing\)/);
+});
+
 test('the reading measure uses the theme note margin as its floor', () => {
 	const setting = ruleBody('.opencode-chat.is-readable-line-width');
 	assert.match(setting, /--file-margins-x/);

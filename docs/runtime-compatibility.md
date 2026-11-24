@@ -906,8 +906,54 @@ only, that the transcript defers padding to the host, that prose seams, detail
 groups and turns use `--p-spacing` with no plugin spacing token, that a group's
 rows stay tight, and that the reading measure uses `--file-margins-x`.
 
+## Subagent result embeds (2026-11-24)
+
+Subagent reports now render at their transcript position as an attributed native
+Markdown embed instead of a collapsed **Synthetic note**. Live acceptance used
+the local build in the disposable `obsidian-test-vault` and, at the user's
+request, in the 7,042-note development vault, with Obsidian 1.15.1, Electron
+43.8.9, Node 24.22.1, and managed OpenCode 2.3.2.
+
+- A real `task` delegation to the **Explore** subagent produced a `synthetic`
+  record with `metadata.source: "subagent"`, `agent: "Explore"`,
+  `state: "completed"`, `childID`, and the task description in the record's own
+  `description` field. The transcript showed `Explore subagent · Read HOME and
+  report` as the embed title at the record's place; the disposable-vault run
+  showed `Explore subagent · Summarize acceptance example`.
+- The report rendered as Markdown inside `internal-embed markdown-embed
+  inline-embed is-loaded` with an `embed-title markdown-embed-title` and a
+  `markdown-embed-content` body. Neither `<subagent …>` nor `</subagent>`
+  appeared in the embed. The parent tool result separately mentions
+  `<subagent>` as prose; that is tool output, not the report envelope. No custom
+  caption or blockquote remains.
+- `[[HOME]]` and `[[Acceptance/Example]]` rendered as internal links in the
+  embed. Activating the `HOME` link opened `HOME.md` in a note tab and left the
+  chat leaf intact.
+- A plan-mode injected **Synthetic note** elsewhere in the same conversation
+  stayed a closed disclosure with its text in plain `<pre>` and no Markdown
+  frame. These runs produced no `skill` or `system` record, so their identical
+  disclosure path is covered by `tests/conversation.test.mjs` rather than
+  observed live.
+- Measured in the disposable vault with **Readable line length** on and off in
+  light and dark themes, the subagent embed matched a live
+  `![[Acceptance/Example]]` note embed: the same classes, a transparent
+  background, a `2px` inline-start border (`rgb(152,115,247)` light,
+  `rgb(138,92,245)` dark), a `16px`/`600` title (`rgb(34,34,34)` light,
+  `rgb(218,218,218)` dark), title padding `0 0 0 24px`, the host
+  `--embed-max-height` (`4000px` here) with `overflow: auto`, and `24px` preview
+  padding. The subagent message measured `16px` (`--p-spacing`) above and below,
+  and no doubled margin appeared at its bottom.
+- The service places the task description on the record rather than in
+  `metadata`; the renderer reads both, and the change artifacts were corrected
+  to match the live payload.
+- Automated verification after the change: `npm test` passed 265 tests,
+  `npm run build` succeeded, and `npm run lint` reported 0 errors and the same
+  two pre-existing warnings (declarative settings API; sentence case for
+  **OpenCode 2 executable path**).
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-24 | `render-subagent-quotes` | 8/8 | 265 passing | pass | `openspec/changes/archive/2026-11-24-render-subagent-quotes` |
 | 2026-11-24 | `adopt-reading-view-typography` | 16/16 | 260 passing | pass | `openspec/changes/archive/2026-11-24-adopt-reading-view-typography` |
 | 2026-11-24 | `chat-link-stack` | 12/12 | 253 passing | pass | `openspec/changes/archive/2026-11-24-chat-link-stack` |
 | 2026-11-24 | `refactor-session-management` | 20/20 | 242 passing | pass | `openspec/changes/archive/2026-11-24-refactor-session-management` |

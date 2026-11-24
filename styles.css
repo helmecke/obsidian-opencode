@@ -228,6 +228,15 @@
 	line-height: var(--line-height-tight);
 }
 
+/*
+ * A subagent report is an embed. The host's `.markdown-embed` and
+ * `.embed-title` rules supply the frame, title type, and padding; the plugin
+ * only separates the embed from the flow.
+ */
+.opencode-message-subagent {
+	margin-block: var(--p-spacing);
+}
+
 .opencode-message-notice {
 	margin-block: var(--size-4-2);
 	color: var(--text-muted);
