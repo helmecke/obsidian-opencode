@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Switch conversation…** now lists only the vault's top-level conversations:
+  a session that a delegated subagent ran in no longer appears in the switcher,
+  while the subagent's report stays in the transcript where it happened.
 - Delegated subagent reports now appear where they occurred as a native Markdown
   embed titled with the agent and task description, instead of a collapsed
   **Synthetic note**. The report keeps its Markdown and links, a cancelled result

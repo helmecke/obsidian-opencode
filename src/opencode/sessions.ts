@@ -200,6 +200,8 @@ export class SessionCoordinator {
 			if (signal.aborted) throw new SessionError();
 			this.checkAlive();
 			for (const session of page.data) {
+				// A delegated subagent session is a child of the conversation that started it, not a conversation.
+				if (session.parentID) continue;
 				if (sameDirectory(session.location.directory, root) && !sessions.some((s) => s.id === session.id)) sessions.push(session);
 			}
 			cursor = page.cursor.next ?? undefined;

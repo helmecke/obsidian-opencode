@@ -951,8 +951,34 @@ request, in the 7,042-note development vault, with Obsidian 1.15.1, Electron
   two pre-existing warnings (declarative settings API; sentence case for
   **OpenCode 2 executable path**).
 
+## Top-level session switcher (2026-11-24)
+
+The conversation switcher now lists only the vault's top-level conversations.
+Live acceptance used the local build in the disposable `obsidian-test-vault` with
+Obsidian 1.15.1, Electron 43.8.9, Node 24.22.1, and a managed OpenCode 2.3.2.
+
+- One real `task` delegation to the **Explore** subagent produced a child session
+  titled **Read HOME heading**, and its report still rendered in the parent
+  transcript as `internal-embed markdown-embed inline-embed is-loaded` titled
+  **Explore subagent · Read HOME heading**.
+- Opening the switcher showed seven rows — **Explore subagent heading task**
+  marked **Current** plus six earlier top-level conversations — and no row
+  carried a subagent's task title.
+- Immediately afterwards the same client returned **9 sessions** for the vault
+  directory, **2 of them children** carrying a `parentID` (**Read HOME heading**
+  and **Summarize acceptance example**), while the coordinator listed **7**,
+  exactly the switcher's rows.
+- The switcher was opened through the view's own switcher action, the method
+  behind the document menu item and the **sessions** breadcrumb, rather than a
+  mouse click on either surface.
+- Limitation: one vault and one delegation. A nested grandchild was not produced
+  live and is covered by `tests/sessions.test.mjs` and
+  `tests/session-switcher.test.mjs` instead; archived and forked sessions were
+  not part of this run and keep their previous behaviour.
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-24 | `hide-subagent-sessions` | 5/5 | 266 passing | pass | `openspec/changes/archive/2026-11-24-hide-subagent-sessions` |
 | 2026-11-24 | `render-subagent-quotes` | 8/8 | 265 passing | pass | `openspec/changes/archive/2026-11-24-render-subagent-quotes` |
 | 2026-11-24 | `adopt-reading-view-typography` | 16/16 | 260 passing | pass | `openspec/changes/archive/2026-11-24-adopt-reading-view-typography` |
 | 2026-11-24 | `chat-link-stack` | 12/12 | 253 passing | pass | `openspec/changes/archive/2026-11-24-chat-link-stack` |

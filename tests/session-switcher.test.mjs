@@ -31,6 +31,8 @@ function fixture() {
 	const records = new Map([
 		['old', session('old', 1000, root, 'Older')],
 		['new', session('new', 2000, root, 'Newest')],
+		['child', { ...session('child', 2500, root, 'Delegated task'), parentID: 'new' }],
+		['grandchild', { ...session('grandchild', 2600, root, 'Nested task'), parentID: 'child' }],
 		['foreign', session('foreign', 3000, 'C:\\Other', 'Other vault')],
 	]);
 	const client = {
@@ -45,14 +47,15 @@ function fixture() {
 	return { coordinator, calls };
 }
 
-test('the switcher lists fresh current-vault sessions newest first and marks the current one', async () => {
+test('the switcher lists fresh current-vault top-level sessions newest first and marks the current one', async () => {
 	const f = fixture();
 	const switcher = new SessionSwitcherModal({}, () => f.coordinator.list(), () => 'new',
 		(id) => f.coordinator.select(id));
 	switcher.open();
 	await wait();
 	assert.equal(f.calls.filter((call) => call[0] === 'list').length, 1, 'Opening requests a fresh list');
-	assert.deepEqual(switcher.getItems().map((item) => item.id), ['new', 'old'], 'Newest first, foreign vault excluded');
+	assert.deepEqual(switcher.getItems().map((item) => item.id), ['new', 'old'],
+		'Newest first, foreign vault and delegated subagent sessions excluded');
 
 	const current = document.createElement('div');
 	switcher.renderSuggestion({ item: switcher.getItems()[0], match: { score: 0, matches: [] } }, current);

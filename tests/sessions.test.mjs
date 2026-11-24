@@ -72,6 +72,15 @@ test('opening is lazy, filters multiple projects by exact directory, and never a
 	assert.equal(f.calls[0][2].signal, f.controller.signal);
 });
 
+test('delegated subagent sessions stay out of the conversation list at any depth', async () => {
+	const f = fixture();
+	f.records.set('delegated', { ...info('delegated'), parentID: 'one' });
+	f.records.set('nested', { ...info('nested'), parentID: 'delegated' });
+	const snapshot = await f.coordinator.open();
+	assert.deepEqual(snapshot.sessions.map((s) => s.id), ['one', 'two']);
+	assert.deepEqual((await f.coordinator.list()).map((s) => s.id), ['one', 'two']);
+});
+
 test('selection loads authoritative messages and reopening reloads the in-memory selection without creation', async () => {
 	const f = fixture();
 	await f.coordinator.open();
