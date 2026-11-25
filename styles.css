@@ -184,9 +184,24 @@
 	--opencode-line-inset: max(var(--file-margins-x), calc((100% - var(--file-line-width, 700px)) / 2));
 }
 
-.opencode-chat.is-readable-line-width .opencode-chat-messages,
+.opencode-chat.is-readable-line-width .opencode-chat-messages {
+	padding-inline: var(--opencode-line-inset);
+}
+
+/*
+ * A theme may express the measure in `ch`, which resolves against the
+ * element's own font. The composer is an interface surface, so borrow the
+ * reading font for the inset calculation and restore the UI font inside.
+ */
 .opencode-chat.is-readable-line-width .opencode-chat-composer {
 	padding-inline: var(--opencode-line-inset);
+	font-family: var(--font-text);
+	font-size: var(--font-preferred-size);
+}
+
+.opencode-chat.is-readable-line-width .opencode-composer-card {
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-medium);
 }
 
 .opencode-message {
@@ -500,6 +515,10 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 		var(--font-ui-small) * var(--line-height-tight) + var(--size-4-1) * 2
 	);
 	flex: 0 0 auto;
+	/* The transcript reserves a stable scrollbar gutter; reserve the same one
+	   here so the composer card lines up with the text column. */
+	overflow-y: auto;
+	scrollbar-gutter: stable;
 	padding: var(--size-4-2) var(--file-margins-x);
 	background-color: transparent;
 }
@@ -750,6 +769,30 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 .opencode-composer-error {
 	flex-basis: 100%;
 	color: var(--text-error);
+}
+
+/* The read-only child composer replaces every control with this one centered line. */
+.opencode-composer-card.is-readonly {
+	align-items: center;
+	justify-content: center;
+	min-height: calc(var(--opencode-composer-control-height) * 2 + var(--size-4-2) * 2);
+}
+
+.opencode-composer-card.is-readonly .opencode-composer-hint {
+	text-align: center;
+}
+
+.opencode-composer-card.is-readonly .opencode-composer-toolbar {
+	display: none;
+}
+
+.opencode-composer-card.is-readonly .opencode-chat-prompt-actions {
+	display: none;
+}
+
+.opencode-composer-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 .opencode-muted {

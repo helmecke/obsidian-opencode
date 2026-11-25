@@ -3,7 +3,7 @@ import type { App, OpenViewState, PaneType, Scope, TFile } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
 import { ConversationRenderer } from './conversation';
-import type { MarkdownLike } from './conversation';
+import type { ConversationOptions, MarkdownLike } from './conversation';
 import { attachLinkRouter, MarkdownBlock, splitInternalLink } from './markdown';
 import type { LinkEnvironment } from './markdown';
 import { appendTab, LinkStack, reservedNoteLeaf } from './link-stack';
@@ -30,6 +30,7 @@ export interface ChatViewHandlers {
 	loadOptions(): void;
 	loadSkills(): Promise<void>;
 	loadCommands(): Promise<void>;
+	openSubagent(childID: string): void;
 }
 
 /** Owns the chat DOM: element creation, control wiring, and state-to-DOM updates. */
@@ -48,6 +49,8 @@ export class ChatRenderer {
 	private composer?: ChatComposer;
 	private retryButton?: HTMLButtonElement;
 	private conversation?: ConversationRenderer;
+	private conversationOptions?: ConversationOptions;
+	private parentTitle?: string;
 	private signatures = { errors: '' };
 
 	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers,
@@ -72,10 +75,14 @@ export class ChatRenderer {
 		this.attachRendering(opening);
 	}
 
-	refresh(state: SynchronizationState, viewError?: string): void {
+	refresh(state: SynchronizationState, viewError?: string, parentTitle?: string): void {
 		if (!this.opening) return;
 		this.state = state;
 		this.viewError = viewError;
+		this.parentTitle = parentTitle;
+		const readOnly = this.isReadOnly(state);
+		if (this.conversationOptions) this.conversationOptions.promptLabel = readOnly ? 'Delegated task' : undefined;
+		this.composer?.setReadOnly(readOnly ? this.readOnlyHint() : undefined);
 		this.updateStatus();
 		this.updateMessages();
 		this.interactions?.update(state);
@@ -100,6 +107,8 @@ export class ChatRenderer {
 		this.messagesEl = undefined;
 		this.composer = undefined;
 		this.retryButton = undefined;
+		this.conversationOptions = undefined;
+		this.parentTitle = undefined;
 	}
 
 	setRetryDisabled(disabled: boolean): void {
@@ -161,13 +170,16 @@ export class ChatRenderer {
 
 	private attachRendering(opening: Component): void {
 		if (!this.messagesEl || !this.contentEl) return;
-		this.conversation = new ConversationRenderer(this.messagesEl, {
+		const options: ConversationOptions = {
 			createMarkdown: (container): MarkdownLike => new MarkdownBlock(
 				{ app: this.app, component: opening, sourcePath: VAULT_ROOT_SOURCE }, container),
 			modelLabel: (model) => this.modelLabel(model),
 			agentLabel: (agent) => this.agentLabel(agent),
 			showReasoning: this.showReasoning,
-		});
+			openSubagent: (childID) => this.handlers.openSubagent(childID),
+		};
+		this.conversationOptions = options;
+		this.conversation = new ConversationRenderer(this.messagesEl, options);
 		const environment: LinkEnvironment = {
 			resolve: (linkpath, sourcePath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath),
 			open: (href, sourcePath, paneType) => this.openLink(href, sourcePath, paneType),
@@ -191,7 +203,7 @@ export class ChatRenderer {
 		if (scope) {
 			const sendKey = scope.register(['Mod'], 'Enter', (event) => {
 				const composer = this.composer?.element;
-				if (!composer || composer.ownerDocument.activeElement !== composer) return true;
+				if (!composer || this.isReadOnly(this.state) || composer.ownerDocument.activeElement !== composer) return true;
 				if (!event.repeat) this.handlers.send();
 				return false;
 			});
@@ -325,6 +337,16 @@ export class ChatRenderer {
 	private executionLabel(execution: string): string {
 		return execution === 'running' ? 'Executing' : execution === 'succeeded' ? 'Answered'
 			: execution === 'failed' ? 'Failed' : execution === 'interrupted' ? 'Stopped' : 'Ready';
+	}
+
+	/** Only delegated children carry a parent; forks and top-level conversations stay editable. */
+	private isReadOnly(state: SynchronizationState | undefined): boolean {
+		return Boolean(state?.snapshot?.selected?.parentID);
+	}
+
+	private readOnlyHint(): string {
+		const parent = this.parentTitle?.trim();
+		return parent ? `Subagent session. Continue in ${parent}.` : 'Subagent session. Read-only.';
 	}
 
 	/** Resolve display names from the refreshed catalog; fall back to the message's IDs. */

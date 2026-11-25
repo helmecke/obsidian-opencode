@@ -220,8 +220,13 @@ details.
   previews truncate instead of widening the column.
 - A delegated subagent's report appears where it occurred as an Obsidian embed,
   titled with the agent and task description and rendered as Markdown with its
-  links. A cancelled report says so in the title. Other injected skill or system
-  text stays collapsed.
+  links. A cancelled report says so in the title. The embed's top-right link
+  opens the subagent's own session read-only: its task is labelled **Delegated
+  task**, the composer shows only a hint naming the parent conversation, and the
+  header breadcrumbs return to the parent. The child cannot be renamed or
+  written to and stays out of the switcher; a report whose child session no
+  longer exists shows a notice and leaves the parent open. Other injected skill
+  or system text stays collapsed.
 - Shell commands, compaction, and injected skill or system text stay collapsed
   behind a short label and expand on request.
 - The transcript stays quiet about routine success and agent, model, or

@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 	(name) => name === 'obsidian' ? { PluginSettingTab: class {} } : require(name), module, module.exports,
 );
-const { SessionCoordinator, loadSettings, sameDirectory } = module.exports;
+const { SessionCoordinator, SessionError, loadSettings, sameDirectory } = module.exports;
 const root = 'C:\\Notes vault';
 const info = (id, directory = root) => ({ id, location: { directory }, projectID: 'project', time: { created: 1, updated: 1 } });
 const message = (id, text) => ({ id, type: 'user', time: { created: 1 }, text });
@@ -115,6 +115,63 @@ test('explicit selection rejects foreign sessions before requesting their messag
 	assert.equal(state.empty, 'unavailable');
 	assert.deepEqual(state.messages, []);
 	assert.equal(f.calls.filter((c) => c[0] === 'messages' && c[1] === 'other').length, 0);
+});
+
+test('openChild selects a resolved child and keeps it out of the conversation list', async () => {
+	const f = fixture();
+	f.records.set('child', { ...info('child'), parentID: 'one' });
+	f.texts.set('child', [message('c1', 'delegated work')]);
+	await f.coordinator.open();
+	await f.coordinator.select('one');
+	const state = await f.coordinator.openChild('child');
+	assert.equal(state.selected.id, 'child');
+	assert.equal(f.coordinator.selectedID, 'child');
+	assert.deepEqual(state.messages.map((m) => m.text), ['delegated work']);
+	assert.deepEqual(state.sessions.map((s) => s.id), ['one', 'two'],
+		'The child is selected but never listed as a conversation');
+});
+
+test('openChild rejects a missing or foreign child and leaves the previous snapshot unchanged', async () => {
+	for (const id of ['missing', 'other']) {
+		const f = fixture();
+		await f.coordinator.select('one');
+		await assert.rejects(f.coordinator.openChild(id), (error) =>
+			error instanceof SessionError && error.message === 'Unable to open the subagent session. It may no longer exist.');
+		assert.equal(f.coordinator.state.selected.id, 'one', `${id} leaves the parent selected`);
+		assert.deepEqual(f.coordinator.state.messages.map((m) => m.text), ['first'],
+			`${id} leaves the parent transcript in place`);
+		assert.equal(f.calls.filter((c) => c[0] === 'messages' && c[1] === id).length, 0,
+			`${id} is rejected before its messages are requested`);
+	}
+});
+
+test('openChild keeps the abort and error-wrapping behavior of a selection load', async () => {
+	const f = fixture();
+	f.records.set('child', { ...info('child'), parentID: 'one' });
+	await f.coordinator.select('one');
+	let finish;
+	f.client.message.list = async (_input, { signal }) => {
+		assert.equal(signal, f.controller.signal);
+		return new Promise((resolve) => { finish = resolve; });
+	};
+	const pending = f.coordinator.openChild('child');
+	await new Promise(setImmediate);
+	f.controller.abort();
+	finish(page([message('late', 'hidden')]));
+	await assert.rejects(pending);
+	assert.equal(f.coordinator.state.selected.id, 'one');
+	assert.deepEqual(f.coordinator.state.messages.map((m) => m.text), ['first']);
+
+	const g = fixture();
+	g.records.set('child', { ...info('child'), parentID: 'one' });
+	g.client.session.get = async ({ sessionID }) => {
+		if (sessionID === 'one') return g.records.get('one');
+		throw new Error('private upstream detail');
+	};
+	await g.coordinator.select('one');
+	await assert.rejects(g.coordinator.openChild('child'), (error) =>
+		error instanceof SessionError && !error.message.includes('private'));
+	assert.equal(g.coordinator.state.selected.id, 'one');
 });
 
 test('concurrent creation is deduplicated, uses the absolute vault path, and reopen does not create again', async () => {

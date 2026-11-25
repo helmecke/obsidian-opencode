@@ -976,8 +976,59 @@ Obsidian 1.15.1, Electron 43.8.9, Node 24.22.1, and a managed OpenCode 2.3.2.
   `tests/session-switcher.test.mjs` instead; archived and forked sessions were
   not part of this run and keep their previous behaviour.
 
+## Subagent session link (2026-11-25)
+
+Delegated subagent reports now open their child session read-only from the
+embed's top-right link. Live acceptance used the local build at the user's
+request in the development vault (`C:\Users\Jakob\Documents\notes`), with the
+plugin files copied into its plugin folder and reloaded through the Obsidian
+CLI. The user reported every check passing:
+
+- The report embed shows the host's top-right link affordance and icon; hovering
+  names **Open subagent session**.
+- Activating it switches the same chat view to the child. The transcript loads,
+  its prompt reads **Delegated task**, and the composer shows only the centered
+  muted hint **“Subagent session. Continue in <parent title>.”** — no input,
+  model, agent, variant, status, retry, send, or stop control.
+- The header trail reads **opencode / sessions / parent title / child title**.
+  The child title is not editable and **Rename conversation…** is disabled.
+- Activating the parent title returns to the parent, reloads it, restores the
+  editable title, and enables rename.
+- While the child is open, **Switch conversation…** lists only top-level
+  conversations and marks no row as **Current**.
+- With unsent composer text, the link asks **Discard unsent message?**;
+  **Keep editing** stays in the parent, and **Discard and switch** opens the
+  child and clears the text.
+
+Measured in the live view with **Readable line length** on and the theme's
+`--file-line-width: 100ch`:
+
+| | padding-inline | width |
+| --- | --- | --- |
+| `.opencode-chat-messages` | `344.75px` | `1552px` |
+| `.opencode-chat-composer` | `344.75px` | `1552px` |
+
+The card spanned `700.75px → 1551.25px`, matching the transcript text column.
+The first implementation differed by about 27px per side because `100ch`
+resolved against the composer's interface font while the transcript uses the
+reading font. The composer now borrows the reading font for its inset
+calculation, reserves the same stable scrollbar gutter as the transcript, and
+restores the interface font inside the card. The embed icon was also corrected
+from `link` to the host's `maximize-2`.
+
+Deviation from the documented check: this ran in the development vault rather
+than a disposable one. A nested child, a stale child id, and a non-default
+theme were not part of this run; they remain covered by
+`tests/chat-view.test.mjs`, `tests/sessions.test.mjs`, and
+`tests/chat-renderer.test.mjs`.
+
+Automated verification: `npm test` passed 280 tests, `npm run build` succeeded,
+and `npm run lint` reported 0 errors and the same two pre-existing warnings
+(declarative settings API; sentence case for **OpenCode 2 executable path**).
+
 | Date | Change | Tasks | Tests | Build | Archive |
 | --- | --- | --- | --- | --- | --- |
+| 2026-11-25 | `subagent-session-link` | 15/15 | 280 passing | pass | `openspec/changes/archive/2026-11-25-subagent-session-link` |
 | 2026-11-24 | `hide-subagent-sessions` | 5/5 | 266 passing | pass | `openspec/changes/archive/2026-11-24-hide-subagent-sessions` |
 | 2026-11-24 | `render-subagent-quotes` | 8/8 | 265 passing | pass | `openspec/changes/archive/2026-11-24-render-subagent-quotes` |
 | 2026-11-24 | `adopt-reading-view-typography` | 16/16 | 260 passing | pass | `openspec/changes/archive/2026-11-24-adopt-reading-view-typography` |

@@ -36,7 +36,10 @@ export class ChatComposer {
 	private readonly agentSelectEl: HTMLSelectElement;
 	private readonly modelSelectEl: HTMLSelectElement;
 	private readonly variantSelectEl: HTMLSelectElement;
+	private readonly toolbar: HTMLElement;
+	private readonly readonlyEl: HTMLElement;
 	private readonly promptActions: HTMLElement;
+	private readOnly = false;
 	private signatures = { agents: '', models: '', variants: '' };
 	private lastState?: SynchronizationState;
 
@@ -51,6 +54,7 @@ export class ChatComposer {
 			},
 		});
 		const toolbar = this.card.createDiv({ cls: 'opencode-composer-toolbar' });
+		this.toolbar = toolbar;
 		const start = toolbar.createDiv({ cls: 'opencode-composer-toolbar-start' });
 		this.metaEl = start.createDiv({ cls: 'opencode-composer-meta' });
 
@@ -74,6 +78,8 @@ export class ChatComposer {
 		});
 		this.stopButtonEl.hidden = true;
 		setNativeDisabled(this.stopButtonEl, true);
+		this.readonlyEl = this.card.createDiv({ cls: 'opencode-composer-hint' });
+		this.readonlyEl.hidden = true;
 		this.promptActions = this.card.createDiv({ cls: 'opencode-chat-prompt-actions' });
 
 		this.sendButtonEl.addEventListener('click', () => this.handlers.send());
@@ -97,6 +103,7 @@ export class ChatComposer {
 			});
 		});
 		this.composer.addEventListener('keydown', (event) => {
+			if (this.readOnly) return;
 			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
 				event.preventDefault();
 				this.handlers.send();
@@ -132,6 +139,18 @@ export class ChatComposer {
 
 	focus(): void { this.composer.focus(); }
 
+	/** Read-only child presentation: one centered hint and no other controls. */
+	setReadOnly(hint?: string): void {
+		this.readOnly = hint !== undefined;
+		this.card.toggleClass('is-readonly', this.readOnly);
+		this.composer.hidden = this.readOnly;
+		this.toolbar.hidden = this.readOnly;
+		this.promptActions.hidden = this.readOnly;
+		this.readonlyEl.hidden = !this.readOnly;
+		if (hint !== undefined) this.readonlyEl.setText(hint);
+		if (this.lastState) this.update(this.lastState);
+	}
+
 	update(state: SynchronizationState): void {
 		this.lastState = state;
 		const pending = state.pendingPrompt;
@@ -139,11 +158,11 @@ export class ChatComposer {
 		const selected = state.snapshot?.selected;
 		const draft = state.snapshot !== undefined && selected === undefined && state.snapshot.empty !== 'unavailable';
 		const canCompose = state.phase === 'ready' && (selected !== undefined || draft);
-		this.composer.disabled = state.phase === 'disposed';
-		this.stopButtonEl.hidden = !running;
-		this.sendButtonEl.hidden = running;
-		setNativeDisabled(this.stopButtonEl, state.phase !== 'ready' || !running);
-		setNativeDisabled(this.sendButtonEl, !canCompose
+		this.composer.disabled = this.readOnly || state.phase === 'disposed';
+		this.stopButtonEl.hidden = this.readOnly || !running;
+		this.sendButtonEl.hidden = this.readOnly || running;
+		setNativeDisabled(this.stopButtonEl, this.readOnly || state.phase !== 'ready' || !running);
+		setNativeDisabled(this.sendButtonEl, this.readOnly || !canCompose
 			|| state.interactionBusy !== undefined
 			|| (pending !== undefined && pending.phase !== 'admitted') || this.composer.value.trim().length === 0);
 		this.updateAgentOptions(state);
@@ -193,7 +212,7 @@ export class ChatComposer {
 		const agent = agents.find((entry) => entry.id === selected);
 		this.agentChoice.labelEl.setText(agents.length ? agent?.name || selected || 'Agent' : 'No agents');
 		this.agentChoice.iconEl.style.color = agent?.color ?? '';
-		const disabled = state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
+		const disabled = this.readOnly || state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
 		this.agentSelectEl.disabled = disabled;
 		this.agentChoice.root.classList.toggle('is-disabled', disabled);
 		this.describeSelect(this.agentSelectEl, 'Agent');
@@ -215,7 +234,7 @@ export class ChatComposer {
 			? model?.name ?? selected.id
 			: models.length ? 'Session default' : 'No models');
 		this.modelChoice.root.classList.toggle('is-default', !selected);
-		const disabled = state.phase !== 'ready' || models.length === 0 || Boolean(state.interactionBusy);
+		const disabled = this.readOnly || state.phase !== 'ready' || models.length === 0 || Boolean(state.interactionBusy);
 		this.modelSelectEl.disabled = disabled;
 		this.modelChoice.root.classList.toggle('is-disabled', disabled);
 		this.describeSelect(this.modelSelectEl, 'Model');

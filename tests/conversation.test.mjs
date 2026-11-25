@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
 import test from 'node:test';
 import { build } from 'esbuild';
-import { createObsidian, installDom } from './dom-helper.mjs';
+import { createObsidian, click, installDom, keydown } from './dom-helper.mjs';
 
 installDom();
 const bundle = await build({ entryPoints: ['src/ui/conversation.ts'], bundle: true,
@@ -253,6 +253,60 @@ test('a cancelled subagent result keeps its report and names the state', () => {
 		'General subagent · Long task · cancelled');
 	assert.match(target.querySelector('.markdown-embed-content .opencode-markdown').textContent,
 		/Partial \*\*report\*\*\./, 'The available report text stays visible');
+});
+
+test('a subagent report exposes the host embed link only when the record names a child', () => {
+	const opened = [];
+	const target = container();
+	renderer(target, { openSubagent: (id) => opened.push(id) }).render([
+		synthetic('sub', '<subagent sessionID="ses_child">\nReport.\n</subagent>', {
+			source: 'subagent', agent: 'Explore', childID: 'ses_child' }),
+	]);
+	const link = target.querySelector('.markdown-embed .markdown-embed-link');
+	assert.ok(link, 'The embed frame carries the host link');
+	assert.equal(link.getAttribute('role'), 'button');
+	assert.equal(link.getAttribute('tabindex'), '0');
+	assert.equal(link.getAttribute('aria-label'), 'Open subagent session');
+	assert.ok(link.querySelector('.svg-icon.lucide-maximize-2'), 'The anchor carries the host embed icon');
+	click(link);
+	assert.deepEqual(opened, ['ses_child'], 'A click opens the named child');
+	keydown(link, { key: 'Enter' });
+	keydown(link, { key: ' ' });
+	assert.deepEqual(opened, ['ses_child', 'ses_child', 'ses_child'], 'Enter and Space activate the link');
+	keydown(link, { key: 'a' });
+	assert.equal(opened.length, 3, 'Other keys do nothing');
+
+	for (const [name, metadata] of [
+		['absent', { source: 'subagent', agent: 'Explore' }],
+		['blank', { source: 'subagent', agent: 'Explore', childID: '   ' }],
+	]) {
+		const other = container();
+		renderer(other).render([synthetic(`sub-${name}`, '<subagent>\nReport.\n</subagent>', metadata)]);
+		assert.ok(other.querySelector('.opencode-message-subagent'), `${name}: the record is still a subagent report`);
+		assert.equal(other.querySelector('.markdown-embed-link'), null, `${name}: no child id means no link`);
+	}
+
+	const unmarked = container();
+	renderer(unmarked).render([synthetic('sub-no-source', '<subagent>\nReport.\n</subagent>',
+		{ childID: 'ses_child', agent: 'Explore' })]);
+	assert.equal(unmarked.querySelector('.opencode-message-subagent'), null,
+		'A record without metadata.source is not a subagent result');
+	assert.equal(unmarked.querySelector('.markdown-embed-link'), null);
+});
+
+test('a supplied prompt label attributes delegated task records', () => {
+	const target = container();
+	renderer(target, { promptLabel: 'Delegated task' }).render([user('u1', 'You are a subagent. Find the note.')]);
+	const entry = target.querySelector('.opencode-message-user');
+	assert.equal(entry.getAttribute('aria-label'), 'Delegated task');
+	assert.equal(entry.querySelector('.callout-title-inner').textContent, 'Delegated task');
+	assert.equal(entry.querySelector('.opencode-prompt-text').textContent, 'You are a subagent. Find the note.');
+
+	const pending = container();
+	renderer(pending, { promptLabel: 'Delegated task' }).render([],
+		{ id: 'pending-1', phase: 'sending', text: 'Delegated prompt' });
+	assert.equal(pending.querySelector('.opencode-message-user').getAttribute('aria-label'), 'Delegated task');
+	assert.equal(pending.querySelector('.callout-title-inner').textContent, 'Delegated task');
 });
 
 test('an unchanged subagent embed keeps its nodes and is disposed with the record', () => {

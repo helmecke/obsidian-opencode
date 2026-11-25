@@ -34,6 +34,10 @@ export class ChatView extends ItemView {
 	private titleParentEl?: HTMLElement;
 	private titleParentHome?: HTMLElement;
 	private titleTransition?: number;
+	private parentTrail?: { id: string; title: string };
+	private breadcrumbsEl?: HTMLElement;
+	private parentCrumbEl?: HTMLElement;
+	private parentSeparatorEl?: HTMLElement;
 	constructor(leaf: WorkspaceLeaf, private readonly connection: ConnectionCoordinator,
 		private readonly sessions: SessionCoordinator, private readonly synchronization: SynchronizationCoordinator,
 		private readonly showReasoning: () => boolean) {
@@ -113,7 +117,7 @@ export class ChatView extends ItemView {
 		menu.addItem((item) => item
 			.setTitle('Rename conversation…')
 			.setIcon('pencil')
-			.setDisabled(!this.synchronization.canCompose)
+			.setDisabled(!this.synchronization.canCompose || this.readOnly)
 			.onClick(() => this.beginTitleRename()));
 	}
 
@@ -164,20 +168,22 @@ export class ChatView extends ItemView {
 			loadOptions: () => { void this.synchronization.loadOptions(); },
 			loadSkills: () => this.synchronization.loadSkills(),
 			loadCommands: () => this.synchronization.loadCommands(),
+			openSubagent: (childID) => { void this.openSubagent(childID); },
 		};
 	}
 
 	/** Re-render from the current synchronization state after a plugin setting changes. */
 	refreshFromSettings(): void {
 		if (!this.opening) return;
-		this.renderer?.refresh(this.synchronization.state, this.viewError);
+		this.renderer?.refresh(this.synchronization.state, this.viewError, this.parentTrail?.title);
 	}
 
 	private refresh(): void {
 		if (!this.opening) return;
 		const state = this.synchronization.state;
 		this.syncTitle();
-		this.renderer?.refresh(state, this.viewError);
+		this.syncBreadcrumbs();
+		this.renderer?.refresh(state, this.viewError, this.parentTrail?.title);
 		void this.ensureOptions(state);
 	}
 
@@ -222,6 +228,7 @@ export class ChatView extends ItemView {
 	private async selectConversation(id: string): Promise<void> {
 		if (!id || this.synchronization.state.phase !== 'ready') return;
 		if (!(await this.discardDraftIfConfirmed())) return;
+		this.parentTrail = undefined;
 		this.viewError = undefined;
 		try {
 			await this.sessions.select(id);
@@ -233,9 +240,28 @@ export class ChatView extends ItemView {
 		this.refresh();
 	}
 
+	/** Open a subagent child read-only; a failed lookup keeps the parent transcript in place. */
+	private async openSubagent(childID: string): Promise<void> {
+		if (!childID || this.synchronization.state.phase !== 'ready') return;
+		if (!(await this.discardDraftIfConfirmed())) return;
+		const parent = this.synchronization.state.snapshot?.selected ?? this.sessions.state.selected;
+		const parentTitle = this.displayTitle();
+		this.viewError = undefined;
+		try {
+			await this.sessions.openChild(childID);
+			this.parentTrail = parent ? { id: parent.id, title: parentTitle } : undefined;
+			await this.synchronization.open();
+		} catch (error) {
+			this.synchronization.rejectIncompatible(error);
+			new Notice(this.errorMessage(error, 'Unable to open the subagent session.'));
+		}
+		this.refresh();
+	}
+
 	private async newConversation(): Promise<void> {
 		if (this.synchronization.state.phase !== 'ready') return;
 		if (!(await this.discardDraftIfConfirmed())) return;
+		this.parentTrail = undefined;
 		this.viewError = undefined;
 		try {
 			await this.synchronization.openDraft();
@@ -281,6 +307,7 @@ export class ChatView extends ItemView {
 	}
 
 	private beginTitleRename(): void {
+		if (this.readOnly) return;
 		const header = this.headerTitleElement();
 		if (!header) {
 			const current = this.sessions.state.selected?.title ?? this.sessions.state.draftTitle ?? '';
@@ -292,7 +319,7 @@ export class ChatView extends ItemView {
 	}
 
 	private startTitleEdit(): void {
-		if (this.titleEditing) return;
+		if (this.readOnly || this.titleEditing) return;
 		this.titleEditing = true;
 		this.titleStart = this.displayTitle();
 		const parent = this.headerTitleParentElement();
@@ -404,6 +431,7 @@ export class ChatView extends ItemView {
 		if (!parent) return;
 		parent.empty();
 		parent.addClass('opencode-chat-breadcrumbs');
+		this.breadcrumbsEl = parent;
 		this.breadcrumb(parent, opening, 'opencode', 'New conversation', () => { void this.newConversation(); });
 		parent.createSpan({ cls: 'view-header-breadcrumb-separator', text: '/' });
 		this.breadcrumb(parent, opening, 'sessions', 'Switch conversation', () => { void this.openSwitcher(); });
@@ -411,7 +439,32 @@ export class ChatView extends ItemView {
 		opening.register(() => {
 			parent.empty();
 			parent.removeClass('opencode-chat-breadcrumbs');
+			this.breadcrumbsEl = undefined;
+			this.parentCrumbEl = undefined;
+			this.parentSeparatorEl = undefined;
 		});
+	}
+
+	/** Append the parent conversation only while a delegated child is open. */
+	private syncBreadcrumbs(): void {
+		const trail = this.readOnly ? this.parentTrail : undefined;
+		if (!trail) {
+			if (this.parentSeparatorEl) this.parentSeparatorEl.hidden = true;
+			if (this.parentCrumbEl) this.parentCrumbEl.hidden = true;
+			return;
+		}
+		const parent = this.breadcrumbsEl;
+		const opening = this.opening;
+		if (!parent || !opening) return;
+		// Created once and toggled, so its activation always returns to the recorded parent.
+		this.parentCrumbEl ??= this.breadcrumb(parent, opening, '', 'Return to the parent conversation', () => {
+			const recorded = this.parentTrail;
+			if (recorded) void this.selectConversation(recorded.id);
+		});
+		this.parentSeparatorEl ??= parent.createSpan({ cls: 'view-header-breadcrumb-separator', text: '/' });
+		this.parentCrumbEl.hidden = false;
+		this.parentSeparatorEl.hidden = false;
+		this.parentCrumbEl.setText(trail.title);
 	}
 
 	private breadcrumb(parent: HTMLElement, opening: Component, text: string, label: string,
@@ -447,10 +500,19 @@ export class ChatView extends ItemView {
 		return snapshot.selected?.title?.trim() || snapshot.draftTitle?.trim() || 'New conversation';
 	}
 
+	/** A delegated child carries a parent; it is read-only and cannot be renamed or written to. */
+	private get readOnly(): boolean {
+		return Boolean(this.synchronization.state.snapshot?.selected?.parentID);
+	}
+
 	private syncTitle(): void {
 		const title = this.displayTitle();
 		const header = this.headerTitleElement();
-		if (header && !this.titleEditing) header.setText(title);
+		if (header && !this.titleEditing) {
+			header.setText(title);
+			// A delegated child is read-only: its title is not a rename surface.
+			header.setAttribute('contenteditable', this.readOnly ? 'false' : 'true');
+		}
 		const tab = this.tabTitleElement();
 		if (tab) tab.setText(title);
 	}
@@ -475,6 +537,7 @@ export class ChatView extends ItemView {
 	}
 
 	private async send(): Promise<void> {
+		if (this.readOnly) return;
 		const text = this.renderer?.composerText() ?? '';
 		if (!text.trim()) return;
 		// Only a confirmed prompt or command clears the composer; a failed command

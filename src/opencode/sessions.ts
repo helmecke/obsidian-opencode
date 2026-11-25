@@ -9,6 +9,10 @@ export class SessionError extends Error {
 	constructor(message = 'Unable to load conversations. Retry or choose a conversation again.') { super(message); }
 }
 
+const childFailureMessage = 'Unable to open the subagent session. It may no longer exist.';
+
+type Client = Awaited<ReturnType<ConnectionCoordinator['connect']>>;
+
 export interface SessionSnapshot {
 	readonly sessions: readonly SessionInfo[];
 	readonly selected?: SessionInfo;
@@ -110,6 +114,19 @@ export class SessionCoordinator {
 		return this.run((root) => this.load(root, id));
 	}
 
+	/** Open a child session atomically; a failed lookup leaves the current view untouched. */
+	openChild(id: string): Promise<SessionSnapshot> {
+		return this.run(async (root) => {
+			const client = await this.connection.connect();
+			await this.childAt(client, root, id);
+			const messages = await this.messagesAt(client, id, this.connection.signal);
+			// A session can be moved by another client while its messages are being fetched.
+			const session = await this.childAt(client, root, id);
+			this.snapshot = { sessions: this.snapshot.sessions, selected: session, messages };
+			return this.snapshot;
+		});
+	}
+
 	/** Concurrent create actions share one admission; the local draft's title is applied here. */
 	create(): Promise<SessionSnapshot> {
 		if (!this.creating) this.creating = this.run(async (root) => {
@@ -172,6 +189,37 @@ export class SessionCoordinator {
 		return this.snapshot;
 	}
 
+	private async childAt(client: Client, root: string, id: string): Promise<SessionInfo> {
+		try {
+			const session = await client.session.get({ sessionID: id }, { signal: this.connection.signal });
+			if (this.connection.signal.aborted) throw new SessionError();
+			this.checkAlive();
+			if (!sameDirectory(session.location.directory, root)) throw new SessionError(childFailureMessage);
+			return session;
+		} catch (error) {
+			if (isSessionNotFoundError(error)) throw new SessionError(childFailureMessage);
+			throw error;
+		}
+	}
+
+	private async messagesAt(client: Client, id: string, signal: AbortSignal): Promise<SessionMessageInfo[]> {
+		const messages: SessionMessageInfo[] = [];
+		let cursor: string | undefined;
+		const seen = new Set<string>();
+		do {
+			// A cursor contains its order; the server rejects combining both.
+			const page = await client.message.list(cursor ? { sessionID: id, cursor }
+				: { sessionID: id, order: 'asc' }, { signal });
+			if (signal.aborted) throw new SessionError();
+			this.checkAlive();
+			messages.push(...page.data);
+			cursor = page.cursor.next ?? undefined;
+			if (cursor && seen.has(cursor)) throw new SessionError();
+			if (cursor) seen.add(cursor);
+		} while (cursor);
+		return messages;
+	}
+
 	private checkAlive(): void { if (this.connection.signal.aborted) throw new SessionError(); }
 
 	private run<T>(operation: (root: string) => Promise<T>): Promise<T> {
@@ -227,20 +275,7 @@ export class SessionCoordinator {
 			if (signal.aborted) throw new SessionError();
 			this.checkAlive();
 			if (!sameDirectory(session.location.directory, root)) return this.unavailable();
-			const messages: SessionMessageInfo[] = [];
-			let cursor: string | undefined;
-			const seen = new Set<string>();
-			do {
-				// A cursor contains its order; the server rejects combining both.
-				const page = await client.message.list(cursor ? { sessionID: id, cursor }
-					: { sessionID: id, order: 'asc' }, { signal });
-				if (signal.aborted) throw new SessionError();
-				this.checkAlive();
-				messages.push(...page.data);
-				cursor = page.cursor.next ?? undefined;
-				if (cursor && seen.has(cursor)) throw new SessionError();
-				if (cursor) seen.add(cursor);
-			} while (cursor);
+			const messages = await this.messagesAt(client, id, signal);
 			// A session can be moved by another client while its messages are being fetched.
 			session = await client.session.get({ sessionID: id }, { signal });
 			if (signal.aborted) throw new SessionError();

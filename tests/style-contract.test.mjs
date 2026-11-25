@@ -61,10 +61,52 @@ test('a subagent embed is separated from the flow by the paragraph step', () => 
 	assert.match(ruleBody('.opencode-message-subagent'), /margin-block: var\(--p-spacing\)/);
 });
 
+test('the subagent embed link stays host-owned', () => {
+	assert.ok(!/\.markdown-embed-link\s*\{/.test(css),
+		'The plugin adds no rule for the host embed link');
+	assert.ok(!/--embed-/.test(css),
+		'No host embed variable is copied into the plugin styles');
+});
+
+test('the read-only composer hint is one muted, centered line', () => {
+	const hint = ruleBody('.opencode-composer-hint');
+	assert.match(hint, /color: var\(--text-muted\)/);
+	assert.match(hint, /font-size: var\(--font-ui-smaller\)/);
+	const card = ruleBody('.opencode-composer-card.is-readonly');
+	assert.match(card, /align-items: center/);
+	assert.match(card, /justify-content: center/);
+	assert.match(ruleBody('.opencode-composer-card.is-readonly .opencode-composer-hint'),
+		/text-align: center/);
+	assert.match(ruleBody('.opencode-composer-card.is-readonly .opencode-composer-toolbar'),
+		/display: none/);
+	assert.match(ruleBody('.opencode-composer-card.is-readonly .opencode-chat-prompt-actions'),
+		/display: none/);
+});
+
 test('the reading measure uses the theme note margin as its floor', () => {
 	const setting = ruleBody('.opencode-chat.is-readable-line-width');
 	assert.match(setting, /--file-margins-x/);
 	assert.match(setting, /--file-line-width/);
+});
+
+test('the composer shares the transcript measure', () => {
 	assert.match(ruleBody('.opencode-chat-composer'), /var\(--file-margins-x\)/,
 		'The composer shares the transcript measure');
+});
+
+test('the composer resolves a ch-based measure in the reading font', () => {
+	assert.match(ruleBody('.opencode-chat.is-readable-line-width .opencode-chat-composer'),
+		/font-family: var\(--font-text\)/);
+	assert.match(ruleBody('.opencode-chat.is-readable-line-width .opencode-chat-composer'),
+		/font-size: var\(--font-preferred-size\)/);
+	assert.match(ruleBody('.opencode-chat.is-readable-line-width .opencode-composer-card'),
+		/font-family: var\(--font-interface\)/, 'The card keeps the interface font');
+});
+
+test('the composer reserves the transcript scrollbar gutter', () => {
+	const composer = ruleBody('.opencode-chat-composer');
+	assert.match(composer, /scrollbar-gutter: stable/,
+		'The composer reserves the same gutter as the reading view');
+	assert.match(composer, /overflow-y: auto/,
+		'The reserved gutter needs a scroll container');
 });

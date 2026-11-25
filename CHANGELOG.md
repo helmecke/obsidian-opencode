@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A delegated subagent's report now links to the session that produced it: the
+  embed's top-right link opens the child session read-only in the chat view,
+  where its prompt reads **Delegated task** and one centered muted line points
+  back to the parent. The **opencode / sessions / parent** breadcrumb returns to the
+  parent, the switcher keeps listing top-level conversations only, and an
+  unresolvable child shows a notice without replacing the parent transcript.
 - **Switch conversation…** now lists only the vault's top-level conversations:
   a session that a delegated subagent ran in no longer appears in the switcher,
   while the subagent's report stays in the transcript where it happened.
