@@ -211,6 +211,19 @@
 	max-width: 100%;
 }
 
+/*
+ * A message carries its speaker name for assistive technology, and Obsidian
+ * turns every `aria-label` into a hover tooltip. Opt the entry out while links,
+ * buttons, and disclosure summaries inside it keep their own tooltips.
+ */
+.opencode-message[aria-label] {
+	--no-tooltip: true;
+}
+
+.opencode-message[aria-label] :is(a, button, summary) {
+	--no-tooltip: false;
+}
+
 .opencode-message-body {
 	width: 100%;
 	min-width: 0;
@@ -555,6 +568,8 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	font-family: var(--font-interface);
 	font-size: var(--font-ui-medium);
 	line-height: var(--line-height-normal);
+	/* Keep the field's accessible name without a hover tooltip. */
+	--no-tooltip: true;
 }
 
 .opencode-composer-card .opencode-chat-input:focus {

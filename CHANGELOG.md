@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Hovering a message or the message field no longer shows a tooltip repeating
+  the speaker name or **Message OpenCode**. The names stay available to screen
+  readers, and links and controls inside a message keep their own tooltips.
+
 ## 1.1.0 (2026-11-25)
 
 - A delegated subagent's report now links to the session that produced it: the

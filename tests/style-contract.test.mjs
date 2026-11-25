@@ -68,6 +68,15 @@ test('the subagent embed link stays host-owned', () => {
 		'No host embed variable is copied into the plugin styles');
 });
 
+test('transcript names and the message field stay off hover tooltips', () => {
+	assert.match(ruleBody('.opencode-message[aria-label]'), /--no-tooltip: true/,
+		'A message keeps its accessible name without a hover tooltip');
+	assert.match(ruleBody('.opencode-message[aria-label] :is(a, button, summary)'),
+		/--no-tooltip: false/, 'Controls inside a message keep their own tooltips');
+	assert.match(ruleBody('.opencode-composer-card .opencode-chat-input'), /--no-tooltip: true/,
+		'The message field keeps its accessible name without a hover tooltip');
+});
+
 test('the read-only composer hint is one muted, centered line', () => {
 	const hint = ruleBody('.opencode-composer-hint');
 	assert.match(hint, /color: var\(--text-muted\)/);
