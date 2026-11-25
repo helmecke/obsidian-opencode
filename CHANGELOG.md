@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-11-25)
 
 - A delegated subagent's report now links to the session that produced it: the
   embed's top-right link opens the child session read-only in the chat view,
