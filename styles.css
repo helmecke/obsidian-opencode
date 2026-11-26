@@ -37,6 +37,11 @@
 	text-overflow: ellipsis;
 }
 
+.opencode-chat-title[contenteditable="true"]:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
 .opencode-chat-breadcrumbs .view-header-breadcrumb:focus-visible {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: 2px;
@@ -92,7 +97,7 @@
 	max-width: 100%;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
-	line-height: 1.4;
+	line-height: var(--line-height-normal);
 	overflow-wrap: anywhere;
 }
 
@@ -376,7 +381,7 @@
 	padding: var(--size-4-2) var(--size-4-4);
 	max-height: 45%;
 	overflow-y: auto;
-	border-top: 1px solid var(--background-modifier-border);
+	border-top: var(--border-width, 1px) solid var(--background-modifier-border);
 }
 
 .opencode-chat-permissions,
@@ -552,9 +557,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 }
 
 .opencode-chat-composer {
-	--opencode-composer-control-height: calc(
-		var(--font-ui-small) * var(--line-height-tight) + var(--size-4-1) * 2
-	);
+	--opencode-composer-control-height: var(--input-height, 30px);
 	flex: 0 0 auto;
 	/* The transcript reserves a stable scrollbar gutter; reserve the same one
 	   here so the composer card lines up with the text column. */
@@ -569,7 +572,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	flex-direction: column;
 	gap: var(--size-4-1);
 	padding: var(--size-4-2);
-	border: 1px solid var(--background-modifier-border);
+	border: var(--border-width, 1px) solid var(--background-modifier-border);
 	border-radius: var(--radius-l);
 	background-color: var(--background-primary);
 	transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -577,7 +580,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 
 .opencode-composer-card:focus-within {
 	border-color: var(--interactive-accent);
-	box-shadow: 0 0 0 1px var(--interactive-accent);
+	box-shadow: 0 0 0 var(--border-width, 1px) var(--interactive-accent);
 }
 
 .opencode-composer-card .opencode-chat-input {
@@ -626,8 +629,9 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	gap: var(--size-2-1);
 	max-width: 100%;
 	height: auto;
+	min-height: var(--size-4-6);
 	padding: var(--size-2-1) var(--size-4-1);
-	border: 1px solid var(--background-modifier-border);
+	border: var(--border-width, 1px) solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	background-color: var(--background-secondary);
 	color: var(--text-muted);
@@ -721,6 +725,11 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 
 .opencode-composer-choice:not(:hover) {
 	background-color: transparent;
+}
+
+/* The real <select> is an invisible overlay; ring the visible trigger it drives. */
+.opencode-composer-choice:focus-within {
+	box-shadow: 0 0 0 2px var(--interactive-accent);
 }
 
 .opencode-composer-choice[hidden] {
@@ -823,7 +832,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 .opencode-composer-send {
 	width: var(--opencode-composer-control-height);
 	padding: 0;
-	border: 1px solid var(--interactive-accent);
+	border: var(--border-width, 1px) solid var(--interactive-accent);
 	border-radius: 999px;
 	background-color: var(--interactive-accent);
 	color: var(--text-on-accent);
@@ -848,7 +857,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	gap: var(--size-4-2);
 	flex-wrap: wrap;
 	padding-top: var(--size-4-1);
-	border-top: 1px solid var(--background-modifier-border);
+	border-top: var(--border-width, 1px) solid var(--background-modifier-border);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
@@ -966,11 +975,11 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 }
 
 .opencode-file {
-	border-top: 1px solid var(--background-modifier-border);
+	border-top: var(--border-width, 1px) solid var(--background-modifier-border);
 }
 
 .opencode-file:last-child {
-	border-bottom: 1px solid var(--background-modifier-border);
+	border-bottom: var(--border-width, 1px) solid var(--background-modifier-border);
 }
 
 .opencode-file summary {
@@ -1113,4 +1122,12 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	align-items: center;
 	color: var(--text-error);
 	font-size: var(--font-ui-smaller);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.opencode-chat-breadcrumbs,
+	.opencode-composer-card,
+	.opencode-composer-choice {
+		transition: none;
+	}
 }

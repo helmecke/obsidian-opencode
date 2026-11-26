@@ -311,6 +311,24 @@ test('cyclic pagination fails closed instead of looping or publishing partial me
 	await assert.rejects(f.coordinator.list());
 });
 
+test('endless unique pagination is bounded instead of exhausting memory', async () => {
+	const f = fixture();
+	await f.coordinator.select('one');
+	let pages = 0;
+	f.client.message.list = async () => {
+		pages++;
+		return page([message(`m${pages}`, 'x')], `page-${pages}`);
+	};
+	await assert.rejects(f.coordinator.open());
+	assert.deepEqual(f.coordinator.state.messages, []);
+	let sessionPages = 0;
+	f.client.session.list = async () => {
+		sessionPages++;
+		return page([info(`s${sessionPages}`)], `spage-${sessionPages}`);
+	};
+	await assert.rejects(f.coordinator.list());
+});
+
 test('unload aborts requests, suppresses late snapshots and forbids subsequent operations', async () => {
 	const f = fixture();
 	await f.coordinator.select('one');

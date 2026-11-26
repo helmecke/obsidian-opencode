@@ -11,6 +11,11 @@ export class SessionError extends Error {
 
 const childFailureMessage = 'Unable to open the subagent session. It may no longer exist.';
 
+/** Snapshot paging is bounded: a broken local service must not exhaust plugin memory. */
+const MAX_PAGE_COUNT = 200;
+const MAX_MESSAGE_COUNT = 100_000;
+const MAX_SESSION_COUNT = 20_000;
+
 type Client = Awaited<ReturnType<ConnectionCoordinator['connect']>>;
 
 export interface SessionSnapshot {
@@ -205,14 +210,17 @@ export class SessionCoordinator {
 	private async messagesAt(client: Client, id: string, signal: AbortSignal): Promise<SessionMessageInfo[]> {
 		const messages: SessionMessageInfo[] = [];
 		let cursor: string | undefined;
+		let pages = 0;
 		const seen = new Set<string>();
 		do {
+			if (++pages > MAX_PAGE_COUNT) throw new SessionError();
 			// A cursor contains its order; the server rejects combining both.
 			const page = await client.message.list(cursor ? { sessionID: id, cursor }
 				: { sessionID: id, order: 'asc' }, { signal });
 			if (signal.aborted) throw new SessionError();
 			this.checkAlive();
 			messages.push(...page.data);
+			if (messages.length > MAX_MESSAGE_COUNT) throw new SessionError();
 			cursor = page.cursor.next ?? undefined;
 			if (cursor && seen.has(cursor)) throw new SessionError();
 			if (cursor) seen.add(cursor);
@@ -242,8 +250,10 @@ export class SessionCoordinator {
 		const client = await this.connection.connect();
 		const sessions: SessionInfo[] = [];
 		let cursor: string | undefined;
+		let pages = 0;
 		const seen = new Set<string>();
 		do {
+			if (++pages > MAX_PAGE_COUNT) throw new SessionError();
 			const page = await client.session.list({ directory: root, cursor, order: 'desc' }, { signal });
 			if (signal.aborted) throw new SessionError();
 			this.checkAlive();
@@ -252,6 +262,7 @@ export class SessionCoordinator {
 				if (session.parentID) continue;
 				if (sameDirectory(session.location.directory, root) && !sessions.some((s) => s.id === session.id)) sessions.push(session);
 			}
+			if (sessions.length > MAX_SESSION_COUNT) throw new SessionError();
 			cursor = page.cursor.next ?? undefined;
 			if (cursor && seen.has(cursor)) throw new SessionError();
 			if (cursor) seen.add(cursor);

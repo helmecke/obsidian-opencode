@@ -10,13 +10,18 @@ import { ConnectionError } from './errors';
 import { resolveExecutable } from './executable';
 import { createNodeFetch } from './node-fetch';
 import { selectLoopbackPort } from './port';
-import { isProcessAlive } from './process';
+import { isProcessAlive, processStartedAt } from './process';
 import { validateExecutableVersion } from './version';
 import type { VersionQuery } from './version';
 
 type Client = ReturnType<typeof OpenCode.make>;
 
-export interface ManagedOrphanRecord { pid: number; token: string }
+export interface ManagedOrphanRecord { pid: number; startedAt: number }
+
+/** Spawn and record time differ by milliseconds; a wide window still rules out PID reuse. */
+const ORPHAN_START_TOLERANCE_MS = 120_000;
+const STOP_CONFIRM_ATTEMPTS = 10;
+const STOP_CONFIRM_INTERVAL_MS = 100;
 export type ManagedRuntimePhase = 'idle' | 'starting' | 'running' | 'restarting' | 'failed';
 export interface ManagedRuntimeStatus {
 	readonly mode: 'managed';
@@ -44,7 +49,8 @@ export interface ManagedRuntimeOptions {
 	isAlive?: (pid: number) => boolean;
 	delay?: (milliseconds: number) => Promise<void>;
 	randomPassword?: () => string;
-	randomToken?: () => string;
+	/** Start time of a recorded PID, used to prove it is the child this plugin spawned. */
+	processStartedAt?: (pid: number) => Promise<number | undefined>;
 }
 
 /** Windows needs the whole tree; POSIX children are started in their own group. */
@@ -111,10 +117,20 @@ export class ManagedRuntime {
 		const child = this.child;
 		this.child = undefined;
 		this.client = undefined;
-		if (child) await this.stop(child);
-		await this.clearOrphan();
+		// A kill that cannot be confirmed keeps the orphan record for the next start.
+		if (!child || await this.stop(child)) await this.clearOrphan().catch(() => undefined);
 		this.publish({ mode: 'managed', phase: 'idle' });
 		this.listeners.clear();
+	}
+
+	/** Best-effort synchronous signal while the plugin unloads; dispose() still finishes the job. */
+	terminate(): void {
+		const child = this.child;
+		if (!child?.pid) return;
+		try {
+			if (process.platform === 'win32') child.kill();
+			else process.kill(-child.pid, 'SIGTERM');
+		} catch { /* already gone */ }
 	}
 
 	private async start(): Promise<Client> {
@@ -145,7 +161,7 @@ export class ManagedRuntime {
 			this.child = child;
 			this.observe(child);
 			if (!child.pid) throw new ConnectionError('startup');
-			await this.writeOrphan({ pid: child.pid, token: (this.options.randomToken ?? randomToken)() });
+			await this.writeOrphan({ pid: child.pid, startedAt: Date.now() });
 			const client = await this.waitForReady(child, port);
 			if (this.disposing || this.child !== child) throw new ConnectionError('startup');
 			this.client = client;
@@ -153,10 +169,9 @@ export class ManagedRuntime {
 			this.setStatus({ mode: 'managed', phase: 'running' });
 			return client;
 		} catch (error) {
-			if (child) await this.stop(child);
+			if (!child || await this.stop(child)) await this.clearOrphan().catch(() => undefined);
 			if (this.child === child) this.child = undefined;
 			this.client = undefined;
-			await this.clearOrphan();
 			const mapped = error instanceof ConnectionError ? error : new ConnectionError('startup');
 			if (!this.disposing) this.setStatus({ mode: 'managed', phase: 'failed', error: mapped.message });
 			throw mapped;
@@ -174,7 +189,7 @@ export class ManagedRuntime {
 		if (this.disposing || this.child !== child) return;
 		this.child = undefined;
 		this.client = undefined;
-		void this.clearOrphan();
+		void this.clearOrphan().catch(() => undefined);
 		if (this.statusValue.phase !== 'running') return;
 		this.scheduleRestart();
 	}
@@ -240,16 +255,35 @@ export class ManagedRuntime {
 	private async reapOrphan(): Promise<void> {
 		const record = await this.options.readOrphan?.();
 		if (!record) return;
-		const alive = (this.options.isAlive ?? isProcessAlive)(record.pid);
-		if (alive && record.pid !== process.pid) {
-			await (this.options.killTree ?? killProcessTree)(record.pid);
-		}
-		await this.clearOrphan();
+		const alive = this.options.isAlive ?? isProcessAlive;
+		if (!alive(record.pid) || record.pid === process.pid) { await this.clearOrphan(); return; }
+		// A live PID alone can belong to an unrelated process after a crash and
+		// reboot; only a matching start time proves it is the child we spawned.
+		const startedAt = await (this.options.processStartedAt ?? processStartedAt)(record.pid);
+		if (startedAt === undefined || Math.abs(startedAt - record.startedAt) > ORPHAN_START_TOLERANCE_MS) return;
+		await (this.options.killTree ?? killProcessTree)(record.pid);
+		if (await this.stopped(record.pid)) await this.clearOrphan();
 	}
 
-	private async stop(child: ChildProcess): Promise<void> {
-		if (!child.pid || child.exitCode !== null) return;
+	/** Kill the child tree and report whether the process is confirmed gone. */
+	private async stop(child: ChildProcess): Promise<boolean> {
+		if (!child.pid || child.exitCode !== null) return true;
 		try { await (this.options.killTree ?? killProcessTree)(child.pid); } catch { /* already gone */ }
+		return this.stopped(child.pid);
+	}
+
+	private async stopped(pid: number): Promise<boolean> {
+		const alive = this.options.isAlive ?? isProcessAlive;
+		for (let attempt = 0; attempt < STOP_CONFIRM_ATTEMPTS; attempt++) {
+			if (!alive(pid)) return true;
+			if (attempt < STOP_CONFIRM_ATTEMPTS - 1) await this.wait(STOP_CONFIRM_INTERVAL_MS);
+		}
+		return false;
+	}
+
+	private wait(milliseconds: number): Promise<void> {
+		if (this.options.delay) return this.options.delay(milliseconds);
+		return setTimeoutPromise(milliseconds, undefined, { ref: false }).then(() => undefined);
 	}
 
 	private async writeOrphan(record: ManagedOrphanRecord): Promise<void> {
@@ -269,4 +303,3 @@ export class ManagedRuntime {
 }
 
 function randomPassword(): string { return randomBytes(32).toString('base64url'); }
-function randomToken(): string { return randomBytes(16).toString('hex'); }

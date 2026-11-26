@@ -26,6 +26,14 @@ jobs:
                   npm ci
                   npm run build
 
+            - name: Verify tag matches manifest version
+              run: |
+                  version=$(node -p "require('./manifest.json').version")
+                  if [ "$GITHUB_REF_NAME" != "$version" ]; then
+                      echo "Tag $GITHUB_REF_NAME does not match manifest version $version"
+                      exit 1
+                  fi
+
             - name: Check for optional styles
               id: styles
               run: |

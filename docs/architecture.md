@@ -60,12 +60,15 @@ and spawns:
 opencode serve --hostname 127.0.0.1 --port <ephemeral>
 ```
 
-The process gets a fresh random password and a plugin-private
-`XDG_STATE_HOME`, so it never uses or writes the shared registration. Readiness
-polls `/api/info` and requires the spawned PID. A recorded orphan PID from an
-earlier run is stopped before a new managed process starts. Crashes restart with
-bounded backoff and end in a fixed, password-free failure. Disabling the plugin
-kills the managed process tree and clears the orphan record.
+The process gets a fresh random password and a plugin-private `XDG_STATE_HOME`
+in the user's state directory, outside the vault, so it never uses or writes the
+shared registration and vault sync never carries service state. Readiness polls
+`/api/info` and requires the spawned PID. A recorded orphan from an earlier run
+is stopped only after its process start time proves it is still the child this
+plugin spawned; a bare live PID is never killed. Crashes restart with bounded
+backoff and end in a fixed, password-free failure. Disabling the plugin kills
+the managed process tree and clears the orphan record once the process is
+confirmed gone.
 
 ## Persistence
 
@@ -76,7 +79,7 @@ Plugin data holds only:
 - the reasoning-display preference;
 - the active-note automatic-attachment preference;
 - the last selected model and variant;
-- a transient managed-process PID and token for orphan cleanup.
+- a transient managed-process PID and start time for orphan cleanup.
 
 The selected session is not persisted. `SessionCoordinator` keeps the selection
 or a client-side draft in its in-memory snapshot: opening chat starts a fresh

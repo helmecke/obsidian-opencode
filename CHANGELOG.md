@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The plugin is now named **OpenCode Chat** to avoid colliding with an existing
+  community plugin called **OpenCode**; the plugin ID and installed folder stay
+  `opencode-chat`.
+- Managed service state now lives in the user's state directory outside the
+  vault, so vault sync and backup never carry it. Orphan cleanup verifies a live
+  process's start time before stopping it, so a recycled PID is never killed; an
+  unconfirmed stop keeps the record for the next start.
+- Keyboard focus rings for the conversation title and the Agent, Model, and
+  Thinking controls, reduced-motion support, and native control heights.
 - Review the files an assistant changed without leaving chat. A turn that
   reports changes ends with a collapsed **Changed files** row naming them;
   expanding it loads the turn's changed files lazily, and each file expands to

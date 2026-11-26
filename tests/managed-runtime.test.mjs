@@ -14,6 +14,7 @@ const bundle = await build({
 	stdin: { contents: `export * from './src/opencode/executable';
 		export * from './src/opencode/version';
 		export * from './src/opencode/port';
+		export * from './src/opencode/process';
 		export * from './src/opencode/managed-runtime';
 		export * from './src/opencode/connection';
 		export * from './src/opencode/errors';
@@ -28,7 +29,7 @@ compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 );
 const {
 	resolveExecutable, parseOpenCodeVersion, validateExecutableVersion, selectLoopbackPort,
-	ManagedRuntime, ConnectionCoordinator, ConnectionError, loadSettings,
+	ManagedRuntime, ConnectionCoordinator, ConnectionError, loadSettings, processStartedAt,
 } = module.exports;
 
 const secret = 'managed-runtime-secret';
@@ -161,7 +162,6 @@ function runtimeOptions(t, executablePath, stateDir, server, overrides = {}) {
 		readyTimeout: 2_000,
 		pollInterval: 10,
 		randomPassword: () => secret,
-		randomToken: () => 'start-token',
 		isAlive: () => false,
 		...overrides.runtime,
 	};
@@ -192,7 +192,8 @@ test('managed runtime spawns a private loopback service without a shell and owns
 	assert.deepEqual(spawnOptions.stdio, ['ignore', 'pipe', 'pipe']);
 	assert.equal(spawnOptions.env.OPENCODE_SERVER_PASSWORD, secret);
 	assert.equal(spawnOptions.env.XDG_STATE_HOME, stateDir);
-	assert.deepEqual(fixture.orphans[0], { pid: 4_321, token: 'start-token' });
+	assert.equal(fixture.orphans[0].pid, 4_321);
+	assert.equal(typeof fixture.orphans[0].startedAt, 'number', 'The orphan record carries a start time');
 	assert.equal(server.requests[0].authorization, `Basic ${Buffer.from(`opencode:${secret}`).toString('base64')}`);
 	assert.equal(await readFile(registration, 'utf8'), shared, 'The shared registration is untouched');
 	await runtime.dispose();
@@ -216,12 +217,14 @@ test('a previous orphan is killed before a new start and a crash restarts with b
 	const server = await infoServer(t, 4_321);
 	const kills = [];
 	let spawned = 0;
+	let orphanAlive = true;
 	const children = [];
 	const fixture = runtimeOptions(t, file, dir, server, {
-		orphan: { pid: 7_777, token: 'old-token' },
+		orphan: { pid: 7_777, startedAt: 1_000 },
 		runtime: {
-			isAlive: (pid) => pid === 7_777,
-			killTree: async (pid) => { kills.push(pid); },
+			isAlive: (pid) => pid === 7_777 && orphanAlive,
+			killTree: async (pid) => { kills.push(pid); if (pid === 7_777) orphanAlive = false; },
+			processStartedAt: async (pid) => pid === 7_777 ? 1_000 : undefined,
 			restartAttempts: 2,
 			restartBaseDelay: 10,
 		},
@@ -244,6 +247,35 @@ test('a previous orphan is killed before a new start and a crash restarts with b
 	assert.deepEqual(phases.slice(-3), ['restarting', 'starting', 'running']);
 	await runtime.dispose();
 	assert.ok(kills.includes(4_321));
+});
+
+test('a live process start time is read, and an unknown PID has none', async (t) => {
+	const { spawn } = await import('node:child_process');
+	const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20_000)'], { stdio: 'ignore' });
+	t.after(() => child.kill());
+	const startedAt = await processStartedAt(child.pid);
+	assert.equal(typeof startedAt, 'number');
+	assert.ok(Math.abs(startedAt - Date.now()) < 120_000, 'The start time is close to now');
+	assert.equal(await processStartedAt(Number.MAX_SAFE_INTEGER), undefined);
+});
+
+test('a live PID with a different start time is never killed as an orphan', async (t) => {
+	const { dir, file } = await executable(t);
+	const server = await infoServer(t, 4_321);
+	const kills = [];
+	const fixture = runtimeOptions(t, file, dir, server, {
+		orphan: { pid: 7_777, startedAt: 1_000 },
+		runtime: {
+			isAlive: (pid) => pid === 7_777,
+			killTree: async (pid) => { kills.push(pid); },
+			// The PID was reused by an unrelated process after a crash and reboot.
+			processStartedAt: async () => 9_000_000,
+		},
+	});
+	const runtime = new ManagedRuntime(fixture.options);
+	await runtime.acquire();
+	assert.deepEqual(kills, [], 'A recycled PID is left alone');
+	await runtime.dispose();
 });
 
 test('restart attempts are bounded and end in an actionable failure', async (t) => {
@@ -322,10 +354,10 @@ test('managed errors are fixed, password-free, and settings preserve the orphan 
 		assert.ok(!error.message.includes(secret));
 		assert.ok(!/password/i.test(error.message));
 	}
-	assert.deepEqual(loadSettings({ autoStart: false, managedOrphan: { pid: 42, token: 'abc' } }), {
+	assert.deepEqual(loadSettings({ autoStart: false, managedOrphan: { pid: 42, startedAt: 1_000 } }), {
 		executablePath: '', autoStart: false, showReasoning: false, attachActiveNote: false,
-		managedOrphan: { pid: 42, token: 'abc' },
+		managedOrphan: { pid: 42, startedAt: 1_000 },
 	});
-	assert.deepEqual(loadSettings({ managedOrphan: { pid: -1, token: 'abc' } }),
+	assert.deepEqual(loadSettings({ managedOrphan: { pid: -1, startedAt: 1_000 } }),
 		{ executablePath: '', autoStart: true, showReasoning: false, attachActiveNote: false });
 });

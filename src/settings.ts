@@ -2,7 +2,7 @@ import { PluginSettingTab } from 'obsidian';
 import type { App, Plugin, SettingDefinitionItem } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 
-export interface ManagedOrphan { pid: number; token: string }
+export interface ManagedOrphan { pid: number; startedAt: number }
 export interface OpenCodeSettings {
 	executablePath: string;
 	autoStart: boolean;
@@ -34,11 +34,10 @@ export function loadSettings(value: unknown): OpenCodeSettings {
 		settings.lastModel = { providerID: lastModel.providerID, id: lastModel.id,
 			...(variant ? { variant } : {}) };
 	}
-	if (orphan && typeof orphan === 'object' && 'pid' in orphan && 'token' in orphan
+	if (orphan && typeof orphan === 'object' && 'pid' in orphan && 'startedAt' in orphan
 		&& typeof orphan.pid === 'number' && Number.isSafeInteger(orphan.pid) && orphan.pid > 0
-		&& typeof orphan.token === 'string' && orphan.token.length > 0 && orphan.token.length <= 256
-		&& !unsafeText.test(orphan.token)) {
-		settings.managedOrphan = { pid: orphan.pid, token: orphan.token };
+		&& typeof orphan.startedAt === 'number' && Number.isSafeInteger(orphan.startedAt) && orphan.startedAt > 0) {
+		settings.managedOrphan = { pid: orphan.pid, startedAt: orphan.startedAt };
 	}
 	return settings;
 }

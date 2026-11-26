@@ -73,7 +73,7 @@ export class ConnectionCoordinator {
 	dispose(): void {
 		this.lifetime.abort();
 		this.attempt = undefined;
-		void this.runtime?.dispose();
+		void Promise.resolve(this.runtime?.dispose()).catch(() => undefined);
 	}
 
 	private async resolve(signal: AbortSignal): Promise<Client> {

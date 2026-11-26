@@ -1,6 +1,6 @@
 {
 	"name": "opencode-chat",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"description": "A desktop Obsidian plugin for native OpenCode chat.",
 	"main": "main.js",
 	"type": "module",
@@ -11,8 +11,14 @@
 		"lint": "eslint .",
 		"test": "node --test tests/*.test.mjs"
 	},
-	"keywords": [],
-	"license": "0-BSD",
+	"keywords": [
+		"obsidian",
+		"opencode",
+		"ai",
+		"agent",
+		"chat"
+	],
+	"license": "0BSD",
 	"devDependencies": {
 		"@eslint/js": "^9.39.4",
 		"@types/node": "^22.15.17",

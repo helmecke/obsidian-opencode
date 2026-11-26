@@ -42,7 +42,7 @@ npm ci
    vault. Copy `main.js`, `manifest.json`, and `styles.css` from the repository
    root into that directory. Do not install into a real vault as part of this
    check.
-3. Reload Obsidian and enable **OpenCode** under
+3. Reload Obsidian and enable **OpenCode Chat** under
    **Settings → Community plugins**. Enabling the plugin alone does not contact
    or start OpenCode.
 

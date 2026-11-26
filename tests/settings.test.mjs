@@ -38,7 +38,7 @@ test('reasoning display is opt-in and missing or non-boolean values read as off'
 });
 
 test('reasoning display does not change the parsing of the other stored fields', () => {
-	const managedOrphan = { pid: 42, token: 'abc' };
+	const managedOrphan = { pid: 42, startedAt: 1_000 };
 	assert.deepEqual(loadSettings({
 		executablePath: 'C:\\Program Files\\OpenCode\\opencode.exe', autoStart: false,
 		showReasoning: true, attachActiveNote: true, managedOrphan,
@@ -50,7 +50,7 @@ test('reasoning display does not change the parsing of the other stored fields',
 	assert.deepEqual(loadSettings({
 		executablePath: 'bad\npath', autoStart: 'no', showReasoning: 'yes', attachActiveNote: 'yes',
 		selectedSession: { id: '', directory: 'C:\\Vault' },
-		managedOrphan: { pid: -1, token: 'abc' },
+		managedOrphan: { pid: -1, startedAt: 1_000 },
 	}), { executablePath: '', autoStart: true, showReasoning: false, attachActiveNote: false },
 	'Unknown or invalid values stay out of the stored shape');
 });

@@ -1,13 +1,13 @@
-# OpenCode for Obsidian
+# OpenCode Chat for Obsidian
 
 A desktop-only Obsidian plugin for native [OpenCode](https://opencode.ai/) chat.
-This development build provides a movable, theme-aware conversation view with
+This plugin provides a movable, theme-aware conversation view with
 streamed answers, vault link navigation, tool activity, permission decisions,
 and structured agent forms. It is not published in the community catalog.
 
 OpenCode does the work and owns the transcript. The plugin reuses a healthy
 local OpenCode service when one is registered; when none is, it can start and
-own a private OpenCode 2 process. Open **Settings → OpenCode** to enable or
+own a private OpenCode 2 process. Open **Settings → OpenCode Chat** to enable or
 disable **Start OpenCode automatically** (on by default) and to set the
 executable path. The plugin never starts a process merely because Obsidian
 loads, and it never downloads OpenCode.
@@ -39,14 +39,14 @@ binary with `opencode --version` (or its full executable path).
 
 ### Install the plugin
 
-This build is not in the community catalog. Build it from source:
+This plugin is not in the community catalog. Build it from source:
 
 1. Clone this repository into a development directory and use a current LTS
    Node.js with npm.
 2. From the repository root, run `npm ci` and `npm run build`.
 3. Create `.obsidian/plugins/opencode-chat/` in your vault and copy `main.js`,
    `manifest.json`, and `styles.css` from the repository root into it.
-4. Reload Obsidian and enable **OpenCode** under
+4. Reload Obsidian and enable **OpenCode Chat** under
    **Settings → Community plugins**.
 
 Enabling the plugin alone does not contact or start OpenCode. For watch mode,
@@ -57,7 +57,7 @@ the test suite, lint, and the disposable-vault workflow, see
 
 ### Automatic startup
 
-**Settings → OpenCode → Start OpenCode automatically** is on by default. When
+**Settings → OpenCode Chat → Start OpenCode automatically** is on by default. When
 it is enabled and no healthy service is registered, opening chat validates the
 configured executable and starts a private managed service instead of asking you
 to launch one first. The process keeps running while the plugin is enabled,
@@ -67,7 +67,7 @@ before showing an error with **Retry discovery**.
 
 ### Executable path
 
-Open **Settings → OpenCode → OpenCode 2 executable path** and enter the full path
+Open **Settings → OpenCode Chat → OpenCode 2 executable path** and enter the full path
 to the OpenCode 2 executable, without surrounding quotes or arguments, for
 example `C:\Program Files\OpenCode\opencode.exe`. Spaces are preserved as path
 data; the field is never run through a shell. NUL characters and line breaks are
@@ -85,7 +85,7 @@ startup never writes the shared service registration.
 
 ### Show reasoning
 
-**Settings → OpenCode → Show reasoning** is off by default. While it is off, the
+**Settings → OpenCode Chat → Show reasoning** is off by default. While it is off, the
 transcript omits model reasoning entirely: no summary row, icon, preview, or
 body, for live and reopened conversations alike. When it is on, reasoning
 appears as a collapsed row with a one-line preview that expands to its full
@@ -96,7 +96,7 @@ plugin never stores it.
 
 ### Attach the active note automatically
 
-**Settings → OpenCode → Attach active note automatically** is off by default.
+**Settings → OpenCode Chat → Attach active note automatically** is off by default.
 When it is on, messages sent from the composer include the open Markdown note as
 a `file:///` file reference without an extra chip; the typed text is unchanged.
 Turning it off returns to attaching the note only through **Attach active note**.
@@ -105,7 +105,7 @@ notice, and a note that is already attached is sent once.
 
 ## Open the chat
 
-Select the **OpenCode** ribbon action or run **OpenCode: Open chat** from the
+Select **Open chat** in the ribbon or run **OpenCode Chat: Open chat** from the
 command palette. The view opens in a main tab; move it to a sidebar as needed.
 
 The plugin lazily reads the standard local registration, then checks the
@@ -121,7 +121,7 @@ process on an ephemeral loopback port and shows **Connected · Managed service**
 If a discovery attempt fails, select **Retry discovery**.
 
 The managed process uses a fresh random password and a plugin-private state
-directory. An incompatible shared service is left untouched: the plugin does
+directory outside the vault. An incompatible shared service is left untouched: the plugin does
 not restart, replace, or reconfigure it. See
 [architecture](docs/architecture.md) for discovery, ownership, and lifecycle
 details.
@@ -142,7 +142,7 @@ details.
   the first message creates the session. If the default agent has no model, the
   draft reuses the model you last selected.
 - The pane header and the workspace tab show the current conversation's title.
-  A conversation without a title shows **New conversation**. Clicking the
+  A conversation without a title shows **New conversation**. Selecting the
   header title edits it in place; Enter or leaving the field commits, Escape
   cancels, and an empty title is ignored. A failed rename shows a notice and
   keeps the previous title.
@@ -198,10 +198,10 @@ details.
   are in the paperclip menu beside **Retry discovery** and appear only while
   their source is available. A selection is sent as labelled message text at
   the moment you attach it; a note is sent as a `file:///` reference and its
-  contents are not copied by the plugin. Click a chip's **×** to remove that
+  contents are not copied by the plugin. Select a chip's **×** to remove that
   item; the typed message is unchanged. Identical notes attach once, and notes
   larger than 20 MiB are skipped with a notice.
-- **Settings → OpenCode → Attach active note automatically** is off by default.
+- **Settings → OpenCode Chat → Attach active note automatically** is off by default.
   Enable it to attach the open Markdown note with every message without adding a
   chip; otherwise the active note is attached only when you ask.
 - Type `$` at the start of the message or after a space to search the OpenCode
@@ -269,7 +269,7 @@ details.
   files; expanding a file shows its patch. Nothing is fetched for a turn until
   you expand it.
 - **Review changes in this conversation…** in the document **⋯** menu and
-  **OpenCode: Review changes in this conversation** in the command palette open
+  **OpenCode Chat: Review changes in this conversation** in the command palette open
   a session-wide review. It is bounded to this conversation, from its first
   turn's start to its last turn's end, and refreshes each time it opens.
 - Each file row shows its path, status (added, modified, or deleted), and
@@ -329,8 +329,8 @@ retained text.
 OpenCode owns the transcript and execution. The plugin stores only the
 executable-path setting, the automatic-startup preference, the reasoning-display
 preference, the active-note automatic-attachment preference, the last selected
-model and variant, and a transient record of a managed process PID for orphan
-cleanup; it does not persist the selected conversation, duplicate transcripts,
+model and variant, and a transient record of a managed process PID and start time
+for orphan cleanup; it does not persist the selected conversation, duplicate transcripts,
 changed-file patches, or store service credentials.
 
 ## Markdown and vault links

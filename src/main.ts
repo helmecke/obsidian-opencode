@@ -1,11 +1,10 @@
 import { FileSystemAdapter, Plugin } from 'obsidian';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ChatView, CHAT_VIEW_TYPE } from './ui/chat-view';
 import { openChat } from './ui/open-chat';
 import { reviewConversationChanges } from './ui/review-changes';
 import { ConnectionCoordinator } from './opencode/connection';
 import { ManagedRuntime } from './opencode/managed-runtime';
+import { managedStateDirectory } from './opencode/state-directory';
 import { loadSettings, OpenCodeSettingTab } from './settings';
 import { SessionCoordinator } from './opencode/sessions';
 import { SynchronizationCoordinator } from './state/synchronization';
@@ -21,12 +20,8 @@ export default class OpenCodePlugin extends Plugin {
 		};
 		const adapter = this.app.vault.adapter;
 		const vaultRoot = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
-		const configDir = this.app.vault.configDir;
 		const pluginID = this.manifest?.id ?? 'opencode-chat';
-		const pluginDir = this.manifest?.dir ?? (configDir ? join(configDir, 'plugins', pluginID) : pluginID);
-		const stateDir = vaultRoot
-			? join(vaultRoot, pluginDir, '.state')
-			: join(tmpdir(), 'opencode-obsidian', pluginID);
+		const stateDir = managedStateDirectory(vaultRoot || pluginID);
 		const runtime = new ManagedRuntime({
 			executablePath: () => settings.executablePath,
 			enabled: () => settings.autoStart,
@@ -49,11 +44,13 @@ export default class OpenCodePlugin extends Plugin {
 			lastModel: () => settings.lastModel,
 			rememberModel: (model) => {
 				settings.lastModel = model;
-				void save();
+				void save().catch(() => undefined);
 			},
 		});
-		this.register(() => connection.dispose());
-		this.register(() => { void runtime.dispose(); });
+		this.register(() => {
+			runtime.terminate();
+			connection.dispose();
+		});
 		this.addSettingTab(new OpenCodeSettingTab(this.app, this, settings, save,
 			() => this.refreshChatViews()));
 		this.registerView(CHAT_VIEW_TYPE, (leaf) =>

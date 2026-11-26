@@ -224,6 +224,8 @@ export class ChatView extends ItemView {
 		const known = current?.file ? current : this.lastMarkdownView;
 		if (known?.file && (!leaves || !known.leaf || leaves.includes(known.leaf))) return known;
 		if (!leaves) return undefined;
+		// The remembered view's leaf closed: drop it instead of holding the view alive.
+		if (known === this.lastMarkdownView) this.lastMarkdownView = undefined;
 		const open = leaves.map((leaf) => leaf.view)
 			.filter((view): view is MarkdownView => view instanceof MarkdownView && Boolean(view.file));
 		// With several notes open and no focus history, never guess which one is meant.

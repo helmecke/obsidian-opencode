@@ -80,8 +80,8 @@ export class ConfirmDiscardModal extends ConfirmationModal {
 	private answered = false;
 	constructor(app: App, private readonly decide: (confirmed: boolean) => void) { super(app); }
 
-	onOpen(): void {
-		void super.onOpen();
+	async onOpen(): Promise<void> {
+		await super.onOpen();
 		this.titleEl.setText('Discard unsent message?');
 		this.contentEl.empty();
 		this.contentEl.createEl('p', {
