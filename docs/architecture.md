@@ -19,8 +19,8 @@ installed separately.
   identity and reconciliation, interactions, and the synchronization state
   machine.
 - `src/ui/` holds the chat view, composer and its `[[`, `$`, and `/`
-  completion, message rendering, Markdown and vault links, forms, permission
-  cards, tool entries, and native controls.
+  completion, context attachments, message rendering, Markdown and vault links,
+  forms, permission cards, tool entries, and native controls.
 - `styles.css` documents the Obsidian surfaces the chat reuses.
 
 ## Discovery and connection
@@ -74,6 +74,7 @@ Plugin data holds only:
 - the executable-path override;
 - the automatic-startup preference;
 - the reasoning-display preference;
+- the active-note automatic-attachment preference;
 - the last selected model and variant;
 - a transient managed-process PID and token for orphan cleanup.
 
@@ -91,6 +92,28 @@ conversation…**. A draft resolves its default agent from `config.default_agent
 own model, then the configured `model`, then the last model the user selected,
 then `model.default`, then the first enabled catalog model. Those selections are
 shown and can be changed in the draft, and are passed to `session.create`.
+
+## Composer context attachment
+
+`src/ui/composer-attachments.ts` owns the per-message attachment shape: a note
+item carries a `TFile`, and a selection item carries snapshot text plus its
+source path. `ChatComposer` keeps that list and renders one removable chip per
+item above the field. `ChatRenderer` shows a paperclip menu beside **Retry
+discovery** with **Attach selection** and **Attach active note**, offering each
+item only while its source exists. `ChatView` tracks the active Markdown editor,
+resolves `[[...]]` references at send time with
+`MetadataCache.getFirstLinkpathDest` after stripping alias, heading, and block
+fragments, adds the optional auto-attached note, and collapses duplicates by
+vault path.
+
+`SynchronizationActions.sendMessage` prepends each selection as a labelled text
+block, converts notes to `SessionPromptInput.files` entries with `file:///` URIs
+built from the vault root, and keeps the typed text unchanged.
+`PromptCoordinator` stores that `files` list on `PendingPrompt` and sends it with
+the stable `msg_` identity, so reconciliation and retry reuse the same
+attachments. The plugin never reads a note: only the selected text range is
+read, and a file is skipped from `TFile.stat.size` with a notice when it exceeds
+the service's 20 MiB per-attachment limit.
 
 ## Chrome
 

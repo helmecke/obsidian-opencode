@@ -1,6 +1,10 @@
 import type { ModelRef } from '@opencode/client';
 import { setIcon } from 'obsidian';
 import type { SynchronizationState } from '../state/synchronization';
+import {
+	attachmentLabel, attachmentRemoveLabel, normalizeAttachments,
+} from './composer-attachments';
+import type { MessageAttachment } from './composer-attachments';
 import { fillAgentOptions, fillModelOptions, fillVariantOptions, modelValue } from './chat-options';
 import { applyCloseBracket, applyComposerEdit, applyOpenBracket, deleteEmptyPair } from './composer-link';
 import type { ComposerEdit, ComposerSelection } from './composer-link';
@@ -27,6 +31,7 @@ interface ComposerChoice {
 export class ChatComposer {
 	private readonly card: HTMLElement;
 	private readonly metaEl: HTMLElement;
+	private readonly attachmentsEl: HTMLElement;
 	private readonly composer: HTMLTextAreaElement;
 	private readonly sendButtonEl: HTMLButtonElement;
 	private readonly stopButtonEl: HTMLButtonElement;
@@ -42,9 +47,12 @@ export class ChatComposer {
 	private readOnly = false;
 	private signatures = { agents: '', models: '', variants: '' };
 	private lastState?: SynchronizationState;
+	private attachments: MessageAttachment[] = [];
 
 	constructor(container: HTMLElement, private readonly handlers: ComposerHandlers) {
 		this.card = container.createDiv({ cls: 'opencode-composer-card' });
+		this.attachmentsEl = this.card.createDiv({ cls: 'opencode-composer-attachments' });
+		this.attachmentsEl.hidden = true;
 		this.composer = this.card.createEl('textarea', {
 			cls: 'opencode-chat-input',
 			attr: {
@@ -125,6 +133,39 @@ export class ChatComposer {
 	get modelSelect(): HTMLSelectElement { return this.modelSelectEl; }
 	get variantSelect(): HTMLSelectElement { return this.variantSelectEl; }
 	get text(): string { return this.composer.value; }
+	get attachmentElements(): HTMLButtonElement[] {
+		return [...this.attachmentsEl.querySelectorAll<HTMLButtonElement>('.opencode-composer-chip')];
+	}
+
+	/** The current chips, in the order they were attached. */
+	listAttachments(): MessageAttachment[] { return [...this.attachments]; }
+
+	/** Adds one chip; a repeated note or identical selection keeps the existing chip. */
+	addAttachment(attachment: MessageAttachment): void {
+		this.attachments = normalizeAttachments([...this.attachments, attachment]);
+		this.renderAttachments();
+	}
+
+	removeAttachment(index: number): void {
+		this.attachments = this.attachments.filter((_attachment, position) => position !== index);
+		this.renderAttachments();
+	}
+
+	/**
+	 * Clears the chips that were sent, but only while the list is unchanged. An
+	 * uncertain send retains everything, and a chip added while the send was in
+	 * flight keeps the list intact.
+	 */
+	clearAttachmentsIf(sent: readonly MessageAttachment[]): void {
+		if (!sameAttachments(this.attachments, sent)) return;
+		this.attachments = [];
+		this.renderAttachments();
+	}
+
+	clearAttachments(): void {
+		this.attachments = [];
+		this.renderAttachments();
+	}
 
 	setText(text: string): void {
 		this.composer.value = text;
@@ -146,6 +187,7 @@ export class ChatComposer {
 		this.composer.hidden = this.readOnly;
 		this.toolbar.hidden = this.readOnly;
 		this.promptActions.hidden = this.readOnly;
+		this.attachmentsEl.hidden = this.readOnly || this.attachments.length === 0;
 		this.readonlyEl.hidden = !this.readOnly;
 		if (hint !== undefined) this.readonlyEl.setText(hint);
 		if (this.lastState) this.update(this.lastState);
@@ -167,7 +209,24 @@ export class ChatComposer {
 			|| (pending !== undefined && pending.phase !== 'admitted') || this.composer.value.trim().length === 0);
 		this.updateAgentOptions(state);
 		this.updateModelOptions(state);
+		this.attachmentsEl.hidden = this.readOnly || this.attachments.length === 0;
 		this.renderPromptActions(state);
+	}
+
+	private renderAttachments(): void {
+		this.attachmentsEl.empty();
+		this.attachmentsEl.hidden = this.readOnly || this.attachments.length === 0;
+		this.attachments.forEach((attachment, index) => {
+			const label = attachmentRemoveLabel(attachment);
+			const chip = this.attachmentsEl.createEl('button', {
+				cls: 'opencode-composer-chip',
+				attr: { type: 'button', 'aria-label': label, title: label },
+			});
+			const iconEl = chip.createSpan({ cls: 'opencode-composer-chip-icon', attr: { 'aria-hidden': 'true' } });
+			setIcon(iconEl, 'x');
+			chip.createSpan({ cls: 'opencode-composer-chip-label', text: attachmentLabel(attachment) });
+			chip.addEventListener('click', () => this.removeAttachment(index));
+		});
 	}
 
 	private createChoice(parent: HTMLElement, kind: string, label: string, icon: string): ComposerChoice {
@@ -328,4 +387,15 @@ export class ChatComposer {
 		// Programmatic edits bypass the native input event; keep resize and send state in sync.
 		this.composer.dispatchEvent(new Event('input', { bubbles: true }));
 	}
+}
+
+function attachmentKey(attachment: MessageAttachment): string {
+	return attachment.kind === 'note'
+		? `note:${attachment.file.path}`
+		: `selection:${attachment.sourcePath}\u0000${attachment.text}`;
+}
+
+function sameAttachments(left: readonly MessageAttachment[], right: readonly MessageAttachment[]): boolean {
+	return left.length === right.length
+		&& left.every((attachment, index) => attachmentKey(attachment) === attachmentKey(right[index]!));
 }

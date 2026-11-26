@@ -581,6 +581,54 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	overflow-y: auto;
 }
 
+/* Attachments use the native chip shape: a real button that removes on click. */
+.opencode-composer-attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+}
+
+.opencode-composer-attachments[hidden] {
+	display: none;
+}
+
+.opencode-composer-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	max-width: 100%;
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-1);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	box-shadow: none;
+	font-size: var(--font-ui-smaller);
+	line-height: var(--line-height-tight);
+}
+
+.opencode-composer-chip:hover {
+	color: var(--text-normal);
+	background-color: var(--background-modifier-hover);
+}
+
+.opencode-composer-chip-icon {
+	display: flex;
+	align-items: center;
+}
+
+.opencode-composer-chip-icon .svg-icon {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.opencode-composer-chip-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .opencode-composer-toolbar {
 	display: flex;
 	align-items: center;

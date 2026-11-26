@@ -59,6 +59,7 @@ export function installDom() {
 
 export function createObsidian(app, notices = [], extra = {}) {
 	const modals = [];
+	const menus = [];
 	class Component {
 		events = [];
 		cleanups = [];
@@ -123,7 +124,7 @@ export function createObsidian(app, notices = [], extra = {}) {
 		}
 	}
 	class Menu {
-		constructor() { this.items = []; }
+		constructor() { this.items = []; this.position = undefined; menus.push(this); }
 		addItem(callback) {
 			const item = {
 				title: '', icon: undefined, disabled: false, click: undefined,
@@ -137,6 +138,10 @@ export function createObsidian(app, notices = [], extra = {}) {
 			return this;
 		}
 		addSeparator() { return this; }
+		showAtPosition(position) { this.position = position; return this; }
+		showAtMouseEvent(event) { this.event = event; return this; }
+		show() { return this; }
+		hide() {}
 	}
 	class AbstractInputSuggest {
 		constructor(suggestApp, textInputEl) {
@@ -185,8 +190,18 @@ export function createObsidian(app, notices = [], extra = {}) {
 	}
 	return {
 		modals,
+		menus,
 		Component,
 		ItemView,
+		MarkdownView: class MarkdownView extends Component {
+			constructor(file, editor) {
+				super();
+				this.file = file;
+				this.editor = editor;
+				this.leaf = { view: this };
+			}
+			getViewType() { return 'markdown'; }
+		},
 		Modal,
 		FuzzySuggestModal,
 		Menu,

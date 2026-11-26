@@ -323,8 +323,9 @@ test('managed errors are fixed, password-free, and settings preserve the orphan 
 		assert.ok(!/password/i.test(error.message));
 	}
 	assert.deepEqual(loadSettings({ autoStart: false, managedOrphan: { pid: 42, token: 'abc' } }), {
-		executablePath: '', autoStart: false, showReasoning: false, managedOrphan: { pid: 42, token: 'abc' },
+		executablePath: '', autoStart: false, showReasoning: false, attachActiveNote: false,
+		managedOrphan: { pid: 42, token: 'abc' },
 	});
 	assert.deepEqual(loadSettings({ managedOrphan: { pid: -1, token: 'abc' } }),
-		{ executablePath: '', autoStart: true, showReasoning: false });
+		{ executablePath: '', autoStart: true, showReasoning: false, attachActiveNote: false });
 });

@@ -10,7 +10,15 @@ installDom();
 const notices = [];
 const app = {
 	vault: {},
-	workspace: {},
+	workspace: {
+		activeMarkdown: undefined,
+		focused: true,
+		getActiveViewOfType(type) {
+			return this.focused && this.activeMarkdown instanceof type ? this.activeMarkdown : null;
+		},
+		getLeavesOfType() { return this.activeMarkdown ? [this.activeMarkdown.leaf] : []; },
+		on() { return { e: { offref: () => undefined } }; },
+	},
 	scope: {},
 	metadataCache: { getFirstLinkpathDest: () => null },
 };
@@ -45,9 +53,13 @@ const report = (id, childID) => ({
 	metadata: { source: 'subagent', agent: 'explore', description: 'Find the note', state: 'completed', childID },
 });
 
-function fixture() {
+function fixture(autoAttachActiveNote = () => false) {
 	notices.length = 0;
 	obsidian.modals.length = 0;
+	obsidian.menus.length = 0;
+	app.workspace.activeMarkdown = undefined;
+	app.workspace.focused = true;
+	app.metadataCache.getFirstLinkpathDest = () => null;
 	const controller = new AbortController();
 	const records = new Map([
 		['parent', session('parent', 'Parent conversation')],
@@ -69,12 +81,14 @@ function fixture() {
 	};
 	const sessions = new SessionCoordinator({ signal: controller.signal, connect: async () => client }, () => root);
 	const listeners = new Set();
+	let pendingPrompt;
 	const synchronization = {
 		get state() {
 			const snapshot = sessions.state;
 			return {
 				phase: 'ready', attempt: 0, permissions: [], forms: [], agents: [], models: [],
 				snapshot,
+				...(pendingPrompt ? { pendingPrompt } : {}),
 				conversation: { messages: snapshot.messages, execution: 'succeeded' },
 			};
 		},
@@ -84,6 +98,7 @@ function fixture() {
 		async openDraft() { await sessions.beginDraft(); this.notify(); },
 		async open() { await sessions.open(); this.notify(); },
 		async sendMessage() { return true; },
+		settleAdmitted(text = '') { pendingPrompt = { id: 'prompt', text, phase: 'admitted' }; },
 		async retry() {}, async retryPrompt() {}, async stop() {},
 		async setAgent() {}, async setModel() {}, async loadOptions() {},
 		async loadSkills() { return []; }, async loadCommands() { return []; },
@@ -93,7 +108,7 @@ function fixture() {
 	};
 	const connection = { signal: new AbortController().signal };
 	const view = new ChatView({ parent: {}, getViewState: () => ({}) }, connection, sessions,
-		synchronization, () => false);
+		synchronization, () => false, autoAttachActiveNote);
 	const titleParent = document.createElement('div');
 	titleParent.className = 'view-header-title-parent';
 	const title = document.createElement('div');
@@ -103,8 +118,8 @@ function fixture() {
 	return { view, sessions, synchronization, records, messages, titleParent, title };
 }
 
-async function openOnParent() {
-	const f = fixture();
+async function openOnParent(autoAttachActiveNote) {
+	const f = fixture(autoAttachActiveNote);
 	await f.view.onOpen();
 	await f.sessions.select('parent');
 	f.synchronization.notify();
@@ -191,4 +206,178 @@ test('opening a child with unsent composer text asks before discarding it', asyn
 	await wait();
 	assert.equal(f.sessions.selectedID, 'child');
 	assert.equal(f.view.composer.value, '', 'Discarding clears the unsent text');
+});
+
+const noteFile = (path) => ({
+	path,
+	basename: path.split('/').at(-1).replace(/\.md$/u, ''),
+	extension: 'md',
+	stat: { size: 10 },
+});
+
+function attachMenu(f) {
+	click(f.view.attachButton);
+	return obsidian.menus.at(-1);
+}
+
+function attach(f, title) {
+	const menu = attachMenu(f);
+	const item = menu.items.find((entry) => entry.title === title);
+	assert.ok(item, `The attach menu offers ${title}`);
+	item.click();
+}
+
+test('attach actions follow the active note, chips remove, and the send carries one deduplicated note', async () => {
+	const f = await openOnParent();
+	const file = noteFile('Notes/Idea.md');
+	let selection = 'original words';
+	app.metadataCache.getFirstLinkpathDest = (linkpath) => linkpath === 'Idea' ? file : null;
+	app.workspace.activeMarkdown = new obsidian.MarkdownView(file, { getSelection: () => selection });
+	f.synchronization.notify();
+	await wait();
+
+	assert.equal(f.view.attachButton.hidden, false, 'An available source offers the attach icon');
+	const menu = attachMenu(f);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Attach selection', 'Attach active note'],
+		'Both sources appear in the native attach menu');
+	f.view.composer.value = 'Use [[Idea]] please';
+	f.view.composer.dispatchEvent(new Event('input', { bubbles: true }));
+
+	attach(f, 'Attach selection');
+	await wait();
+	assert.equal(f.view.attachmentElements.length, 1);
+	assert.match(f.view.attachmentElements[0].textContent, /Selection: original words/);
+
+	attach(f, 'Attach active note');
+	await wait();
+	assert.equal(f.view.attachmentElements.length, 2, 'One chip per attached item');
+	assert.equal(f.view.attachmentElements[1].textContent, 'Idea');
+
+	click(f.view.attachmentElements[1]);
+	await wait();
+	assert.equal(f.view.attachmentElements.length, 1, 'Removing a chip drops only that item');
+	assert.match(f.view.attachmentElements[0].textContent, /Selection: original words/);
+	assert.equal(f.view.composer.value, 'Use [[Idea]] please', 'Removing a chip leaves the typed text unchanged');
+
+	attach(f, 'Attach active note');
+	await wait();
+	selection = 'changed afterwards';
+
+	let sent;
+	f.synchronization.sendMessage = async (text, attachments) => {
+		sent = { text, attachments };
+		f.synchronization.settleAdmitted(text);
+		return true;
+	};
+	click(f.view.sendButton);
+	await wait();
+	assert.equal(sent.text, 'Use [[Idea]] please');
+	assert.deepEqual(sent.attachments.map((attachment) => attachment.kind), ['selection', 'note'],
+		'The selection snapshot stays text; the reference and the chip attach one note');
+	assert.equal(sent.attachments[0].text, 'original words',
+		'A changed editor selection does not alter the attached snapshot');
+	assert.equal(sent.attachments[1].file.path, file.path);
+	assert.equal(f.view.attachmentElements.length, 0, 'Confirmed admission clears the chips');
+	assert.equal(f.view.composer.value, '', 'Confirmed admission clears the message text');
+});
+
+test('resolved references attach notes without chips while aliases and headings resolve to the note', async () => {
+	const f = await openOnParent();
+	const file = noteFile('Notes/Idea.md');
+	app.metadataCache.getFirstLinkpathDest = (linkpath) => linkpath === 'Idea' ? file : null;
+	f.view.composer.value = 'Compare [[Idea|the idea]] with [[Idea#Heading]] and [[Missing]]';
+	f.view.composer.dispatchEvent(new Event('input', { bubbles: true }));
+
+	let sent;
+	f.synchronization.sendMessage = async (text, attachments) => {
+		sent = { text, attachments };
+		f.synchronization.settleAdmitted(text);
+		return true;
+	};
+	click(f.view.sendButton);
+	await wait();
+	assert.equal(sent.text, 'Compare [[Idea|the idea]] with [[Idea#Heading]] and [[Missing]]',
+		'The visible references stay in the prompt text');
+	assert.deepEqual(sent.attachments.map((attachment) => attachment.file.path), [file.path],
+		'Both aliased and heading references attach the same note once; unresolved text attaches nothing');
+	assert.deepEqual(notices, [], 'An unresolved reference is omitted silently without an attachment error');
+});
+
+test('attach actions are hidden without a selection or open note, and an oversized note is refused with a notice', async () => {
+	const f = await openOnParent();
+	assert.equal(f.view.attachButton.hidden, false, 'The attach icon stays available as the affordance');
+	let menu = attachMenu(f);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Open a note or select text to attach'],
+		'No source offers no attach action');
+	assert.equal(menu.items[0].disabled, true);
+
+	const large = noteFile('Big.md');
+	large.stat = { size: 21 * 1024 * 1024 };
+	app.workspace.activeMarkdown = new obsidian.MarkdownView(large, { getSelection: () => '  ' });
+	f.synchronization.notify();
+	await wait();
+	menu = attachMenu(f);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Attach active note'],
+		'A whitespace-only selection offers no selection action');
+	menu.items[0].click();
+	await wait();
+	assert.equal(f.view.attachmentElements.length, 0, 'The oversized note is not attached');
+	assert.match(notices.at(-1), /Big is larger than 20 MiB and was not attached/);
+});
+
+test('a lone open note is attachable while the chat view has focus', async () => {
+	const f = await openOnParent();
+	const file = noteFile('Notes/Idea.md');
+	app.workspace.activeMarkdown = new obsidian.MarkdownView(file, { getSelection: () => 'selected words' });
+	app.workspace.focused = false; // The note is open in another pane with the chat focused.
+	const menu = attachMenu(f);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Attach selection', 'Attach active note'],
+		'The focused note is not required when exactly one note is open');
+	menu.items[1].click();
+	await wait();
+	assert.equal(f.view.attachmentElements.length, 1);
+	assert.equal(f.view.attachmentElements[0].textContent, 'Idea');
+});
+
+test('automatic active-note attachment follows the preference', async () => {
+	const file = noteFile('Notes/Idea.md');
+	const sendWith = async (auto) => {
+		const f = await openOnParent(auto);
+		app.workspace.activeMarkdown = new obsidian.MarkdownView(file, { getSelection: () => '' });
+		f.synchronization.notify();
+		f.view.composer.value = 'plain message';
+		f.view.composer.dispatchEvent(new Event('input', { bubbles: true }));
+		let sent;
+		f.synchronization.sendMessage = async (text, attachments) => {
+			sent = { text, attachments };
+			f.synchronization.settleAdmitted(text);
+			return true;
+		};
+		click(f.view.sendButton);
+		await wait();
+		return sent;
+	};
+
+	assert.deepEqual((await sendWith(() => false)).attachments, [],
+		'A disabled preference sends without the open note');
+	const attached = await sendWith(() => true);
+	assert.deepEqual(attached.attachments.map((attachment) => attachment.file.path), [file.path],
+		'An enabled preference attaches the open note without a chip');
+});
+
+test('a confirmed command clears the text but keeps chips until a prompt admission', async () => {
+	const f = await openOnParent();
+	app.workspace.activeMarkdown = new obsidian.MarkdownView(noteFile('Notes/Idea.md'), { getSelection: () => '' });
+	f.synchronization.notify();
+	f.view.composer.value = '/review now';
+	f.view.composer.dispatchEvent(new Event('input', { bubbles: true }));
+	attach(f, 'Attach active note');
+	await wait();
+	assert.equal(f.view.attachmentElements.length, 1);
+
+	f.synchronization.sendMessage = async () => true; // A command has no admission identity.
+	click(f.view.sendButton);
+	await wait();
+	assert.equal(f.view.composer.value, '', 'A confirmed command still clears its text');
+	assert.equal(f.view.attachmentElements.length, 1, 'Only a prompt admission clears the chips');
 });

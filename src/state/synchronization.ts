@@ -8,6 +8,7 @@ import { validateEvent } from '../opencode/event-shapes';
 import { sameDirectory } from '../opencode/vault-directory';
 import { EventIngestion } from './event-ingestion';
 import { createPromptID, PromptCoordinator } from './prompt-coordinator';
+import type { MessageAttachment } from '../ui/composer-attachments';
 import { applyInteractionEvent } from './interaction-events';
 import { SynchronizationActions } from './synchronization-actions';
 import { backoffDelay, clock, defaultPolicy } from './synchronization-model';
@@ -132,7 +133,7 @@ export class SynchronizationCoordinator {
 		return this.actions.loadCommands();
 	}
 
-	async sendMessage(text: string): Promise<boolean> {
+	async sendMessage(text: string, attachments: readonly MessageAttachment[] = []): Promise<boolean> {
 		if (!this.sessions.selectedID) {
 			const snapshot = this.state.snapshot;
 			if (!snapshot || snapshot.empty === 'unavailable') {
@@ -143,7 +144,7 @@ export class SynchronizationCoordinator {
 			}
 			if (!(await this.materializeDraft())) return false;
 		}
-		return this.actions.sendMessage(text);
+		return this.actions.sendMessage(text, attachments);
 	}
 
 	/** The first turn creates the server session; until then the draft is client-only. */

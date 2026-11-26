@@ -56,7 +56,8 @@ export default class OpenCodePlugin extends Plugin {
 		this.addSettingTab(new OpenCodeSettingTab(this.app, this, settings, save,
 			() => this.refreshChatViews()));
 		this.registerView(CHAT_VIEW_TYPE, (leaf) =>
-			new ChatView(leaf, connection, sessions, synchronization, () => settings.showReasoning));
+			new ChatView(leaf, connection, sessions, synchronization, () => settings.showReasoning,
+				() => settings.attachActiveNote));
 		this.addRibbonIcon('message-square', 'Open chat', () => openChat(this.app));
 		this.addCommand({
 			id: 'open-chat',

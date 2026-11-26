@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { compileFunction } from 'node:vm';
 import test from 'node:test';
 import { build } from 'esbuild';
-import { createObsidian, installDom } from './dom-helper.mjs';
+import { createObsidian, click, installDom } from './dom-helper.mjs';
 
 installDom();
 
@@ -46,15 +46,23 @@ function state(selected, messages) {
 function fixture() {
 	const content = document.createElement('div');
 	const opening = new obsidian.Component();
+	const calls = [];
+	let sources = { selection: false, activeNote: false };
 	const handlers = {
 		retryConnection() {}, send() {}, retryPrompt() {}, dismissPrompt() {}, stop() {},
 		setAgent() {}, setModel() {}, replyPermission() {}, replyForm() {}, cancelForm() {},
 		loadOptions() {}, loadSkills: async () => {}, loadCommands: async () => {},
 		openSubagent() {},
+		attachSelection() { calls.push('selection'); },
+		attachActiveNote() { calls.push('note'); },
+		attachmentSources: () => sources,
 	};
 	const renderer = new ChatRenderer(app, handlers, () => false);
 	renderer.mount(content, opening, new obsidian.Scope());
-	return { content, opening, renderer };
+	return {
+		content, opening, renderer, calls,
+		setSources(value) { sources = value; },
+	};
 }
 
 test('a delegated child renders read-only with the delegated-task label, and a top-level session restores the composer', () => {
@@ -85,4 +93,50 @@ test('a delegated child renders read-only with the delegated-task label, and a t
 	assert.equal(content.querySelector('.opencode-chat-prompt-actions').hidden, false);
 	assert.equal(content.querySelector('.opencode-composer-card').classList.contains('is-readonly'), false);
 	assert.equal(content.querySelector('.callout-title-inner').textContent, 'You', 'The default attribution is restored');
+});
+
+test('the attach icon sits beside Retry discovery and offers only available sources', () => {
+	const f = fixture();
+	const top = () => state(session('top'), []);
+	f.renderer.refresh(top());
+	const button = f.renderer.attachButtonElement;
+	assert.ok(button);
+	assert.equal(button.getAttribute('aria-label'), 'Attach selection or active note');
+	assert.ok(button.classList.contains('clickable-icon'), 'The attach action uses the native icon-button surface');
+	assert.ok(button.querySelector('.lucide-paperclip'), 'The attach action uses the paperclip icon');
+	assert.equal(button.previousElementSibling, f.renderer.retryElement, 'The icon follows Retry discovery');
+	assert.equal(button.hidden, false, 'The attach icon stays available as the affordance');
+
+	click(button);
+	let menu = obsidian.menus.at(-1);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Open a note or select text to attach']);
+	assert.equal(menu.items[0].disabled, true, 'No source offers no attach action');
+	assert.deepEqual(f.calls, []);
+
+	f.setSources({ selection: true, activeNote: true });
+	f.renderer.refreshComposer();
+	click(button);
+	menu = obsidian.menus.at(-1);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Attach selection', 'Attach active note']);
+	menu.items[0].click();
+	menu.items[1].click();
+	assert.deepEqual(f.calls, ['selection', 'note'], 'Each menu item runs its action');
+
+	f.setSources({ selection: false, activeNote: true });
+	f.renderer.refresh(top());
+	click(button);
+	menu = obsidian.menus.at(-1);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Attach active note'],
+		'No selection offers no selection action');
+
+	f.setSources({ selection: true, activeNote: false });
+	f.renderer.refresh(top());
+	click(button);
+	menu = obsidian.menus.at(-1);
+	assert.deepEqual(menu.items.map((item) => item.title), ['Attach selection'],
+		'No open note offers no active-note action');
+
+	f.setSources({ selection: true, activeNote: true });
+	f.renderer.refresh(state(session('child', 'parent'), []));
+	assert.equal(button.hidden, true, 'A read-only subagent session offers no attach action');
 });

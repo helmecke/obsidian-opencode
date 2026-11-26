@@ -239,17 +239,18 @@ test('bounded registration reads distinguish missing, malformed size, and non-fi
 
 test('settings retain executable paths with spaces as data and discard credentials', () => {
 	const path = 'C:\\Program Files\\OpenCode\\opencode.exe';
+	const defaults = { executablePath: '', autoStart: true, showReasoning: false, attachActiveNote: false };
 	assert.deepEqual(loadSettings({ executablePath: path, password: secret, url: 'http://example.com' }),
-		{ executablePath: path, autoStart: true, showReasoning: false });
+		{ executablePath: path, autoStart: true, showReasoning: false, attachActiveNote: false });
 	for (const executablePath of ['bad\npath', 'bad\rpath', 'bad\0path', 42, null, {}]) {
-		assert.deepEqual(loadSettings({ executablePath }), { executablePath: '', autoStart: true, showReasoning: false });
+		assert.deepEqual(loadSettings({ executablePath }), defaults);
 	}
-	assert.deepEqual(loadSettings(undefined), { executablePath: '', autoStart: true, showReasoning: false });
+	assert.deepEqual(loadSettings(undefined), defaults);
 	assert.deepEqual(loadSettings({ executablePath: 'opencode.exe & other.exe' }),
-		{ executablePath: 'opencode.exe & other.exe', autoStart: true, showReasoning: false });
-	assert.deepEqual(loadSettings({ autoStart: false }), { executablePath: '', autoStart: false, showReasoning: false });
-	assert.deepEqual(loadSettings({ autoStart: true }), { executablePath: '', autoStart: true, showReasoning: false });
-	assert.deepEqual(loadSettings({ autoStart: 'no' }), { executablePath: '', autoStart: true, showReasoning: false });
+		{ executablePath: 'opencode.exe & other.exe', autoStart: true, showReasoning: false, attachActiveNote: false });
+	assert.deepEqual(loadSettings({ autoStart: false }), { ...defaults, autoStart: false });
+	assert.deepEqual(loadSettings({ autoStart: true }), defaults);
+	assert.deepEqual(loadSettings({ autoStart: 'no' }), defaults);
 });
 
 test('settings tab activates the OpenCode 2 path and automatic startup and saves valid data only', async () => {
@@ -258,24 +259,25 @@ test('settings tab activates the OpenCode 2 path and automatic startup and saves
 	const tab = new OpenCodeSettingTab({}, {}, settings, async () => { saved.push({ ...settings }); });
 	tab.containerEl = { empty() {} };
 	tab.display();
-	const pathControl = settingControls.at(-3);
-	assert.equal(pathControl.name, 'OpenCode 2 executable path');
+	const pathControl = settingControls.find((control) => control.name === 'OpenCode 2 executable path');
+	assert.ok(pathControl);
 	assert.match(pathControl.description, /Full path to the OpenCode 2 executable/);
 	assert.match(pathControl.description, /never run through a shell/);
 	const path = 'C:\\Program Files\\OpenCode\\opencode.exe';
 	await pathControl.change(path);
 	for (const invalid of ['bad\0path', 'bad\rpath', 'bad\npath']) await pathControl.change(invalid);
-	assert.deepEqual(settings, { executablePath: path, autoStart: true, showReasoning: false });
-	assert.deepEqual(saved, [{ executablePath: path, autoStart: true, showReasoning: false }]);
-	const toggle = settingControls.at(-2).toggle;
-	assert.equal(settingControls.at(-2).name, 'Start OpenCode automatically');
-	assert.match(settingControls.at(-2).description, /plugin-owned OpenCode 2 process/);
+	assert.deepEqual(settings, { executablePath: path, autoStart: true, showReasoning: false, attachActiveNote: false });
+	assert.deepEqual(saved, [{ executablePath: path, autoStart: true, showReasoning: false, attachActiveNote: false }]);
+	const autoStart = settingControls.find((control) => control.name === 'Start OpenCode automatically');
+	assert.ok(autoStart);
+	const toggle = autoStart.toggle;
+	assert.match(autoStart.description, /plugin-owned OpenCode 2 process/);
 	assert.equal(toggle.value, true);
 	await toggle.change(false);
-	assert.deepEqual(settings, { executablePath: path, autoStart: false, showReasoning: false });
-	assert.deepEqual(saved.at(-1), { executablePath: path, autoStart: false, showReasoning: false });
+	assert.deepEqual(settings, { executablePath: path, autoStart: false, showReasoning: false, attachActiveNote: false });
+	assert.deepEqual(saved.at(-1), { executablePath: path, autoStart: false, showReasoning: false, attachActiveNote: false });
 	await pathControl.change('');
-	assert.deepEqual(saved.at(-1), { executablePath: '', autoStart: false, showReasoning: false });
+	assert.deepEqual(saved.at(-1), { executablePath: '', autoStart: false, showReasoning: false, attachActiveNote: false });
 });
 
 test('disposing before queued discovery prevents discovery and is idempotent', async () => {

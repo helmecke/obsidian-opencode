@@ -78,6 +78,36 @@ test('prompts without skills omit the skills field', async () => {
 	assert.equal('skills' in f.prompts[0], false);
 });
 
+test('file references are sent with the prompt while the inbox check keeps using the text', async () => {
+	const f = fixture();
+	const files = [{ uri: 'file:///C:/Vault/Notes/Idea.md', name: 'Notes/Idea.md' }];
+	const pending = await f.coordinator.send('Read the attached note', [], files);
+	assert.equal(pending.phase, 'admitted');
+	assert.deepEqual(pending.files, files);
+	assert.deepEqual(f.prompts, [{
+		sessionID: 'session', id: 'prompt-1', text: 'Read the attached note', files,
+	}]);
+	assert.equal(f.prompts[0].text, 'Read the attached note', 'checkInbox still matches on the prompt text');
+
+	const plain = fixture();
+	await plain.coordinator.send('no files');
+	assert.equal('files' in plain.prompts[0], false, 'No files omits the field');
+});
+
+test('retry after a genuine loss reuses the same prompt identity, skills, and files', async () => {
+	const f = fixture();
+	const files = [{ uri: 'file:///C:/Vault/Notes/Idea.md', name: 'Notes/Idea.md' }];
+	f.failNext(true, true); // failure without recording an admitted message
+	await assert.rejects(f.coordinator.send('recover the attachment', ['skill-apply'], files), PromptError);
+	assert.equal(f.coordinator.pending.phase, 'uncertain');
+	assert.deepEqual(f.coordinator.pending.files, files, 'The uncertain prompt retains its files');
+	await f.coordinator.retry();
+	assert.deepEqual(f.prompts.map((prompt) => prompt.id), ['prompt-1', 'prompt-1']);
+	assert.deepEqual(f.prompts.map((prompt) => prompt.files), [files, files]);
+	assert.deepEqual(f.prompts.map((prompt) => prompt.skills), [[{ id: 'skill-apply' }], [{ id: 'skill-apply' }]]);
+	assert.equal(f.coordinator.pending.phase, 'admitted');
+});
+
 test('retry reuses the same prompt identity and skill IDs after a genuine loss', async () => {
 	const f = fixture();
 	f.failNext(true, true); // failure without recording an admitted message

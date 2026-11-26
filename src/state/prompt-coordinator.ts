@@ -3,11 +3,18 @@ import { OpenCodeApiCompatibilityError } from '../opencode/compatibility';
 
 export type PromptPhase = 'sending' | 'admitted' | 'uncertain';
 
+/** One structured file reference sent with a prompt; the server reads the file. */
+export interface PromptFile {
+	readonly uri: string;
+	readonly name?: string;
+}
+
 export interface PendingPrompt {
 	readonly id: string;
 	readonly text: string;
 	readonly phase: PromptPhase;
 	readonly skillIDs?: readonly string[];
+	readonly files?: readonly PromptFile[];
 	readonly error?: string;
 }
 
@@ -74,14 +81,15 @@ export class PromptCoordinator {
 	}
 
 	/** One admission at a time. An uncertain prompt must be reconciled or retried explicitly. */
-	async send(text: string, skillIDs: readonly string[] = []): Promise<PendingPrompt> {
+	async send(text: string, skillIDs: readonly string[] = [], files: readonly PromptFile[] = []): Promise<PendingPrompt> {
 		if (!text.trim()) throw new PromptError('empty');
 		if (this.current?.phase === 'uncertain') throw new PromptError('uncertain');
 		// A confirmed prompt is settled; only another unconfirmed admission blocks a new one.
 		if (this.current?.phase === 'sending') throw new PromptError('busy');
 		if (this.current?.phase === 'admitted') this.current = undefined;
 		const prompt: PendingPrompt = { id: this.makeID(), text, phase: 'sending',
-			...(skillIDs.length > 0 ? { skillIDs: [...skillIDs] } : {}) };
+			...(skillIDs.length > 0 ? { skillIDs: [...skillIDs] } : {}),
+			...(files.length > 0 ? { files: [...files] } : {}) };
 		this.current = prompt;
 		return this.transmit(prompt);
 	}
@@ -124,11 +132,16 @@ export class PromptCoordinator {
 			const client = await this.client();
 			this.signal?.throwIfAborted();
 			const skills = prompt.skillIDs?.map((id) => ({ id }));
+			const files = prompt.files?.map((file) => ({
+				uri: file.uri,
+				...(file.name !== undefined ? { name: file.name } : {}),
+			}));
 			const inbox = await client.session.prompt({
 				sessionID: this.sessionID,
 				id: prompt.id,
 				text: prompt.text,
 				...(skills && skills.length > 0 ? { skills } : {}),
+				...(files && files.length > 0 ? { files } : {}),
 			}, { signal: this.signal });
 			this.checkInbox(inbox, prompt);
 			this.current = { ...prompt, phase: 'admitted', error: undefined };

@@ -1,4 +1,4 @@
-import { Component, Notice, setIcon, setTooltip } from 'obsidian';
+import { Component, Menu, Notice, setIcon, setTooltip } from 'obsidian';
 import type { App, OpenViewState, PaneType, Scope, TFile } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
@@ -11,6 +11,7 @@ import type { FormValue } from './form-card';
 import type { PermissionDecision } from './permission-card';
 import { ChatComposer } from './chat-composer';
 import { ChatInteractionsPanel } from './chat-interactions-panel';
+import type { AttachmentSources, MessageAttachment } from './composer-attachments';
 import { createIconButton, setNativeDisabled } from './native-controls';
 import { ComposerSuggest } from './composer-suggest';
 
@@ -31,6 +32,9 @@ export interface ChatViewHandlers {
 	loadSkills(): Promise<void>;
 	loadCommands(): Promise<void>;
 	openSubagent(childID: string): void;
+	attachSelection(): void;
+	attachActiveNote(): void;
+	attachmentSources(): AttachmentSources;
 }
 
 /** Owns the chat DOM: element creation, control wiring, and state-to-DOM updates. */
@@ -48,6 +52,7 @@ export class ChatRenderer {
 	private interactions?: ChatInteractionsPanel;
 	private composer?: ChatComposer;
 	private retryButton?: HTMLButtonElement;
+	private attachButton?: HTMLButtonElement;
 	private conversation?: ConversationRenderer;
 	private conversationOptions?: ConversationOptions;
 	private parentTitle?: string;
@@ -66,6 +71,8 @@ export class ChatRenderer {
 	get stopButtonElement(): HTMLButtonElement | undefined { return this.composer?.stopButton; }
 	get sendButtonElement(): HTMLButtonElement | undefined { return this.composer?.sendButton; }
 	get composerElement(): HTMLTextAreaElement | undefined { return this.composer?.element; }
+	get attachButtonElement(): HTMLButtonElement | undefined { return this.attachButton; }
+	get attachmentElements(): HTMLButtonElement[] { return this.composer?.attachmentElements ?? []; }
 
 	mount(contentEl: HTMLElement, opening: Component, scope: Scope): void {
 		this.contentEl = contentEl;
@@ -87,6 +94,7 @@ export class ChatRenderer {
 		this.updateMessages();
 		this.interactions?.update(state);
 		this.composer?.update(state);
+		this.updateAttachButton();
 		this.updateErrors();
 	}
 
@@ -107,6 +115,7 @@ export class ChatRenderer {
 		this.messagesEl = undefined;
 		this.composer = undefined;
 		this.retryButton = undefined;
+		this.attachButton = undefined;
 		this.conversationOptions = undefined;
 		this.parentTitle = undefined;
 	}
@@ -117,6 +126,28 @@ export class ChatRenderer {
 
 	composerText(): string {
 		return this.composer?.text ?? '';
+	}
+
+	composerAttachments(): MessageAttachment[] {
+		return this.composer?.listAttachments() ?? [];
+	}
+
+	attachComposer(attachment: MessageAttachment): void {
+		this.composer?.addAttachment(attachment);
+	}
+
+	clearComposerAttachmentsIf(sent: readonly MessageAttachment[]): void {
+		this.composer?.clearAttachmentsIf(sent);
+	}
+
+	clearComposerAttachments(): void {
+		this.composer?.clearAttachments();
+	}
+
+	/** Re-evaluate attach availability after the active editor or selection changes. */
+	refreshComposer(): void {
+		if (this.state) this.composer?.update(this.state);
+		this.updateAttachButton();
 	}
 
 	clearComposerIf(text: string): void {
@@ -166,6 +197,11 @@ export class ChatRenderer {
 			label: 'Retry discovery',
 		});
 		setNativeDisabled(this.retryButton, true);
+		this.attachButton = createIconButton(meta, {
+			icon: 'paperclip',
+			label: 'Attach selection or active note',
+		});
+		this.attachButton.hidden = true;
 	}
 
 	private attachRendering(opening: Component): void {
@@ -210,6 +246,37 @@ export class ChatRenderer {
 			opening.register(() => scope.unregister(sendKey));
 		}
 		opening.registerDomEvent(this.retryButton, 'click', () => this.handlers.retryConnection());
+		if (this.attachButton) {
+			opening.registerDomEvent(this.attachButton, 'click', () => this.openAttachMenu());
+		}
+	}
+
+	/** A native menu beside Retry discovery offers only the sources that exist now. */
+	private openAttachMenu(): void {
+		const sources = this.handlers.attachmentSources();
+		if (!this.attachButton) return;
+		const menu = new Menu();
+		if (sources.selection) {
+			menu.addItem((item) => item.setTitle('Attach selection').setIcon('text-select')
+				.onClick(() => this.handlers.attachSelection()));
+		}
+		if (sources.activeNote) {
+			menu.addItem((item) => item.setTitle('Attach active note').setIcon('file-text')
+				.onClick(() => this.handlers.attachActiveNote()));
+		}
+		if (!sources.selection && !sources.activeNote) {
+			menu.addItem((item) => item.setTitle('Open a note or select text to attach').setDisabled(true));
+		}
+		const rect = this.attachButton.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom });
+	}
+
+	/** The icon stays available as the attach affordance; only the actions gate on a source. */
+	private updateAttachButton(): void {
+		if (!this.attachButton) return;
+		const readOnly = this.isReadOnly(this.state);
+		this.attachButton.hidden = readOnly;
+		setNativeDisabled(this.attachButton, readOnly || this.state?.phase !== 'ready');
 	}
 
 	/**

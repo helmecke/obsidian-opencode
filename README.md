@@ -94,6 +94,15 @@ immediately, without reloading the plugin or reselecting the conversation. The
 setting controls presentation only: OpenCode still produces reasoning, and the
 plugin never stores it.
 
+### Attach the active note automatically
+
+**Settings → OpenCode → Attach active note automatically** is off by default.
+When it is on, messages sent from the composer include the open Markdown note as
+a `file:///` file reference without an extra chip; the typed text is unchanged.
+Turning it off returns to attaching the note only through **Attach active note**.
+A note that exceeds the service's 20 MiB per-attachment limit is skipped with a
+notice, and a note that is already attached is sent once.
+
 ## Open the chat
 
 Select the **OpenCode** ribbon action or run **OpenCode: Open chat** from the
@@ -150,17 +159,22 @@ details.
   does not silently select a different vault's conversation.
 - Switching conversations while one is executing continues that execution in
   the background. Switching or creating a conversation with unsent composer
-  text asks before discarding it.
+  text or attachments asks before discarding them.
 
 ### Composing messages
 
-- The composer is one card. The message field sits above a bottom toolbar shared
-  by the status and message controls. The card follows the transcript's reading
-  column while **Readable line length** is enabled and uses the pane width when
-  it is off. The toolbar's left side holds the connection and execution status
-  and the **Retry discovery** icon; the **Agent** and **Model** selectors and
-  the round arrow-up **Send** button follow on the right. Conversation controls
-  live in the document menu, not the composer.
+- The composer is one card. Next to **Retry discovery**, a paperclip
+  **Attach selection or active note** icon opens a native menu that lists
+  **Attach selection** and **Attach active note** only while their source is
+  available, with a hint when neither is. Each attached item appears as a
+  removable chip above the message field. The message field sits above a bottom
+  toolbar shared by the status and message controls. The card follows the
+  transcript's reading column while **Readable line length** is enabled and
+  uses the pane width when it is off. The toolbar's left side holds the
+  connection and execution status and the **Retry discovery** icon; the
+  **Agent** and **Model** selectors and the round arrow-up **Send** button
+  follow on the right. Conversation controls live in the document menu, not the
+  composer.
   A healthy connection collapses to one small icon whose tooltip carries the
   service mode and execution state; transitions and errors keep their text.
   The view has no separate header. Icon buttons show their name in a tooltip. The
@@ -172,10 +186,24 @@ details.
 - Type `[[` to search this vault's Markdown notes. The inline list shows each
   note's name and folder; arrow keys move, Enter or Tab inserts, and Escape or
   blur closes it. The composer inserts `[[Note]]` when the name is unique, or
-  the vault-relative `[[folder/Note]]` when it is not. The reference remains
-  plain prompt text and is not attached as a file. Brackets pair automatically,
-  a typed `]` skips an existing closer, and Backspace removes an empty pair.
-  Ctrl/Cmd+Enter still sends while the list is open.
+  the vault-relative `[[folder/Note]]` when it is not. The reference stays
+  visible prompt text, and sending the message also attaches the referenced
+  note as a file reference so the agent reads the note itself. Aliases, headings,
+  and block fragments resolve to the note; unresolved references stay text.
+  Brackets pair automatically, a typed `]` skips an existing closer, and
+  Backspace removes an empty pair. Ctrl/Cmd+Enter still sends while the list is
+  open.
+- **Attach active note** adds a chip for the Markdown note in the editor, and
+  **Attach selection** snapshots the selected text with its source note. Both
+  are in the paperclip menu beside **Retry discovery** and appear only while
+  their source is available. A selection is sent as labelled message text at
+  the moment you attach it; a note is sent as a `file:///` reference and its
+  contents are not copied by the plugin. Click a chip's **×** to remove that
+  item; the typed message is unchanged. Identical notes attach once, and notes
+  larger than 20 MiB are skipped with a notice.
+- **Settings → OpenCode → Attach active note automatically** is off by default.
+  Enable it to attach the open Markdown note with every message without adding a
+  chip; otherwise the active note is attached only when you ask.
 - Type `$` at the start of the message or after a space to search the OpenCode
   skills available to this vault. The inline list shows each skill's name and
   description; arrow keys move, Enter or Tab inserts, and Escape or blur closes
@@ -272,9 +300,10 @@ retained text.
 
 OpenCode owns the transcript and execution. The plugin stores only the
 executable-path setting, the automatic-startup preference, the reasoning-display
-preference, the last selected model and variant, and a transient record of a
-managed process PID for orphan cleanup; it does not persist the selected
-conversation, duplicate transcripts, or store service credentials.
+preference, the active-note automatic-attachment preference, the last selected
+model and variant, and a transient record of a managed process PID for orphan
+cleanup; it does not persist the selected conversation, duplicate transcripts,
+or store service credentials.
 
 ## Markdown and vault links
 
@@ -284,8 +313,8 @@ Incomplete streamed Markdown is re-rendered in batches and again when the answer
 completes.
 
 Links in answers resolve from a stable vault-root source context. Changing the
-active note does not change how an existing answer's links resolve. The first
-version does not attach the active editor as a source note.
+active note does not change how an existing answer's links resolve. Composer
+context attachment is a separate action and does not change that source context.
 
 - Note names, vault-relative paths, aliases, headings, and block references use
   Obsidian's internal-link resolution.
@@ -361,8 +390,14 @@ Provider accounts and models are managed in OpenCode, not in Obsidian plugin
 settings. Consult the official [V2 providers guide](https://opencode.ai/v2/docs/providers)
 and [configuration guide](https://opencode.ai/v2/docs/config). Global and
 discovered project/ancestor configuration can affect behavior; the plugin does
-not rewrite those files. It adds no telemetry and does not automatically attach
-the active editor's contents.
+not rewrite those files. It adds no telemetry.
+
+The active note is attached only when you add it in the composer, or when the
+off-by-default **Attach active note automatically** setting is enabled.
+Attachments are `file:///` references to vault paths; OpenCode reads the file
+itself, and the plugin does not copy its contents. The service accepts at most
+20 MiB per attachment. An attached selection is sent as message text from the
+snapshot taken when you attached it.
 
 The vault workspace is a working directory, **not a security sandbox**. OpenCode
 can access locations outside the vault according to its configuration,

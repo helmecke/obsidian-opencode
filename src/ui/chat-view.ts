@@ -1,4 +1,4 @@
-import { Component, ItemView, Notice, Scope } from 'obsidian';
+import { Component, ItemView, MarkdownView, Notice, Scope } from 'obsidian';
 import type { Events, Menu, WorkspaceLeaf } from 'obsidian';
 import type { ConnectionCoordinator } from '../opencode/connection';
 import { ConnectionError } from '../opencode/errors';
@@ -8,6 +8,8 @@ import type { SessionCoordinator } from '../opencode/sessions';
 import type { SynchronizationCoordinator, SynchronizationState } from '../state/synchronization';
 import { ChatRenderer } from './chat-renderer';
 import type { ChatViewHandlers } from './chat-renderer';
+import { attachmentSources, collectAttachments, noteAttachment } from './composer-attachments';
+import type { AttachmentSources, MessageAttachment } from './composer-attachments';
 import { LinkStack } from './link-stack';
 import { ConfirmDiscardModal, RenameSessionModal, SessionSwitcherModal } from './session-switcher';
 
@@ -38,9 +40,11 @@ export class ChatView extends ItemView {
 	private breadcrumbsEl?: HTMLElement;
 	private parentCrumbEl?: HTMLElement;
 	private parentSeparatorEl?: HTMLElement;
+	private lastMarkdownView?: MarkdownView;
 	constructor(leaf: WorkspaceLeaf, private readonly connection: ConnectionCoordinator,
 		private readonly sessions: SessionCoordinator, private readonly synchronization: SynchronizationCoordinator,
-		private readonly showReasoning: () => boolean) {
+		private readonly showReasoning: () => boolean,
+		private readonly autoAttachActiveNote: () => boolean = () => false) {
 		super(leaf);
 		this.scope = new Scope(this.app.scope);
 	}
@@ -60,6 +64,8 @@ export class ChatView extends ItemView {
 	get stopButton(): HTMLButtonElement | undefined { return this.renderer?.stopButtonElement; }
 	get sendButton(): HTMLButtonElement | undefined { return this.renderer?.sendButtonElement; }
 	get composer(): HTMLTextAreaElement | undefined { return this.renderer?.composerElement; }
+	get attachButton(): HTMLButtonElement | undefined { return this.renderer?.attachButtonElement; }
+	get attachmentElements(): HTMLButtonElement[] { return this.renderer?.attachmentElements ?? []; }
 	get title(): string { return this.displayTitle(); }
 
 	async onOpen(): Promise<void> {
@@ -92,6 +98,7 @@ export class ChatView extends ItemView {
 		renderer.mount(this.contentEl, opening, this.scope!);
 		opening.register(this.synchronization.subscribe(() => this.refresh()));
 		this.attachTitleHook(opening);
+		this.watchEditor(opening);
 		this.syncTitle();
 		await this.openInitial();
 	}
@@ -169,7 +176,77 @@ export class ChatView extends ItemView {
 			loadSkills: () => this.synchronization.loadSkills(),
 			loadCommands: () => this.synchronization.loadCommands(),
 			openSubagent: (childID) => { void this.openSubagent(childID); },
+			attachSelection: () => this.attachSelection(),
+			attachActiveNote: () => this.attachActiveNote(),
+			attachmentSources: () => this.attachmentSources(),
 		};
+	}
+
+	/** Track the last Markdown editor so attachment stays usable while chat is focused. */
+	private watchEditor(opening: Component): void {
+		const workspace = this.app.workspace;
+		if (typeof workspace.on !== 'function') return;
+		opening.registerEvent(workspace.on('active-leaf-change', () => this.refreshComposerSources()));
+		opening.registerEvent(workspace.on('editor-change', () => this.refreshComposerSources()));
+	}
+
+	private refreshComposerSources(): void {
+		// Record the focused editor now, while it is the active view.
+		this.activeMarkdownView();
+		this.renderer?.refreshComposer();
+	}
+
+	/** The active Markdown editor, or the most recent open one; a lone open note is a safe fallback. */
+	private activeMarkdownView(): MarkdownView | undefined {
+		const workspace = this.app.workspace;
+		const current = typeof workspace.getActiveViewOfType === 'function'
+			? workspace.getActiveViewOfType(MarkdownView) : null;
+		if (current?.file) this.lastMarkdownView = current;
+		const leaves = typeof workspace.getLeavesOfType === 'function'
+			? workspace.getLeavesOfType('markdown') : undefined;
+		const known = current?.file ? current : this.lastMarkdownView;
+		if (known?.file && (!leaves || !known.leaf || leaves.includes(known.leaf))) return known;
+		if (!leaves) return undefined;
+		const open = leaves.map((leaf) => leaf.view)
+			.filter((view): view is MarkdownView => view instanceof MarkdownView && Boolean(view.file));
+		// With several notes open and no focus history, never guess which one is meant.
+		return open.length === 1 ? open[0] : undefined;
+	}
+
+	private attachmentSources(): AttachmentSources {
+		const view = this.activeMarkdownView();
+		return attachmentSources(view?.editor, view?.file);
+	}
+
+	/** Snapshot the selected text now so later selection changes cannot alter the message. */
+	private attachSelection(): void {
+		const view = this.activeMarkdownView();
+		const file = view?.file;
+		const text = view?.editor.getSelection() ?? '';
+		if (!file || !text.trim()) return;
+		this.renderer?.attachComposer({ kind: 'selection', text, sourcePath: file.path });
+	}
+
+	private attachActiveNote(): void {
+		const file = this.activeMarkdownView()?.file;
+		if (!file) return;
+		const attachment = noteAttachment(file);
+		if (attachment) this.renderer?.attachComposer(attachment);
+		else this.notifyOversized(file.basename);
+	}
+
+	private notifyOversized(name: string): void {
+		new Notice(`${name} is larger than 20 MiB and was not attached.`);
+	}
+
+	/** Chips plus resolved `[[...]]` references, deduplicated, and optional auto-attach. */
+	private collectAttachments(text: string, chips: readonly MessageAttachment[]): MessageAttachment[] {
+		const activeNote = this.autoAttachActiveNote() ? this.activeMarkdownView()?.file ?? null : null;
+		return collectAttachments(text, chips, {
+			resolver: this.app.metadataCache,
+			activeNote,
+			notify: (message) => { new Notice(message); },
+		});
 	}
 
 	/** Re-render from the current synchronization state after a plugin setting changes. */
@@ -274,11 +351,15 @@ export class ChatView extends ItemView {
 
 	private async discardDraftIfConfirmed(): Promise<boolean> {
 		const text = this.renderer?.composerText() ?? '';
-		if (!text.trim()) return true;
+		const attachments = this.renderer?.composerAttachments() ?? [];
+		if (!text.trim() && attachments.length === 0) return true;
 		const confirmed = await new Promise<boolean>((resolve) => {
 			new ConfirmDiscardModal(this.app, resolve).open();
 		});
-		if (confirmed) this.renderer?.setComposerText('');
+		if (confirmed) {
+			this.renderer?.setComposerText('');
+			this.renderer?.clearComposerAttachments();
+		}
 		return confirmed;
 	}
 
@@ -540,16 +621,27 @@ export class ChatView extends ItemView {
 		if (this.readOnly) return;
 		const text = this.renderer?.composerText() ?? '';
 		if (!text.trim()) return;
+		const chips = this.renderer?.composerAttachments() ?? [];
+		const attachments = this.collectAttachments(text, chips);
 		// Only a confirmed prompt or command clears the composer; a failed command
 		// keeps its text for the user to inspect or retry manually.
-		if (await this.synchronization.sendMessage(text)) this.renderer?.clearComposerIf(text);
+		if (await this.synchronization.sendMessage(text, attachments)) {
+			this.renderer?.clearComposerIf(text);
+			// Chips clear only with a confirmed prompt admission, never with a command.
+			if (this.synchronization.state.pendingPrompt?.phase === 'admitted') {
+				this.renderer?.clearComposerAttachmentsIf(chips);
+			}
+		}
 		this.refresh();
 	}
 
 	private async retryPrompt(): Promise<void> {
 		await this.synchronization.retryPrompt();
 		const pending = this.synchronization.state.pendingPrompt;
-		if (pending?.phase === 'admitted') this.renderer?.setComposerText('');
+		if (pending?.phase === 'admitted') {
+			this.renderer?.setComposerText('');
+			this.renderer?.clearComposerAttachments();
+		}
 		this.refresh();
 	}
 }

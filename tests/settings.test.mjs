@@ -77,17 +77,17 @@ test('reasoning display does not change the parsing of the other stored fields',
 	const managedOrphan = { pid: 42, token: 'abc' };
 	assert.deepEqual(loadSettings({
 		executablePath: 'C:\\Program Files\\OpenCode\\opencode.exe', autoStart: false,
-		showReasoning: true, managedOrphan,
+		showReasoning: true, attachActiveNote: true, managedOrphan,
 		selectedSession: { id: 'one', directory: 'C:\\Vault' },
 	}), {
 		executablePath: 'C:\\Program Files\\OpenCode\\opencode.exe', autoStart: false,
-		showReasoning: true, managedOrphan,
+		showReasoning: true, attachActiveNote: true, managedOrphan,
 	}, 'Legacy session selection is not persisted');
 	assert.deepEqual(loadSettings({
-		executablePath: 'bad\npath', autoStart: 'no', showReasoning: 'yes',
+		executablePath: 'bad\npath', autoStart: 'no', showReasoning: 'yes', attachActiveNote: 'yes',
 		selectedSession: { id: '', directory: 'C:\\Vault' },
 		managedOrphan: { pid: -1, token: 'abc' },
-	}), { executablePath: '', autoStart: true, showReasoning: false },
+	}), { executablePath: '', autoStart: true, showReasoning: false, attachActiveNote: false },
 	'Unknown or invalid values stay out of the stored shape');
 });
 
@@ -100,6 +100,16 @@ test('the last selected model is validated and kept for draft defaults', () => {
 		{ providerID: 'p', id: '' }, { providerID: 'p\n', id: 'm' }, { providerID: 'p', id: 'm', variant: 1 }]) {
 		assert.equal(loadSettings({ lastModel }).lastModel, undefined,
 			`${JSON.stringify(lastModel)} is not persisted`);
+	}
+});
+
+test('the active-note attachment preference is opt-in and missing values read as off', () => {
+	assert.equal(loadSettings(undefined).attachActiveNote, false, 'A new install sends without the active note');
+	assert.equal(loadSettings({}).attachActiveNote, false, 'An upgraded install sends without the active note');
+	assert.equal(loadSettings({ attachActiveNote: true }).attachActiveNote, true);
+	for (const value of [false, 'true', 1, 0, null, {}, []]) {
+		assert.equal(loadSettings({ attachActiveNote: value }).attachActiveNote, false,
+			`${JSON.stringify(value)} reads as off`);
 	}
 });
 
@@ -120,6 +130,7 @@ test('settings tab shows Show reasoning unchecked, updates the setting, and save
 
 	assert.deepEqual(controls.map((control) => control.name), [
 		'OpenCode 2 executable path', 'Start OpenCode automatically', 'Show reasoning',
+		'Attach active note automatically',
 	], 'The existing rows keep their order');
 	assert.equal(controls[0].text.value, '');
 	assert.equal(controls[1].toggle.value, true);
@@ -129,6 +140,12 @@ test('settings tab shows Show reasoning unchecked, updates the setting, and save
 	assert.ok(row.toggle, 'The row is a toggle');
 	assert.equal(row.toggle.value, false, 'Reasoning starts hidden');
 	assert.match(row.description, /Hidden by default/);
+
+	const attachRow = controls[3];
+	assert.ok(attachRow.toggle, 'The attachment preference is a toggle');
+	assert.equal(attachRow.toggle.value, false, 'The active note is not attached automatically by default');
+	assert.match(attachRow.description, /Off by default/);
+	assert.match(attachRow.description, /never attached while this is off/);
 
 	const pending = row.toggle.change(true);
 	assert.equal(settings.showReasoning, true, 'The toggle mutates the settings object');
@@ -144,4 +161,9 @@ test('settings tab shows Show reasoning unchecked, updates the setting, and save
 	assert.equal(settings.showReasoning, false);
 	assert.equal(saved.at(-1).showReasoning, false);
 	assert.equal(notify, 2);
+
+	await attachRow.toggle.change(true);
+	assert.equal(settings.attachActiveNote, true, 'The attachment toggle mutates the settings object');
+	assert.equal(saved.at(-1).attachActiveNote, true, 'The preference round-trips through save');
+	assert.equal(notify, 3, 'Open chats re-render after the preference changes');
 });

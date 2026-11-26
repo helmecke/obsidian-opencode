@@ -1,6 +1,8 @@
 import type { ModelRef } from '@opencode/client';
 import type { ConnectionCoordinator } from '../opencode/connection';
 import type { SessionCoordinator } from '../opencode/sessions';
+import { composePromptText, noteFiles } from '../ui/composer-attachments';
+import type { MessageAttachment } from '../ui/composer-attachments';
 import { skillMentions } from '../ui/composer-link';
 import { PromptError } from './prompt-coordinator';
 import type { PromptCoordinator } from './prompt-coordinator';
@@ -105,7 +107,7 @@ export class SynchronizationActions {
 	}
 
 	/** Returns whether delivery was confirmed, so the view clears only accepted text. */
-	async sendMessage(text: string): Promise<boolean> {
+	async sendMessage(text: string, attachments: readonly MessageAttachment[] = []): Promise<boolean> {
 		try {
 			this.host.assertReady();
 		} catch {
@@ -115,13 +117,15 @@ export class SynchronizationActions {
 		const prompt = this.host.getPrompt();
 		if (!prompt) return false;
 		const command = leadingCommand(text);
-		return command ? this.sendCommand(text, command, prompt) : this.sendPrompt(text, prompt);
+		return command ? this.sendCommand(text, command, prompt, attachments) : this.sendPrompt(text, prompt, attachments);
 	}
 
-	private async sendPrompt(text: string, prompt: PromptCoordinator): Promise<boolean> {
+	private async sendPrompt(text: string, prompt: PromptCoordinator,
+		attachments: readonly MessageAttachment[] = []): Promise<boolean> {
 		try {
 			const skillIDs = await this.resolveSkills(skillMentions(text).map((mention) => mention.name));
-			const pending = await prompt.send(text, skillIDs);
+			const pending = await prompt.send(composePromptText(text, attachments), skillIDs,
+				noteFiles(attachments, this.host.sessions.vaultRoot).files);
 			this.host.publishReady({ pendingPrompt: prompt.pending, actionError: undefined, commandError: undefined });
 			return pending.phase === 'admitted';
 		} catch (error) {
@@ -141,12 +145,13 @@ export class SynchronizationActions {
 	 * Unknown names and an unavailable catalog keep the ordinary prompt path, so
 	 * slash-leading prose is never dropped.
 	 */
-	private async sendCommand(text: string, command: LeadingCommand, prompt: PromptCoordinator): Promise<boolean> {
+	private async sendCommand(text: string, command: LeadingCommand, prompt: PromptCoordinator,
+		attachments: readonly MessageAttachment[] = []): Promise<boolean> {
 		try {
 			prompt.assertIdle();
 			if (this.host.state.commands === undefined) await this.loadCommands();
 			const known = (this.host.state.commands ?? []).some((entry) => entry.name === command.name);
-			if (!known) return this.sendPrompt(text, prompt);
+			if (!known) return this.sendPrompt(text, prompt, attachments);
 			const skillIDs = await this.resolveSkills(
 				skillMentions(command.arguments).map((mention) => mention.name));
 			const client = await this.host.connection.connect();

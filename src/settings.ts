@@ -7,6 +7,7 @@ export interface OpenCodeSettings {
 	executablePath: string;
 	autoStart: boolean;
 	showReasoning: boolean;
+	attachActiveNote: boolean;
 	lastModel?: ModelRef;
 	managedOrphan?: ManagedOrphan;
 }
@@ -20,6 +21,7 @@ export function loadSettings(value: unknown): OpenCodeSettings {
 		executablePath: typeof path === 'string' && !unsafeText.test(path) ? path : '',
 		autoStart: record.autoStart !== false,
 		showReasoning: record.showReasoning === true,
+		attachActiveNote: record.attachActiveNote === true,
 	};
 	const orphan = record.managedOrphan;
 	const lastModel = record.lastModel;
@@ -70,6 +72,15 @@ export class OpenCodeSettingTab extends PluginSettingTab {
 			.addToggle((toggle) => toggle.setValue(this.settings.showReasoning)
 				.onChange(async (value) => {
 					this.settings.showReasoning = value;
+					await this.save();
+					this.onChange?.();
+				}));
+		new Setting(this.containerEl)
+			.setName('Attach active note automatically')
+			.setDesc('Send the note open in the editor as a file reference with every message sent from a draft, without an explicit attach action. Off by default; the note is never attached while this is off.')
+			.addToggle((toggle) => toggle.setValue(this.settings.attachActiveNote)
+				.onChange(async (value) => {
+					this.settings.attachActiveNote = value;
 					await this.save();
 					this.onChange?.();
 				}));

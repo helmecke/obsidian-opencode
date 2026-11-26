@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { compileFunction } from 'node:vm';
 import test from 'node:test';
 import { build } from 'esbuild';
@@ -316,6 +318,46 @@ test('a message without mentions never requests the skill catalog', async () => 
 	await f.coordinator.open();
 	await f.coordinator.sendMessage('plain message');
 	assert.equal(f.calls.filter((call) => call[0] === 'skills').length, 0);
+	f.lifetime.abort();
+});
+
+const noteFile = (path, size = 20) => ({
+	path,
+	basename: path.split('/').at(-1).replace(/\.md$/u, ''),
+	extension: 'md',
+	stat: { size },
+});
+
+test('send carries note files, skill IDs, and a labelled selection block while keeping the typed text', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	const brief = noteFile('Notes/Brief.md');
+	const idea = noteFile('Notes/Idea.md');
+	const attachments = [
+		{ kind: 'selection', text: 'the chosen lines', sourcePath: 'Notes/Brief.md' },
+		{ kind: 'note', file: brief },
+		{ kind: 'note', file: idea },
+		{ kind: 'note', file: { ...idea } },
+	];
+	assert.equal(await f.coordinator.sendMessage('Use $apply on this', attachments), true);
+	const prompt = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal(prompt.text,
+		'Selected text from [[Notes/Brief]]:\n\nthe chosen lines\n\nUse $apply on this');
+	assert.deepEqual(prompt.skills, [{ id: 'skill-apply' }]);
+	assert.deepEqual(prompt.files, [
+		{ uri: pathToFileURL(join(root, 'Notes/Brief.md')).href, name: 'Notes/Brief.md' },
+		{ uri: pathToFileURL(join(root, 'Notes/Idea.md')).href, name: 'Notes/Idea.md' },
+	], 'Each note attaches once; the selection stays message text');
+	assert.equal(f.coordinator.state.pendingPrompt.phase, 'admitted');
+	f.lifetime.abort();
+});
+
+test('a prompt without attachments sends no files field', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	await f.coordinator.sendMessage('plain message');
+	const prompt = f.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
+	assert.equal('files' in prompt, false);
 	f.lifetime.abort();
 });
 

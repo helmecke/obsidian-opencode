@@ -226,10 +226,15 @@ test('native view renders the conversation shell and clears its content on close
 	assert.match(view.composer.placeholder, /^Plan, build, or ask\./);
 	assert.equal(view.composer.getAttribute('aria-label'), 'Message OpenCode');
 	const labels = [...card.querySelectorAll('[aria-label]')].map((element) => element.getAttribute('aria-label').toLowerCase());
-	assert.deepEqual(labels.filter((label) => /attach|voice|microphone|shield|command|skill/.test(label)), [],
+	assert.deepEqual(labels.filter((label) => /voice|microphone|shield|command|skill/.test(label)), [],
 		'The card exposes no unsupported controls');
 	const classes = [...card.querySelectorAll('*')].flatMap((element) => [...element.classList]);
-	assert.deepEqual(classes.filter((name) => /attach|voice|microphone|shield|command|skill/.test(name)), []);
+	assert.deepEqual(classes.filter((name) => /voice|microphone|shield|command|skill/.test(name)), []);
+	assert.equal(view.attachButton.hidden, false, 'The attach affordance stays visible');
+	assert.equal(view.attachButton.getAttribute('aria-label'), 'Attach selection or active note');
+	assert.ok(view.attachButton.classList.contains('clickable-icon'), 'Attach uses the native icon-button surface');
+	assert.ok(view.attachButton.querySelector('.lucide-paperclip'), 'Attach uses the paperclip icon');
+	assert.equal(view.attachButton.previousElementSibling, view.retryButton, 'Attach sits beside Retry discovery');
 	await view.onOpen();
 	assert.equal(view.contentEl.querySelectorAll('.opencode-chat-header, .opencode-chat-conversations').length, 0);
 	assert.equal(view.sessions.state.selected, undefined, 'Reopening returns to a fresh draft');

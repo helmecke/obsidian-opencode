@@ -84,7 +84,7 @@ apart from the differences listed in section 7.
 | Pending forms | `session.form.list` | `GET /api/session/{sessionID}/form` | Session-scoped array |
 | Form answer | `session.form.reply` | `POST /api/session/{sessionID}/form/{formID}/reply` body `{ answer }` | 204 |
 | Form cancel | `session.form.cancel` | `DELETE /api/session/{sessionID}/form/{formID}?message=…` | 204 |
-| Send prompt | `session.prompt` | `POST /api/session/{sessionID}/prompt` body `{ id, text, … }` | See section 5 |
+| Send prompt | `session.prompt` | `POST /api/session/{sessionID}/prompt` body `{ id, text, skills?, files?, … }` | See section 5 |
 | Interrupt | `session.interrupt` | `POST /api/session/{sessionID}/interrupt` | Response `{ interrupted: boolean }`; no `data` wrapper |
 | Switch agent | `session.switchAgent` | `POST /api/session/{sessionID}/agent` body `{ agent }` | 204 |
 | Switch model | `session.switchModel` | `POST /api/session/{sessionID}/model` body `{ model }` | 204 |
@@ -219,6 +219,23 @@ A second, lower-risk nuance: the acknowledgment check also requires
 prompt text before admission. If a hook does so, an admitted prompt would be
 classified as uncertain. It remains recoverable, but the equality check is
 stricter than the identity contract.
+
+### Prompt file attachments
+
+`SessionPromptInput.files` is present in the pinned 2.2.2 generated client types
+(`dist/promise/generated/types.d.ts`) as an optional array of
+`{ uri, name?, description?, source?, mention? }`. It is part of the base
+contract, not an additive 2.3.x field, so using it neither narrows nor widens
+`>=2.2.2 <3.0.0`.
+
+The plugin sends a note attachment as `{ uri, name }`, where `uri` is a
+`file:///` reference built from the absolute vault path and `name` is the
+vault-relative path. The prompt `text` and the inbox acknowledgment check are
+unchanged: attachments ride alongside the same stable `msg_` identity, so
+reconcile and retry reuse them. The service reads and MIME-detects the file
+itself; the plugin does not read or copy note contents. Its 20 MiB
+per-attachment limit is pre-checked with `TFile.stat.size`, and an oversized
+note is omitted with a notice.
 
 ## 6. Events and ordering
 

@@ -60,7 +60,8 @@ your real vault. Never commit generated `main.js`, probe bundles, or
 - **Credentials**: service authentication is transient. Never persist or log
   credentials, transcripts, drafts, or vault contents. Plugin data is limited to
   the executable path, automatic-startup preference, reasoning-display
-  preference, last selected model and variant, and the managed orphan record.
+  preference, active-note attachment preference, last selected model and
+  variant, and the managed orphan record.
 - **No workarounds**: do not edit the registration, change CORS, weaken
   authentication, patch the bundled client, or globally replace `fetch` to fix a
   connection.
@@ -69,9 +70,12 @@ your real vault. Never commit generated `main.js`, probe bundles, or
   stays untouched.
 - **Vault scope**: the vault is a working directory, not a security sandbox.
   Never describe local service access as offline model processing.
-- **Composer references**: `[[Note]]` stays plain prompt text. `$skill` attaches
-  the skill by ID and stays visible in the text. `/command` runs a known leading
-  command; unknown names send as ordinary prompts.
+- **Composer references**: `[[Note]]` stays visible prompt text and attaches the
+  referenced note as a structured file reference. `$skill` attaches the skill by
+  ID and stays visible in the text. `/command` runs a known leading command;
+  unknown names send as ordinary prompts. The active note and editor selection
+  are attached only on an explicit action, unless the off-by-default
+  active-note preference enables automatic attachment for sends.
 - **Recovery never replays** a prompt, decision, or execution. Reuse the stable
   `msg_` prompt identity when reconciling.
 

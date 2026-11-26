@@ -344,7 +344,7 @@ test('absolute path comparison handles Windows aliases but not nested or unrelat
 test('settings parsing strips credentials, transcripts, and legacy selection data', () => {
 	assert.deepEqual(loadSettings({ executablePath: 'opencode', password: 'secret', messages: ['private'],
 		selectedSession: { id: 'one', directory: root, transcript: ['secret'], authorization: 'secret' } }),
-	{ executablePath: 'opencode', autoStart: true, showReasoning: false });
+	{ executablePath: 'opencode', autoStart: true, showReasoning: false, attachActiveNote: false });
 });
 
 test('pinned generated client uses actual session/message routes and envelopes with isolated fetch', async () => {
