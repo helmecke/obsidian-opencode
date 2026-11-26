@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 (2026-11-26)
 
 - The plugin is now named **OpenCode Chat** to avoid colliding with an existing
   community plugin called **OpenCode**; the plugin ID and installed folder stay

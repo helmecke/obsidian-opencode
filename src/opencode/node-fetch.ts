@@ -17,8 +17,11 @@ export function localOrigin(value: string): string {
 	return url.origin;
 }
 
+export const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
+
 /** No browser fetch, redirects, DNS names, or cross-origin credential forwarding. */
-export function createNodeFetch(origin: string, maxResponseBytes = Infinity, lifetime?: AbortSignal): typeof fetch {
+export function createNodeFetch(origin: string, maxResponseBytes = Infinity, lifetime?: AbortSignal,
+	maxRequestBytes = MAX_REQUEST_BYTES): typeof fetch {
 	const boundOrigin = localOrigin(origin);
 	return async (input, init) => {
 		try {
@@ -29,7 +32,8 @@ export function createNodeFetch(origin: string, maxResponseBytes = Infinity, lif
 			req.signal.throwIfAborted();
 			const url = new URL(req.url);
 			if (url.origin !== boundOrigin || url.username || url.password) throw new ConnectionError('transport');
-			const body = ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.from(await req.arrayBuffer());
+			const body = ['GET', 'HEAD'].includes(req.method) ? undefined
+				: await readRequestBody(req, maxRequestBytes);
 			return await new Promise<Response>((resolve, reject) => {
 				const fail = () => reject(new ConnectionError('transport'));
 				const outgoing = request(url, {
@@ -72,4 +76,27 @@ export function createNodeFetch(origin: string, maxResponseBytes = Infinity, lif
 			});
 		} catch { throw new ConnectionError('transport'); }
 	};
+}
+
+/** Buffer a request body under a hard limit instead of reading it unbounded. */
+async function readRequestBody(request: Request, limit: number): Promise<Buffer> {
+	const declared = request.headers.get('content-length');
+	if (declared !== null && Number(declared) > limit) throw new ConnectionError('transport');
+	if (!request.body) return Buffer.alloc(0);
+	const reader = request.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let bytes = 0;
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			bytes += value.byteLength;
+			if (bytes > limit) throw new ConnectionError('transport');
+			chunks.push(value);
+		}
+	} catch (error) {
+		await reader.cancel().catch(() => undefined);
+		throw error;
+	}
+	return Buffer.concat(chunks);
 }

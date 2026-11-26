@@ -1,4 +1,4 @@
-import { execFile, spawn as nodeSpawn } from 'node:child_process';
+import { execFile, execFileSync, spawn as nodeSpawn } from 'node:child_process';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { clearTimeout as clearNodeTimeout, setTimeout as setNodeTimeout } from 'node:timers';
@@ -127,10 +127,17 @@ export class ManagedRuntime {
 	terminate(): void {
 		const child = this.child;
 		if (!child?.pid) return;
-		try {
-			if (process.platform === 'win32') child.kill();
-			else process.kill(-child.pid, 'SIGTERM');
-		} catch { /* already gone */ }
+		if (process.platform === 'win32') {
+			// Windows needs taskkill to reach the tree, and unload cannot await it.
+			try {
+				execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'],
+					{ windowsHide: true, stdio: 'ignore', timeout: 3_000 });
+				return;
+			} catch { /* fall through to the direct kill */ }
+			try { child.kill(); } catch { /* already gone */ }
+			return;
+		}
+		try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
 	}
 
 	private async start(): Promise<Client> {

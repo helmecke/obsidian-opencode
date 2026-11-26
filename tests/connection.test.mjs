@@ -186,6 +186,20 @@ test('origin binding, redirects, and oversized health responses fail closed', as
 	await assert.rejects(discoverConnection(async () => registration(large)), { code: 'transport' });
 });
 
+test('request bodies are bounded before they reach the service', async (t) => {
+	let received = 0;
+	const url = await server(t, (req, res) => {
+		req.on('data', (chunk) => { received += chunk.length; });
+		req.on('end', () => { res.end('ok'); });
+	});
+	const bounded = createNodeFetch(url, Infinity, undefined, 8);
+	await assert.rejects(bounded(url, { method: 'POST', body: 'ninebytes' }));
+	await assert.rejects(bounded(url, { method: 'POST', body: new Uint8Array(9) }));
+	const response = await bounded(url, { method: 'POST', body: 'small' });
+	assert.equal(await response.text(), 'ok');
+	assert.equal(received, 5, 'Only the accepted body reached the service');
+});
+
 test('transport streams incrementally and handles abort and reader cancellation', async (t) => {
 	const url = await server(t, (_req, res) => { res.writeHead(200); res.write('data: first\n\n'); });
 	const response = await createNodeFetch(url)(url);
