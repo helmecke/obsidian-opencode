@@ -35,7 +35,7 @@
 ## 6. Integration verification
 
 - [x] 6.1 Run `npm test`, `npm run build`, and `npm run lint`; all three pass.
-- [ ] 6.2 In a disposable vault, attach a note via `[[`, attach a selection, attach the active note, remove a chip, send, and exercise reconcile-and-retry; record the observed result in `docs/runtime-compatibility.md`.
+- [x] 6.2 In a disposable vault, attach a note via `[[`, attach a selection, attach the active note, remove a chip, send, and exercise reconcile-and-retry; record the observed result in `docs/runtime-compatibility.md`.
 
 ## Workflow follow-up
 
