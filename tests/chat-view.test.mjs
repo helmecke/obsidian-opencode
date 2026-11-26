@@ -200,7 +200,7 @@ test('opening a child with unsent composer text asks before discarding it', asyn
 	await wait();
 	const modal = obsidian.modals.at(-1);
 	assert.equal(modal.titleEl.textContent, 'Discard unsent message?');
-	const [keep] = modal.contentEl.querySelectorAll('button');
+	const [keep] = modal.buttonContainerEl.querySelectorAll('button');
 	click(keep);
 	await wait();
 	assert.equal(f.sessions.selectedID, 'parent', 'Keeping the draft cancels the switch');
@@ -208,7 +208,7 @@ test('opening a child with unsent composer text asks before discarding it', asyn
 
 	click(link);
 	await wait();
-	click(obsidian.modals.at(-1).contentEl.querySelectorAll('button')[1]);
+	click(obsidian.modals.at(-1).buttonContainerEl.querySelectorAll('button')[1]);
 	await wait();
 	assert.equal(f.sessions.selectedID, 'child');
 	assert.equal(f.view.composer.value, '', 'Discarding clears the unsent text');

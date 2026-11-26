@@ -549,7 +549,10 @@ export class ChatView extends ItemView {
 		const header = this.headerTitleElement();
 		if (!header) return;
 		header.addClass('opencode-chat-title');
-		header.setAttribute('tabindex', '-1');
+		header.setAttribute('role', 'textbox');
+		header.setAttribute('aria-label', 'Conversation title');
+		header.setAttribute('aria-multiline', 'false');
+		header.setAttribute('tabindex', '0');
 		header.setAttribute('spellcheck', 'false');
 		header.setAttribute('contenteditable', 'true');
 		opening.registerDomEvent(header, 'focus', () => this.startTitleEdit());
@@ -561,6 +564,10 @@ export class ChatView extends ItemView {
 			header.removeAttribute('contenteditable');
 			header.removeAttribute('tabindex');
 			header.removeAttribute('spellcheck');
+			header.removeAttribute('role');
+			header.removeAttribute('aria-label');
+			header.removeAttribute('aria-multiline');
+			header.removeAttribute('aria-readonly');
 		});
 		this.attachBreadcrumbs(opening);
 	}
@@ -651,6 +658,8 @@ export class ChatView extends ItemView {
 			header.setText(title);
 			// A delegated child is read-only: its title is not a rename surface.
 			header.setAttribute('contenteditable', this.readOnly ? 'false' : 'true');
+			header.setAttribute('aria-readonly', this.readOnly ? 'true' : 'false');
+			header.setAttribute('tabindex', this.readOnly ? '-1' : '0');
 		}
 		const tab = this.tabTitleElement();
 		if (tab) tab.setText(title);

@@ -10,15 +10,26 @@ export interface FormCallbacks {
 	openExternal(url: string): void;
 }
 
+interface FieldControl {
+	readonly controlId: string;
+	readonly labelId: string;
+	readonly title: string;
+	readonly describedBy: string;
+}
+
+let formCardSequence = 0;
+
 /** A form card keeps its in-progress answers across view refreshes. */
 export class FormCard {
 	readonly el: HTMLElement;
+	private readonly uid = ++formCardSequence;
 	private readonly errorEl: HTMLElement;
 	private readonly submitButton: HTMLButtonElement;
 	private readonly cancelButton: HTMLButtonElement;
 	private readonly fieldsEl: HTMLElement;
 	private readonly controls = new Map<string, {
-		wrapper: HTMLElement; update(values: FormValues): void; error: HTMLElement; staticError?: string;
+		wrapper: HTMLElement; element: HTMLElement; update(values: FormValues): void;
+		error: HTMLElement; staticError?: string;
 	}>();
 	private values: FormValues;
 	private busy = false;
@@ -73,46 +84,77 @@ export class FormCard {
 		const info = wrapper.createDiv({ cls: 'setting-item-info' });
 		const title = (field as { readonly title?: string }).title ?? field.key;
 		const required = Boolean((field as { readonly required?: boolean }).required);
-		info.createDiv({ cls: 'setting-item-name', text: required ? `${title} *` : title });
 		const description = (field as { readonly description?: string }).description;
-		if (description) info.createDiv({ cls: 'setting-item-description', text: description });
+		const ids = this.fieldIds(field, title, Boolean(description));
+		const name = info.createEl(type === 'external' ? 'div' : 'label', {
+			cls: 'setting-item-name', text: required ? `${title} *` : title,
+			attr: { id: ids.labelId },
+		});
+		if (description) {
+			info.createDiv({ cls: 'setting-item-description', text: description, attr: { id: ids.descriptionId } });
+		}
 		const control = wrapper.createDiv({ cls: 'setting-item-control' });
-		const error = wrapper.createDiv({ cls: 'setting-item-error' });
+		const error = wrapper.createDiv({
+			cls: 'setting-item-error', attr: { id: ids.errorId, 'aria-live': 'polite' },
+		});
 		if (type === 'external') {
 			const external = field as FormField & { readonly url: string; readonly title?: string };
 			const href = safeExternalUrl(external.url);
 			if (!href) {
 				error.setText('This external link uses an unsupported URL.');
 				this.controls.set(field.key, {
-					wrapper, update: () => this.refresh(), error, staticError: 'This external link uses an unsupported URL.',
+					wrapper, element: wrapper, update: () => this.refresh(), error,
+					staticError: 'This external link uses an unsupported URL.',
 				});
 				return;
 			}
-			const link = control.createEl('a', { text: external.title ?? external.url, href });
+			const link = control.createEl('a', { text: external.title ?? external.url, href,
+				attr: { id: ids.controlId, 'aria-describedby': ids.describedBy } });
 			link.addEventListener('click', (event) => { event.preventDefault(); this.callbacks.openExternal(href); });
-			this.controls.set(field.key, { wrapper, update: () => this.refresh(), error });
+			this.controls.set(field.key, { wrapper, element: wrapper, update: () => this.refresh(), error });
 			return;
 		}
-		const input = this.createInput(field, type, control);
-		this.controls.set(field.key, { wrapper, update: () => this.refresh(), error });
+		const input = this.createInput(field, type, control, ids);
+		if (type !== 'multiselect') name.setAttribute('for', ids.controlId);
+		this.controls.set(field.key, { wrapper, element: input, update: () => this.refresh(), error });
 		input.addEventListener('input', () => this.refresh());
 		input.addEventListener('change', () => this.refresh());
 	}
 
-	private createInput(field: FormField, type: string, control: HTMLElement): HTMLElement {
+	private fieldIds(field: FormField, title: string, hasDescription: boolean): {
+		controlId: string; labelId: string; descriptionId: string; errorId: string;
+		title: string; describedBy: string;
+	} {
+		const key = field.key.replace(/[^A-Za-z0-9_-]/gu, '-');
+		const base = `opencode-form-${this.uid}-${key}`;
+		return {
+			controlId: `${base}-control`, labelId: `${base}-label`,
+			descriptionId: `${base}-description`, errorId: `${base}-error`, title,
+			describedBy: [hasDescription ? `${base}-description` : '', `${base}-error`].filter(Boolean).join(' '),
+		};
+	}
+
+	private createInput(field: FormField, type: string, control: HTMLElement,
+		ids: Pick<FieldControl, 'controlId' | 'labelId' | 'title' | 'describedBy'>): HTMLElement {
 		const key = field.key;
+		const label = <T extends HTMLElement>(element: T): T => {
+			element.id = ids.controlId;
+			element.setAttribute('aria-describedby', ids.describedBy);
+			return element;
+		};
 		if (type === 'string') {
 			const options = (field as { readonly options?: readonly { value: string; label: string }[] }).options;
 			if (options?.length) {
 				const custom = Boolean((field as { readonly custom?: boolean }).custom);
-				const select = control.createEl('select');
+				const select = label(control.createEl('select'));
 				select.createEl('option', { text: 'Select…', value: '' });
 				for (const option of options) select.createEl('option', { text: option.label, value: option.value });
 				if (custom) select.createEl('option', { text: 'Other…', value: '__custom__' });
 				select.value = typeof this.values[key] === 'string' ? String(this.values[key]) : '';
 				let customInput: HTMLInputElement | undefined;
 				if (custom) {
-					customInput = control.createEl('input', { type: 'text', cls: 'opencode-form-input' });
+					customInput = control.createEl('input', { type: 'text', cls: 'opencode-form-input',
+						attr: { 'aria-label': `${ids.title} (other answer)`, 'aria-describedby': ids.describedBy } });
 					customInput.placeholder = 'Other answer';
 					customInput.hidden = select.value !== '__custom__';
 					customInput.value = select.value === '__custom__' ? String(this.values[key] ?? '') : '';
@@ -126,14 +168,14 @@ export class FormCard {
 				if (select.value === '__custom__' && !customInput?.value) delete this.values[key];
 				return select;
 			}
-			const input = control.createEl('input', { type: 'text', cls: 'opencode-form-input' });
+			const input = label(control.createEl('input', { type: 'text', cls: 'opencode-form-input' }));
 			input.placeholder = (field as { readonly placeholder?: string }).placeholder ?? '';
 			input.value = typeof this.values[key] === 'string' ? String(this.values[key]) : '';
 			input.addEventListener('input', () => { this.values[key] = input.value; });
 			return input;
 		}
 		if (type === 'number' || type === 'integer') {
-			const input = control.createEl('input', { type: 'number', cls: 'opencode-form-input' });
+			const input = label(control.createEl('input', { type: 'number', cls: 'opencode-form-input' }));
 			input.step = type === 'integer' ? '1' : 'any';
 			const limits = field as FormField & { readonly minimum?: number; readonly maximum?: number };
 			if (typeof limits.minimum === 'number') input.min = String(limits.minimum);
@@ -149,30 +191,32 @@ export class FormCard {
 			return input;
 		}
 		if (type === 'boolean') {
-			const label = control.createEl('label', { cls: 'opencode-form-checkbox' });
-			const input = label.createEl('input', { type: 'checkbox' });
+			const group = control.createEl('label', { cls: 'opencode-form-checkbox' });
+			const input = label(group.createEl('input', { type: 'checkbox' }));
 			input.checked = this.values[key] === true;
 			input.addEventListener('change', () => { this.values[key] = input.checked; });
-			label.createSpan({ text: 'Yes' });
+			group.createSpan({ text: 'Yes' });
 			return input;
 		}
 		if (type === 'multiselect') {
-			const group = control.createDiv({ cls: 'opencode-form-options' });
+			const group = control.createDiv({ cls: 'opencode-form-options',
+				attr: { role: 'group', 'aria-labelledby': ids.labelId, 'aria-describedby': ids.describedBy } });
 			const selected = new Set(Array.isArray(this.values[key])
 				? this.values[key].filter((item): item is string => typeof item === 'string') : []);
 			const options = (field as { readonly options?: readonly { value: string; label: string }[] }).options ?? [];
 			for (const option of options) {
-				const label = group.createEl('label', { cls: 'opencode-form-checkbox' });
-				const input = label.createEl('input', { type: 'checkbox' });
+				const optionLabel = group.createEl('label', { cls: 'opencode-form-checkbox' });
+				const input = optionLabel.createEl('input', { type: 'checkbox' });
 				input.checked = selected.has(option.value);
 				input.addEventListener('change', () => {
 					if (input.checked) selected.add(option.value); else selected.delete(option.value);
 					this.values[key] = [...selected];
 				});
-				label.createSpan({ text: option.label });
+				optionLabel.createSpan({ text: option.label });
 			}
 			if ((field as { readonly custom?: boolean }).custom) {
-				const custom = control.createEl('input', { type: 'text', cls: 'opencode-form-input' });
+				const custom = control.createEl('input', { type: 'text', cls: 'opencode-form-input',
+					attr: { 'aria-label': `${ids.title} (other values)`, 'aria-describedby': ids.describedBy } });
 				custom.placeholder = 'Other values, separated by commas';
 				custom.addEventListener('input', () => {
 					this.values[key] = [...selected, ...custom.value.split(',').map((value) => value.trim()).filter(Boolean)];
@@ -180,7 +224,7 @@ export class FormCard {
 			}
 			return group;
 		}
-		const input = control.createEl('input', { type: 'text', cls: 'opencode-form-input' });
+		const input = label(control.createEl('input', { type: 'text', cls: 'opencode-form-input' }));
 		input.disabled = true;
 		return input;
 	}
@@ -192,8 +236,11 @@ export class FormCard {
 			const visible = field ? isFieldVisible(field, this.values) : false;
 			control.wrapper.hidden = !visible;
 			const error = control.staticError ?? validation.errors[key] ?? '';
-			control.error.setText(error);
+			if (control.error.textContent !== error) control.error.setText(error);
 			control.wrapper.toggleClass('is-invalid', Boolean(error));
+			if (control.element.matches('input, select, textarea, [role="group"]')) {
+				control.element.setAttribute('aria-invalid', String(Boolean(error)));
+			}
 		}
 		const unsupported = validation.unsupported.length > 0;
 		this.submitButton.disabled = this.busy || unsupported;

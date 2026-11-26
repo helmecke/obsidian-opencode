@@ -6,14 +6,17 @@ import { build } from 'esbuild';
 import { click, createObsidian, installDom } from './dom-helper.mjs';
 
 installDom();
-const bundle = await build({ entryPoints: ['src/ui/interactions.ts'], bundle: true,
-	format: 'cjs', platform: 'node', external: ['obsidian'], write: false });
+const bundle = await build({
+	stdin: { contents: `export * from './src/ui/interactions';
+		export * from './src/ui/chat-interactions-panel';`, resolveDir: process.cwd(), loader: 'ts' },
+	bundle: true, format: 'cjs', platform: 'node', external: ['obsidian'], write: false,
+});
 const module = { exports: {} };
 const obsidian = createObsidian({});
 compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 	(name) => name === 'obsidian' ? obsidian : createRequire(import.meta.url)(name), module, module.exports);
 const { defaultValues, isFieldVisible, validateForm, safeExternalUrl, renderPermissionCard, FormCard, ToolEntryView,
-	toolStatus } = module.exports;
+	toolStatus, ChatInteractionsPanel } = module.exports;
 
 const field = (key, type, extra = {}) => ({ key, type, title: key, ...extra });
 const container = () => document.createElement('div');
@@ -140,6 +143,15 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	}
 	assert.equal(rows[2].hidden, true, 'Conditional rows start hidden');
 	assert.equal(rows[2].classList.contains('is-invalid'), false);
+	const firstLabel = rows[0].querySelector('.setting-item-name');
+	const firstSelect = rows[0].querySelector('select');
+	assert.equal(firstLabel.tagName, 'LABEL', 'The field title is a native label');
+	assert.equal(firstLabel.getAttribute('for'), firstSelect.id, 'The label targets its control');
+	assert.ok(firstSelect.id, 'Each control has an id');
+	assert.match(firstSelect.getAttribute('aria-describedby'), new RegExp(rows[0].querySelector('.setting-item-error').id));
+	const textLabel = rows[1].querySelector('.setting-item-name');
+	const textInput = rows[1].querySelector('input[type="text"]');
+	assert.equal(textLabel.getAttribute('for'), textInput.id, 'Text fields are labelled too');
 	click(root.querySelector('.opencode-form-actions button'));
 	assert.equal(rows[0].classList.contains('is-invalid'), true, 'Required rows report field errors natively');
 	assert.equal(rows[0].querySelector('.setting-item-error').textContent, 'This field is required.');
@@ -172,6 +184,33 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	card.update(form, false);
 	assert.equal(root.querySelector('.opencode-form-actions button').disabled, false);
 	assert.equal([...root.querySelectorAll('.opencode-form-actions button')][1].disabled, false);
+});
+
+test('interaction cards are grouped, announce new requests, and return focus to the composer', () => {
+	const root = container();
+	document.body.appendChild(root);
+	let focused = 0;
+	const panel = new ChatInteractionsPanel(root, {
+		replyPermission: () => {}, replyForm: () => {}, cancelForm: () => {},
+		focusComposer: () => { focused++; },
+	});
+	const request = { id: 'p', sessionID: 's', action: 'Run shell', resources: ['C:\\vault'],
+		save: ['C:\\vault'], message: 'Review.' };
+	const state = (busy) => ({ phase: 'ready', attempt: 0, permissions: [request], forms: [],
+		agents: [], models: [], interactionBusy: busy });
+	panel.update(state());
+	const permissions = root.querySelector('.opencode-chat-permissions');
+	assert.ok(permissions.querySelector('.opencode-permission'), 'Permissions render in their own group');
+	assert.equal(root.classList.contains('is-empty'), false);
+	assert.match(root.querySelector('[role="status"]').textContent, /Permission required: Run shell/,
+		'A new request is announced');
+	const allow = permissions.querySelector('button');
+	allow.focus();
+	assert.equal(document.activeElement, allow);
+	panel.update(state({ kind: 'permission', id: 'p' }));
+	assert.equal(focused, 1, 'A busy-only update hands focus back to the composer');
+	panel.dispose();
+	root.remove();
 });
 
 test('form card keeps hidden required fields from blocking and reports unsupported fields', () => {

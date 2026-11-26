@@ -308,6 +308,7 @@ export class ConversationRenderer {
 			part.root.remove();
 			entry.parts.delete(key);
 		}
+		this.syncEdgeClasses(entry);
 		this.syncChangedFiles(entry, assistant, messages);
 		this.syncFootnote(entry, footnote);
 	}
@@ -389,6 +390,18 @@ export class ConversationRenderer {
 		details.createEl('summary', { text: content.label });
 		const body = details.createDiv({ cls: 'opencode-disclosure-body' });
 		body.createEl('pre', { cls: 'opencode-disclosure-text', text: content.body });
+	}
+
+	/** Mark the first and last part kind so a server-side message split keeps its group gap. */
+	private syncEdgeClasses(entry: Entry): void {
+		const parts = [...entry.parts.values()];
+		const first = parts[0]?.kind;
+		const last = parts[parts.length - 1]?.kind;
+		const group = (kind: string | undefined) => kind === 'tool' || kind === 'reasoning';
+		entry.root.toggleClass('opencode-first-part-text', first === 'text');
+		entry.root.toggleClass('opencode-first-part-group', group(first));
+		entry.root.toggleClass('opencode-last-part-text', last === 'text');
+		entry.root.toggleClass('opencode-last-part-group', group(last));
 	}
 
 	/** A turn that reports files gains a trailing collapsed disclosure; one that reports none loses it. */

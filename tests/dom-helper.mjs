@@ -9,6 +9,9 @@ export function installDom() {
 		'Event', 'MouseEvent', 'KeyboardEvent', 'Node']) {
 		globalThis[key] = window[key];
 	}
+	// Obsidian adds cross-window-safe instanceOf() to DOM Nodes and UIEvents.
+	window.Node.prototype.instanceOf = function instanceOf(type) { return this instanceof type; };
+	window.UIEvent.prototype.instanceOf = function instanceOf(type) { return this instanceof type; };
 	const element = window.Element.prototype;
 	element.createEl = function createEl(tag, options = {}) {
 		const child = this.ownerDocument.createElement(tag);
@@ -108,6 +111,38 @@ export function createObsidian(app, notices = [], extra = {}) {
 		onOpen() {}
 		onClose() {}
 	}
+	class ConfirmationModal extends Modal {
+		constructor(modalApp) {
+			super(modalApp);
+			this.buttonContainerEl = document.createElement('div');
+			this.modalEl.appendChild(this.buttonContainerEl);
+			this.buttons = [];
+		}
+		addButton(callback) {
+			const el = document.createElement('button');
+			const button = {
+				el,
+				setButtonText(text) { el.textContent = text; return button; },
+				setCancel() { el.classList.add('mod-cancel'); return button; },
+				setDestructive() { el.classList.add('mod-warning'); return button; },
+				setInitialFocus() { button.initialFocus = el; return button; },
+				onClick: (handler) => {
+					el.addEventListener('click', () => {
+						const keepOpen = handler(new window.MouseEvent('click'));
+						if (!keepOpen) this.close();
+					});
+					return button;
+				},
+			};
+			callback(button);
+			this.buttonContainerEl.appendChild(el);
+			this.buttons.push(el);
+			return this;
+		}
+		addCancelButton(text = 'Cancel') {
+			return this.addButton((button) => button.setButtonText(text).setCancel().onClick(() => undefined));
+		}
+	}
 	class FuzzySuggestModal extends Modal {
 		constructor(modalApp) {
 			super(modalApp);
@@ -203,6 +238,7 @@ export function createObsidian(app, notices = [], extra = {}) {
 			getViewType() { return 'markdown'; }
 		},
 		Modal,
+		ConfirmationModal,
 		FuzzySuggestModal,
 		Menu,
 		AbstractInputSuggest,

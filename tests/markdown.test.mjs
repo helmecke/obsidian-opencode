@@ -108,7 +108,7 @@ test('internal anchor clicks are intercepted before MarkdownRenderer and forward
 	click.stopPropagation = () => { stopped = true; };
 	const handler = events.find(([event]) => event === 'click')[1];
 	const originalTarget = click.target;
-	Object.defineProperty(click, 'target', { value: anchor });
+	Object.defineProperty(click, 'targetNode', { value: anchor });
 	handler(click);
 	assert.equal(prevented, true);
 	assert.equal(stopped, true);
@@ -124,7 +124,7 @@ test('internal anchor clicks are intercepted before MarkdownRenderer and forward
 	];
 	for (const [paneType, init] of modifierClicks) {
 		const event = new window.MouseEvent('click', { bubbles: true, cancelable: true, ...init });
-		Object.defineProperty(event, 'target', { value: anchor });
+		Object.defineProperty(event, 'targetNode', { value: anchor });
 		handler(event);
 		assert.deepEqual(opened.at(-1), ['Note#Heading', '', paneType]);
 	}
@@ -136,7 +136,7 @@ test('internal anchor clicks are intercepted before MarkdownRenderer and forward
 	root.appendChild(missing);
 	const openedBeforeUnresolved = opened.length;
 	const missingClick = new window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true, altKey: true });
-	Object.defineProperty(missingClick, 'target', { value: missing });
+	Object.defineProperty(missingClick, 'targetNode', { value: missing });
 	handler(missingClick);
 	assert.deepEqual(notified, [UNRESOLVED_LINK]);
 	assert.equal(opened.length, openedBeforeUnresolved, 'An unresolved click never opens');
@@ -147,7 +147,7 @@ test('internal anchor clicks are intercepted before MarkdownRenderer and forward
 	contextless.setAttribute('data-href', '#Heading');
 	root.appendChild(contextless);
 	const contextlessClick = new window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true, altKey: true });
-	Object.defineProperty(contextlessClick, 'target', { value: contextless });
+	Object.defineProperty(contextlessClick, 'targetNode', { value: contextless });
 	handler(contextlessClick);
 	assert.deepEqual(notified, [UNRESOLVED_LINK, CONTEXTLESS_LINK]);
 	assert.equal(opened.length, openedBeforeUnresolved, 'A contextless click never opens');

@@ -169,10 +169,10 @@ export interface LinkRegistration {
 export function attachLinkRouter(container: HTMLElement, sourcePath: string,
 	environment: LinkEnvironment, register: LinkRegistration): void {
 	register.registerDomEvent(container, 'click', (event) => {
-		const target = event.target;
-		if (!(target instanceof Element)) return;
+		const target = event.targetNode;
+		if (!target?.instanceOf(Element)) return;
 		const anchor = target.closest('a.internal-link');
-		if (!(anchor instanceof HTMLAnchorElement)) return;
+		if (!anchor?.instanceOf(HTMLAnchorElement)) return;
 		const raw = anchor.getAttribute('data-href') ?? anchor.getAttribute('href');
 		if (!raw) return;
 		event.preventDefault();

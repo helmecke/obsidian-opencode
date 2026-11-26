@@ -165,10 +165,10 @@
 }
 
 /* A server-side message split can land on a group edge; the gap survives it. */
-.opencode-chat-messages > .opencode-message:has(> .opencode-message-body > :is(.opencode-part-tool, .opencode-part-reasoning):nth-last-child(1 of .opencode-part))
-	+ .opencode-message:has(> .opencode-message-body > .opencode-part-text:first-child),
-.opencode-chat-messages > .opencode-message:has(> .opencode-message-body > .opencode-part-text:nth-last-child(1 of .opencode-part))
-	+ .opencode-message:has(> .opencode-message-body > :is(.opencode-part-tool, .opencode-part-reasoning):first-child) {
+.opencode-chat-messages > .opencode-message.opencode-last-part-group
+	+ .opencode-message.opencode-first-part-text,
+.opencode-chat-messages > .opencode-message.opencode-last-part-text
+	+ .opencode-message.opencode-first-part-group {
 	margin-top: var(--p-spacing);
 }
 
@@ -365,7 +365,7 @@
 	padding: var(--size-4-1) 0;
 }
 
-.opencode-chat-interactions:empty {
+.opencode-chat-interactions.is-empty {
 	display: none;
 }
 
@@ -379,6 +379,30 @@
 	border-top: 1px solid var(--background-modifier-border);
 }
 
+.opencode-chat-permissions,
+.opencode-chat-forms {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.opencode-chat-permissions:empty,
+.opencode-chat-forms:empty {
+	display: none;
+}
+
+.opencode-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
 .opencode-permission-scope {
 	color: var(--text-warning);
 	font-size: var(--font-ui-small);
@@ -390,6 +414,10 @@
 	gap: var(--size-4-2);
 	flex-wrap: wrap;
 	margin-top: var(--size-4-2);
+}
+
+.opencode-form-field .setting-item-name {
+	display: block;
 }
 
 /* Composite form controls: grouped checkboxes and a custom value input. */
@@ -707,7 +735,7 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 }
 
 .opencode-composer-choice[data-kind="agent"] .opencode-composer-choice-icon {
-	color: var(--text-accent);
+	color: var(--opencode-agent-color, var(--text-accent));
 }
 
 .opencode-composer-choice-icon {

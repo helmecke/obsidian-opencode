@@ -1,4 +1,4 @@
-import { FuzzySuggestModal, Modal, Notice } from 'obsidian';
+import { ConfirmationModal, FuzzySuggestModal, Modal, Notice } from 'obsidian';
 import type { App, FuzzyMatch } from 'obsidian';
 import type { SessionInfo } from '@opencode/client';
 import { OpenCodeApiCompatibilityError } from '../opencode/compatibility';
@@ -76,22 +76,26 @@ export class SessionSwitcherModal extends FuzzySuggestModal<SessionInfo> {
 }
 
 /** Confirms that switching or creating may discard unsent composer text. */
-export class ConfirmDiscardModal extends Modal {
+export class ConfirmDiscardModal extends ConfirmationModal {
 	private answered = false;
 	constructor(app: App, private readonly decide: (confirmed: boolean) => void) { super(app); }
 
 	onOpen(): void {
+		void super.onOpen();
 		this.titleEl.setText('Discard unsent message?');
 		this.contentEl.empty();
 		this.contentEl.createEl('p', {
 			text: 'The message in the composer has not been sent. Switching conversations discards it.',
 		});
-		const actions = this.contentEl.createDiv({ cls: 'modal-button-container' });
-		const keep = actions.createEl('button', { text: 'Keep editing' });
-		const discard = actions.createEl('button', { text: 'Discard and switch', cls: 'mod-warning' });
-		keep.addEventListener('click', () => this.answer(false));
-		discard.addEventListener('click', () => this.answer(true));
-		keep.focus();
+		this.addButton((button) => button
+			.setButtonText('Keep editing')
+			.setCancel()
+			.setInitialFocus()
+			.onClick(() => this.answer(false)));
+		this.addButton((button) => button
+			.setButtonText('Discard and switch')
+			.setDestructive()
+			.onClick(() => this.answer(true)));
 	}
 
 	onClose(): void {
@@ -105,7 +109,6 @@ export class ConfirmDiscardModal extends Modal {
 	private answer(confirmed: boolean): void {
 		if (this.answered) return;
 		this.answered = true;
-		this.close();
 		this.decide(confirmed);
 	}
 }

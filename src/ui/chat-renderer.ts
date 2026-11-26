@@ -171,7 +171,8 @@ export class ChatRenderer {
 		this.errorEl = this.contentEl.createDiv({ cls: 'opencode-chat-errors' });
 		this.messagesEl = this.contentEl.createDiv({ cls: 'opencode-chat-messages markdown-preview-view' });
 		this.interactions = new ChatInteractionsPanel(
-			this.contentEl.createDiv({ cls: 'opencode-chat-interactions' }), this.handlers);
+			this.contentEl.createDiv({ cls: 'opencode-chat-interactions' }),
+			{ ...this.handlers, focusComposer: () => this.composer?.focus() });
 
 		this.composer = new ChatComposer(this.contentEl.createDiv({ cls: 'opencode-chat-composer' }), {
 			send: () => this.handlers.send(),

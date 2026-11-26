@@ -42,8 +42,10 @@ test('prose seams use the theme paragraph rhythm without spacing a tool run', ()
 test('a tool or reasoning group uses the same step, with tight rows', () => {
 	const band = ruleBody('.opencode-chat-messages .opencode-part-text + :is(.opencode-part-tool, .opencode-part-reasoning),\n.opencode-chat-messages :is(.opencode-part-tool, .opencode-part-reasoning) + .opencode-part-text');
 	assert.match(band, /margin-top: var\(--p-spacing\)/);
-	assert.match(css, /nth-last-child\(1 of \.opencode-part\)/,
+	assert.match(css, /\.opencode-message\.opencode-last-part-group[\s\S]*?\+ \.opencode-message\.opencode-first-part-text/,
 		'A group edge keeps its gap when a message split lands on it');
+	assert.match(css, /\.opencode-message\.opencode-last-part-text[\s\S]*?\+ \.opencode-message\.opencode-first-part-group/);
+	assert.ok(!/:has\(/.test(css), 'Message spacing uses rendered classes, not :has()');
 	assert.ok(!/\.opencode-part-tool \+ \.opencode-part-tool|:is\(\.opencode-part-tool, \.opencode-part-reasoning\) \+ :is\(\.opencode-part-tool, \.opencode-part-reasoning\)/.test(css),
 		'Rows inside one group get no margin of their own');
 });

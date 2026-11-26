@@ -270,7 +270,8 @@ export class ChatComposer {
 		}
 		const agent = agents.find((entry) => entry.id === selected);
 		this.agentChoice.labelEl.setText(agents.length ? agent?.name || selected || 'Agent' : 'No agents');
-		this.agentChoice.iconEl.style.color = agent?.color ?? '';
+		const color = agent?.color && supportsColor(agent.color) ? agent.color : 'var(--text-accent)';
+		this.agentChoice.iconEl.setCssProps({ '--opencode-agent-color': color });
 		const disabled = this.readOnly || state.phase !== 'ready' || agents.length === 0 || Boolean(state.interactionBusy);
 		this.agentSelectEl.disabled = disabled;
 		this.agentChoice.root.classList.toggle('is-disabled', disabled);
@@ -387,6 +388,12 @@ export class ChatComposer {
 		// Programmatic edits bypass the native input event; keep resize and send state in sync.
 		this.composer.dispatchEvent(new Event('input', { bubbles: true }));
 	}
+}
+
+/** Reject a server-supplied color that is not a valid CSS color token. */
+function supportsColor(value: string): boolean {
+	return typeof CSS === 'undefined' || typeof CSS.supports !== 'function'
+		|| CSS.supports('color', value);
 }
 
 function attachmentKey(attachment: MessageAttachment): string {

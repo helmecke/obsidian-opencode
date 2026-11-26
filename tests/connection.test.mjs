@@ -17,33 +17,10 @@ const bundle = await build({
 });
 const module = { exports: {} };
 const require = createRequire(import.meta.url);
-const settingControls = [];
 let processCalls = 0;
 compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 	(name) => {
-		if (name === 'obsidian') return {
-			PluginSettingTab: class {},
-			Setting: class {
-				constructor() { settingControls.push(this); }
-				setName(name) { this.name = name; return this; }
-				setDesc(description) { this.description = description; return this; }
-				addText(callback) {
-					callback({ setPlaceholder() { return this; }, setValue() { return this; },
-						onChange: (change) => { this.change = change; } });
-					return this;
-				}
-				addToggle(callback) {
-					const control = {
-						value: undefined,
-						setValue(value) { control.value = value; return control; },
-						onChange(change) { control.change = change; },
-					};
-					callback(control);
-					this.toggle = control;
-					return this;
-				}
-			},
-		};
+		if (name === 'obsidian') return { PluginSettingTab: class {} };
 		if (name === 'node:child_process' || name === 'child_process') {
 			return new Proxy({}, { get: () => () => { processCalls++; throw new Error('Process launch is forbidden'); } });
 		}
@@ -253,30 +230,30 @@ test('settings retain executable paths with spaces as data and discard credentia
 	assert.deepEqual(loadSettings({ autoStart: 'no' }), defaults);
 });
 
-test('settings tab activates the OpenCode 2 path and automatic startup and saves valid data only', async () => {
+test('settings definitions activate the OpenCode 2 path and automatic startup and save valid data only', async () => {
 	const settings = loadSettings(undefined);
 	const saved = [];
 	const tab = new OpenCodeSettingTab({}, {}, settings, async () => { saved.push({ ...settings }); });
-	tab.containerEl = { empty() {} };
-	tab.display();
-	const pathControl = settingControls.find((control) => control.name === 'OpenCode 2 executable path');
+	const definitions = tab.getSettingDefinitions();
+	const pathControl = definitions.find((definition) => definition.name === 'OpenCode 2 executable path');
 	assert.ok(pathControl);
-	assert.match(pathControl.description, /Full path to the OpenCode 2 executable/);
-	assert.match(pathControl.description, /never run through a shell/);
+	assert.match(pathControl.desc, /Full path to the OpenCode 2 executable/);
+	assert.match(pathControl.desc, /never run through a shell/);
 	const path = 'C:\\Program Files\\OpenCode\\opencode.exe';
-	await pathControl.change(path);
-	for (const invalid of ['bad\0path', 'bad\rpath', 'bad\npath']) await pathControl.change(invalid);
+	await tab.setControlValue('executablePath', path);
+	for (const invalid of ['bad\0path', 'bad\rpath', 'bad\npath']) {
+		await tab.setControlValue('executablePath', invalid);
+	}
 	assert.deepEqual(settings, { executablePath: path, autoStart: true, showReasoning: false, attachActiveNote: false });
 	assert.deepEqual(saved, [{ executablePath: path, autoStart: true, showReasoning: false, attachActiveNote: false }]);
-	const autoStart = settingControls.find((control) => control.name === 'Start OpenCode automatically');
+	const autoStart = definitions.find((definition) => definition.name === 'Start OpenCode automatically');
 	assert.ok(autoStart);
-	const toggle = autoStart.toggle;
-	assert.match(autoStart.description, /plugin-owned OpenCode 2 process/);
-	assert.equal(toggle.value, true);
-	await toggle.change(false);
+	assert.match(autoStart.desc, /plugin-owned OpenCode 2 process/);
+	assert.equal(tab.getControlValue('autoStart'), true);
+	await tab.setControlValue('autoStart', false);
 	assert.deepEqual(settings, { executablePath: path, autoStart: false, showReasoning: false, attachActiveNote: false });
 	assert.deepEqual(saved.at(-1), { executablePath: path, autoStart: false, showReasoning: false, attachActiveNote: false });
-	await pathControl.change('');
+	await tab.setControlValue('executablePath', '');
 	assert.deepEqual(saved.at(-1), { executablePath: '', autoStart: false, showReasoning: false, attachActiveNote: false });
 });
 

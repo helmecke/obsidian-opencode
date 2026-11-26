@@ -1,5 +1,5 @@
-import { PluginSettingTab, Setting } from 'obsidian';
-import type { App, Plugin } from 'obsidian';
+import { PluginSettingTab } from 'obsidian';
+import type { App, Plugin, SettingDefinitionItem } from 'obsidian';
 import type { ModelRef } from '@opencode/client';
 
 export interface ManagedOrphan { pid: number; token: string }
@@ -47,42 +47,48 @@ export class OpenCodeSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: Plugin, private readonly settings: OpenCodeSettings,
 		private readonly save: () => Promise<void>, private readonly onChange?: () => void) { super(app, plugin); }
 
-	display(): void {
-		this.containerEl.empty();
-		new Setting(this.containerEl)
-			.setName('OpenCode 2 executable path')
-			.setDesc('Full path to the OpenCode 2 executable, without surrounding quotes or arguments. Leave empty to use `opencode` from PATH or a common install location. Spaces are preserved as path data; the value is never run through a shell.')
-			.addText((text) => text.setPlaceholder('opencode').setValue(this.settings.executablePath)
-				.onChange(async (value) => {
-					if (unsafeText.test(value)) return;
-					this.settings.executablePath = value;
-					await this.save();
-				}));
-		new Setting(this.containerEl)
-			.setName('Start OpenCode automatically')
-			.setDesc('When no healthy OpenCode service is already running, start a plugin-owned OpenCode 2 process and stop it when the plugin is disabled. A healthy shared service is always reused instead.')
-			.addToggle((toggle) => toggle.setValue(this.settings.autoStart)
-				.onChange(async (value) => {
-					this.settings.autoStart = value;
-					await this.save();
-				}));
-		new Setting(this.containerEl)
-			.setName('Show reasoning')
-			.setDesc('Show model reasoning in the transcript as a collapsed row with a one-line preview. Hidden by default, and changes apply to open chats immediately.')
-			.addToggle((toggle) => toggle.setValue(this.settings.showReasoning)
-				.onChange(async (value) => {
-					this.settings.showReasoning = value;
-					await this.save();
-					this.onChange?.();
-				}));
-		new Setting(this.containerEl)
-			.setName('Attach active note automatically')
-			.setDesc('Send the note open in the editor as a file reference with every message sent from a draft, without an explicit attach action. Off by default; the note is never attached while this is off.')
-			.addToggle((toggle) => toggle.setValue(this.settings.attachActiveNote)
-				.onChange(async (value) => {
-					this.settings.attachActiveNote = value;
-					await this.save();
-					this.onChange?.();
-				}));
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				name: 'OpenCode 2 executable path',
+				desc: 'Full path to the OpenCode 2 executable, without surrounding quotes or arguments. Leave empty to use `opencode` from PATH or a common install location. Spaces are preserved as path data; the value is never run through a shell.',
+				control: {
+					type: 'text', key: 'executablePath', placeholder: 'opencode',
+					validate: (value) => unsafeText.test(value)
+						? 'The path cannot contain line breaks or null characters.' : undefined,
+				},
+			},
+			{
+				name: 'Start OpenCode automatically',
+				desc: 'When no healthy OpenCode service is already running, start a plugin-owned OpenCode 2 process and stop it when the plugin is disabled. A healthy shared service is always reused instead.',
+				control: { type: 'toggle', key: 'autoStart' },
+			},
+			{
+				name: 'Show reasoning',
+				desc: 'Show model reasoning in the transcript as a collapsed row with a one-line preview. Hidden by default, and changes apply to open chats immediately.',
+				control: { type: 'toggle', key: 'showReasoning' },
+			},
+			{
+				name: 'Attach active note automatically',
+				desc: 'Send the note open in the editor as a file reference with every message sent from a draft, without an explicit attach action. Off by default; the note is never attached while this is off.',
+				control: { type: 'toggle', key: 'attachActiveNote' },
+			},
+		];
+	}
+
+	getControlValue(key: string): unknown {
+		return this.settings[key as keyof OpenCodeSettings];
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key === 'executablePath') {
+			if (typeof value !== 'string' || unsafeText.test(value)) return;
+			this.settings.executablePath = value;
+		} else if (key === 'autoStart' || key === 'showReasoning' || key === 'attachActiveNote') {
+			if (typeof value !== 'boolean') return;
+			this.settings[key] = value;
+		} else return;
+		await this.save();
+		if (key === 'showReasoning' || key === 'attachActiveNote') this.onChange?.();
 	}
 }

@@ -57,7 +57,7 @@ const app = {
 };
 
 async function createShell(data = {}) {
-	const registrations = { views: new Map(), commands: [], ribbons: [], settingTabs: [], settingControls: [] };
+	const registrations = { views: new Map(), commands: [], ribbons: [], settingTabs: [] };
 	const leaves = [];
 	const revealed = [];
 	const notices = [];
@@ -77,35 +77,7 @@ async function createShell(data = {}) {
 		},
 		revealLeaf: async (leaf) => { revealed.push(leaf); },
 	};
-	class Setting {
-		constructor() { registrations.settingControls.push(this); }
-		setName(name) { this.name = name; return this; }
-		setDesc(description) { this.description = description; return this; }
-		addText(callback) {
-			const control = {
-				value: undefined,
-				change: undefined,
-				setPlaceholder(value) { control.placeholder = value; return control; },
-				setValue(value) { control.value = value; return control; },
-				onChange(change) { control.change = change; return control; },
-			};
-			callback(control);
-			this.text = control;
-			return this;
-		}
-		addToggle(callback) {
-			const control = {
-				value: undefined,
-				change: undefined,
-				setValue(value) { control.value = value; return control; },
-				onChange(change) { control.change = change; return control; },
-			};
-			callback(control);
-			this.toggle = control;
-			return this;
-		}
-	}
-	const obsidian = createObsidian(app, notices, { Setting });
+	const obsidian = createObsidian(app, notices);
 	const obsidianWithApp = {
 		...obsidian,
 		Plugin: class extends obsidian.Component {
@@ -330,11 +302,10 @@ test('Show reasoning applies to an open transcript without reopening the view or
 	await selectSession(view, 'old');
 
 	const tab = registrations.settingTabs.at(-1);
-	tab.containerEl = { empty() {} };
-	tab.display();
-	const row = registrations.settingControls.find((control) => control.name === 'Show reasoning');
-	assert.ok(row, 'The settings tab exposes Show reasoning');
-	assert.equal(row.toggle.value, false, 'An upgraded install starts with reasoning hidden');
+	const definition = tab.getSettingDefinitions().find((item) => item.name === 'Show reasoning');
+	assert.ok(definition, 'The settings tab exposes Show reasoning');
+	assert.equal(definition.control.type, 'toggle');
+	assert.equal(tab.getControlValue('showReasoning'), false, 'An upgraded install starts with reasoning hidden');
 	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null);
 	assert.match(view.messagesEl.textContent, /Visible answer\./);
 
@@ -346,7 +317,7 @@ test('Show reasoning applies to an open transcript without reopening the view or
 	Object.defineProperty(view.messagesEl, 'scrollHeight', { configurable: true, value: 1000 });
 	Object.defineProperty(view.messagesEl, 'clientHeight', { configurable: true, value: 500 });
 	view.messagesEl.scrollTop = 200;
-	await row.toggle.change(true);
+	await tab.setControlValue('showReasoning', true);
 	assert.equal(saved.at(-1).showReasoning, true, 'The preference is persisted');
 	const shown = view.messagesEl.querySelector('details.opencode-reasoning');
 	assert.ok(shown, 'Enabling adds reasoning to the already open transcript');
@@ -359,7 +330,7 @@ test('Show reasoning applies to an open transcript without reopening the view or
 	assert.equal(toolDetails.open, true, 'Other expanded disclosures stay open');
 	assert.equal(view.messagesEl.scrollTop, 200, 'The scroll position is preserved');
 
-	await row.toggle.change(false);
+	await tab.setControlValue('showReasoning', false);
 	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null,
 		'Disabling removes the reasoning row immediately');
 	assert.match(view.messagesEl.textContent, /Visible answer\./);
@@ -369,7 +340,7 @@ test('Show reasoning applies to an open transcript without reopening the view or
 	assert.equal(view.messagesEl.scrollTop, 200, 'Disabling does not scroll the transcript');
 	assert.equal(reads(), before, 'Disabling performs no network I/O');
 
-	await row.toggle.change(true);
+	await tab.setControlValue('showReasoning', true);
 	await view.onClose();
 	await view.onOpen();
 	await wait();
@@ -383,15 +354,14 @@ test('the Show reasoning toggle is harmless before chat opens and with no conver
 	const { plugin, registrations } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const tab = registrations.settingTabs.at(-1);
-	tab.containerEl = { empty() {} };
-	tab.display();
-	const row = registrations.settingControls.find((control) => control.name === 'Show reasoning');
-	await assert.doesNotReject(row.toggle.change(true), 'Toggling with no open view does nothing');
+	const definition = tab.getSettingDefinitions().find((item) => item.name === 'Show reasoning');
+	assert.equal(definition.control.type, 'toggle');
+	await assert.doesNotReject(tab.setControlValue('showReasoning', true), 'Toggling with no open view does nothing');
 	assert.equal(view.messagesEl, undefined, 'No renderer was created by the toggle');
 
 	view.connection.discover = async () => emptyClient();
 	await view.onOpen();
-	await row.toggle.change(false);
+	await tab.setControlValue('showReasoning', false);
 	assert.equal(view.messagesEl.querySelector('.opencode-reasoning'), null);
 	assert.equal(view.sessions.state.selected, undefined, 'A draft has no transcript');
 	await view.onClose();
@@ -418,10 +388,9 @@ test('another conversation and non-chat leaves follow the stored reasoning prefe
 	await selectSession(view, 'old');
 
 	const tab = registrations.settingTabs.at(-1);
-	tab.containerEl = { empty() {} };
-	tab.display();
-	const row = registrations.settingControls.find((control) => control.name === 'Show reasoning');
-	await row.toggle.change(true);
+	const definition = tab.getSettingDefinitions().find((item) => item.name === 'Show reasoning');
+	assert.equal(definition.control.type, 'toggle');
+	await tab.setControlValue('showReasoning', true);
 	assert.ok(view.messagesEl.querySelector('.opencode-reasoning'));
 
 	await selectSession(view, 'new');
@@ -789,7 +758,9 @@ test('header and tab show the session title, inline rename commits or cancels, a
 		return header.getAttribute('contenteditable') === 'true' ? header : undefined;
 	};
 	assert.equal(header.getAttribute('contenteditable'), 'true', 'The title is natively editable at rest');
-	assert.equal(header.getAttribute('tabindex'), '-1');
+	assert.equal(header.getAttribute('tabindex'), '0');
+	assert.equal(header.getAttribute('role'), 'textbox');
+	assert.equal(header.getAttribute('aria-label'), 'Conversation title');
 	assert.equal(header.getAttribute('spellcheck'), 'false');
 	let editor = beginRename();
 	assert.ok(editor, 'Clicking the header starts an inline rename');
@@ -960,7 +931,7 @@ test('the switcher lists fresh sessions, marks the current one, and switching co
 	await wait();
 	const confirm = modals.at(-1);
 	assert.equal(confirm.isOpen, true, 'Switching with a draft asks for confirmation');
-	click(confirm.contentEl.querySelectorAll('button')[0]);
+	click(confirm.buttonContainerEl.querySelectorAll('button')[0]);
 	await wait();
 	assert.equal(view.sessions.state.selected.id, 'new', 'Keeping the draft leaves the selection unchanged');
 	assert.equal(view.composer.value, 'unsent draft');
@@ -974,7 +945,7 @@ test('the switcher lists fresh sessions, marks the current one, and switching co
 	third.onChooseItem(third.getItems().find((session) => session.id === 'old'));
 	await wait();
 	const discard = modals.at(-1);
-	click(discard.contentEl.querySelectorAll('button')[1]);
+	click(discard.buttonContainerEl.querySelectorAll('button')[1]);
 	await wait();
 	assert.equal(view.sessions.state.selected.id, 'old');
 	assert.equal(view.composer.value, '', 'Discarding clears the composer');

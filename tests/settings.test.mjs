@@ -9,38 +9,6 @@ const bundle = await build({
 	platform: 'node', external: ['obsidian'], write: false,
 });
 
-const controls = [];
-
-class Setting {
-	constructor(containerEl) { this.containerEl = containerEl; controls.push(this); }
-	setName(name) { this.name = name; return this; }
-	setDesc(description) { this.description = description; return this; }
-	addText(callback) {
-		const control = {
-			placeholder: undefined,
-			value: undefined,
-			change: undefined,
-			setPlaceholder(value) { control.placeholder = value; return control; },
-			setValue(value) { control.value = value; return control; },
-			onChange(change) { control.change = change; return control; },
-		};
-		callback(control);
-		this.text = control;
-		return this;
-	}
-	addToggle(callback) {
-		const control = {
-			value: undefined,
-			change: undefined,
-			setValue(value) { control.value = value; return control; },
-			onChange(change) { control.change = change; return control; },
-		};
-		callback(control);
-		this.toggle = control;
-		return this;
-	}
-}
-
 class PluginSettingTab {
 	constructor(app, plugin) { this.app = app; this.plugin = plugin; }
 }
@@ -50,17 +18,13 @@ const require = createRequire(import.meta.url);
 compileFunction(bundle.outputFiles[0].text, ['require', 'module', 'exports'])(
 	(name) => {
 		if (name !== 'obsidian') return require(name);
-		return { PluginSettingTab, Setting };
+		return { PluginSettingTab };
 	}, module, module.exports,
 );
 const { loadSettings, OpenCodeSettingTab } = module.exports;
 
-function displayTab(settings, save, onChange) {
-	controls.length = 0;
-	const tab = new OpenCodeSettingTab({}, {}, settings, save, onChange);
-	tab.containerEl = { empty() {} };
-	tab.display();
-	return tab;
+function makeTab(settings, save, onChange) {
+	return new OpenCodeSettingTab({}, {}, settings, save, onChange);
 }
 
 test('reasoning display is opt-in and missing or non-boolean values read as off', () => {
@@ -113,42 +77,48 @@ test('the active-note attachment preference is opt-in and missing values read as
 	}
 });
 
-test('settings tab shows Show reasoning unchecked, updates the setting, and saves before notifying', async () => {
+test('settings definitions keep the four rows, their controls, and their order', () => {
+	const settings = loadSettings(undefined);
+	const tab = makeTab(settings, async () => {}, () => {});
+	const definitions = tab.getSettingDefinitions();
+	assert.deepEqual(definitions.map((definition) => definition.name), [
+		'OpenCode 2 executable path', 'Start OpenCode automatically', 'Show reasoning',
+		'Attach active note automatically',
+	], 'The existing rows keep their order');
+	assert.deepEqual(definitions.map((definition) => definition.control.key), [
+		'executablePath', 'autoStart', 'showReasoning', 'attachActiveNote',
+	], 'Each row binds to its stored key');
+	assert.deepEqual(definitions.map((definition) => definition.control.type), [
+		'text', 'toggle', 'toggle', 'toggle',
+	]);
+	assert.equal(definitions[0].control.placeholder, 'opencode');
+	assert.equal(definitions[0].control.validate('bad\npath'),
+		'The path cannot contain line breaks or null characters.');
+	assert.equal(definitions[0].control.validate('C:\\Program Files\\OpenCode\\opencode.exe'), undefined);
+	assert.match(definitions[1].desc, /shared service is always reused/);
+	assert.match(definitions[2].desc, /Hidden by default/);
+	assert.equal(tab.getControlValue('showReasoning'), false, 'Reasoning starts hidden');
+	assert.match(definitions[3].desc, /Off by default/);
+	assert.match(definitions[3].desc, /never attached while this is off/);
+	assert.equal(tab.getControlValue('attachActiveNote'), false, 'The active note is not attached by default');
+});
+
+test('settings updates mutate, save before notifying, and ignore invalid values', async () => {
 	const settings = loadSettings(undefined);
 	const saved = [];
 	let notify = 0;
 	let release;
 	const gate = new Promise((resolve) => { release = resolve; });
-	const tab = displayTab(settings, async () => {
+	const tab = makeTab(settings, async () => {
 		await gate;
 		saved.push({ ...settings });
 	}, () => {
 		assert.equal(saved.length, notify + 1, 'The change callback runs after its save resolves');
 		notify++;
 	});
-	void tab;
 
-	assert.deepEqual(controls.map((control) => control.name), [
-		'OpenCode 2 executable path', 'Start OpenCode automatically', 'Show reasoning',
-		'Attach active note automatically',
-	], 'The existing rows keep their order');
-	assert.equal(controls[0].text.value, '');
-	assert.equal(controls[1].toggle.value, true);
-	assert.match(controls[1].description, /shared service is always reused/);
-
-	const row = controls[2];
-	assert.ok(row.toggle, 'The row is a toggle');
-	assert.equal(row.toggle.value, false, 'Reasoning starts hidden');
-	assert.match(row.description, /Hidden by default/);
-
-	const attachRow = controls[3];
-	assert.ok(attachRow.toggle, 'The attachment preference is a toggle');
-	assert.equal(attachRow.toggle.value, false, 'The active note is not attached automatically by default');
-	assert.match(attachRow.description, /Off by default/);
-	assert.match(attachRow.description, /never attached while this is off/);
-
-	const pending = row.toggle.change(true);
-	assert.equal(settings.showReasoning, true, 'The toggle mutates the settings object');
+	const pending = tab.setControlValue('showReasoning', true);
+	assert.equal(settings.showReasoning, true, 'The change mutates the settings object');
 	assert.equal(saved.length, 0);
 	assert.equal(notify, 0);
 	release();
@@ -157,13 +127,21 @@ test('settings tab shows Show reasoning unchecked, updates the setting, and save
 	assert.equal(saved[0].showReasoning, true);
 	assert.equal(notify, 1);
 
-	await row.toggle.change(false);
+	await tab.setControlValue('showReasoning', false);
 	assert.equal(settings.showReasoning, false);
 	assert.equal(saved.at(-1).showReasoning, false);
 	assert.equal(notify, 2);
 
-	await attachRow.toggle.change(true);
+	await tab.setControlValue('attachActiveNote', true);
 	assert.equal(settings.attachActiveNote, true, 'The attachment toggle mutates the settings object');
 	assert.equal(saved.at(-1).attachActiveNote, true, 'The preference round-trips through save');
 	assert.equal(notify, 3, 'Open chats re-render after the preference changes');
+
+	await tab.setControlValue('executablePath', 'bad\npath');
+	assert.equal(settings.executablePath, '', 'An invalid path is never stored');
+	await tab.setControlValue('autoStart', 'no');
+	assert.equal(settings.autoStart, true, 'A non-boolean toggle value is ignored');
+	const savedCount = saved.length;
+	await tab.setControlValue('unknown', true);
+	assert.equal(saved.length, savedCount, 'Unknown keys are not persisted');
 });
