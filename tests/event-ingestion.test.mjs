@@ -291,6 +291,26 @@ test('tool lifecycle events reduce into compact inspectable entries without reco
 	assert.deepEqual(recoveries, []);
 });
 
+test('session-scoped notifications admit without recovery churn during a live answer', (t) => {
+	const { sink, recoveries } = fixture(t);
+	const tokens = { input: 1, output: 2, reasoning: 0, cache: { read: 0, write: 0 } };
+	apply(sink, event('execution.started'),
+		event('usage.updated', { cost: 0.001, tokens }),
+		event('retry.scheduled', { assistantMessageID: 'assistant', attempt: 1, at: 10,
+			error: { type: 'unknown', message: 'retry' } }, durable(2)),
+		event('usage.updated', { cost: 0.002, tokens }));
+	assert.equal(sink.state.execution, 'running');
+	assert.deepEqual(recoveries, []);
+});
+
+test('a genuinely unsupported session mutation still requests authoritative recovery', (t) => {
+	const { sink, recoveries } = fixture(t);
+	apply(sink, event('execution.started'),
+		event('message.content.updated', { messageID: 'assistant', content: [] }, durable(2)));
+	assert.equal(sink.state, undefined);
+	assert.deepEqual(recoveries, ['unsupported-mutation']);
+});
+
 test('pinned client decodes native SSE event identities/envelopes into the ingestion boundary', async (t) => {
 	const { sink } = fixture(t);
 	const controller = new AbortController();

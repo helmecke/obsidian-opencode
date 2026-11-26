@@ -39,6 +39,14 @@ export class SessionReducer {
 			// Idle/busy notifications do not identify an execution outcome. Keep them separate.
 			case 'session.status': this.status = event.data.status; return true;
 			case 'session.idle': this.status = { type: 'idle' }; return true;
+			// Session-scoped notifications that never mutate the message projection.
+			// The service publishes usage counters after every step and a scheduling
+			// note before a retry; the retry itself then streams ordinary step/text
+			// events. Admitting these without a reload keeps a live answer from
+			// flickering through the recovery path on every notification.
+			case 'session.usage.updated':
+			case 'session.retry.scheduled':
+				return true;
 			case 'session.execution.started': this.execution = 'running'; this.error = undefined; return true;
 			case 'session.execution.succeeded': this.execution = 'succeeded'; this.error = undefined; return true;
 			case 'session.execution.interrupted': this.execution = 'interrupted'; this.error = undefined; return true;
