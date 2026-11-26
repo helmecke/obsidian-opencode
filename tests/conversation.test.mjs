@@ -482,3 +482,87 @@ test('a footnote appears only on the last message of each contiguous run', () =>
 	assert.equal(assistants[1].querySelector('.opencode-message-footnote'), null);
 	assert.ok(assistants[2].querySelector('.opencode-message-footnote'));
 });
+
+const waitFor = async () => { for (let i = 0; i < 10; i++) await new Promise((resolve) => setImmediate(resolve)); };
+
+const changedFile = (name = 'Notes/Example.md') => ({
+	file: name, patch: `--- a/${name}\n+++ b/${name}\n@@ -1 +1 @@\n-old\n+new`,
+	additions: 1, deletions: 1, status: 'modified',
+});
+
+test('an assistant turn that reports files gains a collapsed disclosure after its parts', () => {
+	const target = container();
+	const message = { ...assistant('a1', text('Answer.'), { created: 1000, completed: 2000 }),
+		snapshot: { start: 's1', end: 's2', files: ['Notes/Example.md'] } };
+	renderer(target, { changedFiles: { load: async () => [changedFile()] } }).render([message]);
+	const details = target.querySelector('details.opencode-turn-changes');
+	assert.ok(details, 'The turn exposes a changed-files disclosure');
+	assert.equal(details.open, false, 'It starts folded');
+	const summary = details.querySelector('summary');
+	assert.match(summary.textContent, /^Changed files/);
+	assert.match(summary.textContent, /Notes\/Example\.md/);
+	assert.equal(summary.getAttribute('aria-label'), 'Changed files: Notes/Example.md');
+	assert.ok(summary.querySelector('.opencode-disclosure-glyph .lucide-file-diff'), 'The row carries a file icon');
+	assert.ok(summary.querySelector('.opencode-disclosure-chevron .lucide-chevron-right'), 'The row carries the chevron affordance');
+	const body = target.querySelector('.opencode-message-body-assistant');
+	assert.equal(body.lastElementChild, details, 'The disclosure trails the turn content');
+	assert.ok(body.querySelector('.opencode-part-text'), 'The answer part stays above it');
+
+	const none = container();
+	renderer(none, { changedFiles: { load: async () => [changedFile()] } }).render([
+		assistant('a1', text('No changes.'), { created: 1000, completed: 2000 }),
+		{ ...assistant('a2', text('Empty list.'), { created: 2000, completed: 3000 }), snapshot: { files: [] } },
+	]);
+	assert.equal(none.querySelector('details.opencode-turn-changes'), null,
+		'A turn without files shows no disclosure');
+
+	const unset = container();
+	renderer(unset).render([message]);
+	assert.equal(unset.querySelector('details.opencode-turn-changes'), null,
+		'A fixed turn diff surface and its disclosure only exists when the view is wired');
+});
+
+test('expanding a turn disclosure loads that turn and retries after a failure', async () => {
+	const target = container();
+	const calls = [];
+	let attempts = 0;
+	const view = renderer(target, { changedFiles: { load: async (message, bounds) => {
+		calls.push({ id: message.id, bounds });
+		if (++attempts === 1) throw new Error('private transport detail');
+		return [changedFile()];
+	} } });
+	view.render([user('u1', 'Prompt.'),
+		{ ...assistant('a1', text('Answer.'), { created: 1000, completed: 2000 }),
+			snapshot: { start: 's1', end: 's2', files: ['Notes/Example.md'] } }]);
+	const details = target.querySelector('details.opencode-turn-changes');
+	assert.equal(calls.length, 0, 'Nothing is fetched while collapsed');
+	details.open = true;
+	details.dispatchEvent(new Event('toggle'));
+	await waitFor();
+	assert.equal(calls.length, 1, 'Expansion makes one bounded request');
+	assert.deepEqual(calls[0], { id: 'a1', bounds: { from: 'u1', to: 'u1' } },
+		'The turn is bounded by its own user prompt');
+	const error = details.querySelector('.opencode-diff-error');
+	assert.match(error.textContent, /Unable to load changes\./);
+	assert.equal(target.textContent.includes('private transport detail'), false, 'Upstream detail is not shown');
+	const retry = error.querySelector('button');
+	assert.equal(retry.textContent, 'Retry');
+	retry.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+	await waitFor();
+	assert.equal(calls.length, 2);
+	assert.equal(details.querySelectorAll('details.opencode-file').length, 1);
+	assert.equal(details.querySelector('.opencode-diff-error'), null);
+});
+
+test('turning off a snapshot removes only the changed-files disclosure', () => {
+	const target = container();
+	const withFiles = { ...assistant('a1', text('Answer.'), { created: 1000, completed: 2000 }),
+		snapshot: { start: 's1', end: 's2', files: ['Notes/Example.md'] } };
+	const view = renderer(target, { changedFiles: { load: async () => [changedFile()] } });
+	view.render([withFiles]);
+	assert.ok(target.querySelector('details.opencode-turn-changes'));
+	view.render([{ ...withFiles, snapshot: { start: 's1', end: 's2' } }]);
+	assert.equal(target.querySelector('details.opencode-turn-changes'), null);
+	assert.match(target.textContent, /Answer\./, 'The turn content survives');
+	assert.ok(target.querySelector('.opencode-message-footnote'), 'The footnote survives');
+});

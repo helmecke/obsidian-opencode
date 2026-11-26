@@ -101,6 +101,29 @@ test('step completion is separate from execution outcome and records final messa
 	assert.ok(sink.state.messages[0].time.completed);
 });
 
+test('live step snapshots keep the turn bounds and changed files used by the diff review', (t) => {
+	const { sink, recoveries } = fixture(t);
+	const tokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } };
+	apply(sink,
+		event('step.started', { assistantMessageID: 'assistant', agent: 'general',
+			model: { providerID: 'fixture', id: 'fixture' }, started: 10, snapshot: 'start-1' }, durable(1)),
+		event('step.ended', { assistantMessageID: 'assistant', finish: 'stop', cost: 0, tokens,
+			snapshot: 'end-1', files: ['Notes/A.md'] }, durable(2)));
+	assert.deepEqual(sink.state.messages[0].snapshot,
+		{ start: 'start-1', end: 'end-1', files: ['Notes/A.md'] },
+		'A completed live turn carries the bounds and files the turn review needs');
+
+	apply(sink,
+		event('step.started', { assistantMessageID: 'failed', agent: 'general',
+			model: { providerID: 'fixture', id: 'fixture' }, started: 20, snapshot: 'start-2' }, durable(3)),
+		event('step.failed', { assistantMessageID: 'failed', error: { type: 'unknown', message: 'fixture failure' },
+			snapshot: 'end-2', files: ['Notes/B.md'] }, durable(4)));
+	assert.deepEqual(sink.state.messages[1].snapshot,
+		{ start: 'start-2', end: 'end-2', files: ['Notes/B.md'] },
+		'A failed live turn keeps its partial change record');
+	assert.deepEqual(recoveries, []);
+});
+
 test('other sessions, projects, nested vaults and global notifications cannot mutate or fill the queue', (t) => {
 	const { sink, recoveries } = fixture(t, { maxEvents: 1 });
 	for (let i = 0; i < 10; i++) {
@@ -327,4 +350,25 @@ test('pinned client decodes native SSE event identities/envelopes into the inges
 	}
 	sink.drain();
 	assert.equal(sink.state.messages[0].content[0].text, 'fixture');
+});
+
+test('live step start and completion retain snapshot bounds and changed files for the turn review', (t) => {
+	const { sink, recoveries } = fixture(t);
+	apply(sink,
+		event('step.started', { assistantMessageID: 'assistant', agent: 'general',
+			model: { providerID: 'fixture', id: 'fixture' }, started: 10, snapshot: 'start-1' }, durable(1)),
+		event('step.ended', { assistantMessageID: 'assistant', finish: 'stop', cost: 0,
+			tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+			snapshot: 'end-1', files: ['Notes/A.md', 'Notes/B.md'] }, durable(2)));
+	assert.deepEqual(sink.state.messages[0].snapshot,
+		{ start: 'start-1', end: 'end-1', files: ['Notes/A.md', 'Notes/B.md'] });
+	assert.deepEqual(recoveries, []);
+
+	apply(sink,
+		event('step.started', { assistantMessageID: 'failed', agent: 'general',
+			model: { providerID: 'fixture', id: 'fixture' }, started: 20, snapshot: 'start-2' }, durable(3)),
+		event('step.failed', { assistantMessageID: 'failed', error: { type: 'unknown', message: 'failed' },
+			snapshot: 'end-2', files: ['Notes/C.md'] }, durable(4)));
+	const failed = sink.state.messages.find((message) => message.id === 'failed');
+	assert.deepEqual(failed.snapshot, { start: 'start-2', end: 'end-2', files: ['Notes/C.md'] });
 });

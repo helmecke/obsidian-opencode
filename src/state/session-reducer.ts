@@ -57,6 +57,7 @@ export class SessionReducer {
 				this.messages = [...this.messages, {
 					id: event.data.assistantMessageID, type: 'assistant', agent: event.data.agent,
 					model: event.data.model, time: { created: event.data.started }, content: [],
+					...(event.data.snapshot ? { snapshot: { start: event.data.snapshot } } : {}),
 				}];
 				return true;
 			}
@@ -168,6 +169,7 @@ export class SessionReducer {
 					message.native = event.data.native;
 					message.rawFinish = event.data.rawFinish;
 					if (event.type === 'session.step.failed') message.error = event.data.error;
+					this.applySnapshot(message, event.data.snapshot, event.data.files);
 				}
 				return true;
 			}
@@ -179,6 +181,17 @@ export class SessionReducer {
 	private assistant(id: string): SessionMessageAssistant | undefined {
 		const message = this.messages.find((m) => m.id === id);
 		return message?.type === 'assistant' ? message : undefined;
+	}
+
+	/** Keep the live turn's end snapshot and changed files for the review disclosure. */
+	private applySnapshot(message: SessionMessageAssistant, end?: string,
+		files?: NonNullable<SessionMessageAssistant['snapshot']>['files']): void {
+		if (!end && !files) return;
+		message.snapshot = {
+			...(message.snapshot ?? {}),
+			...(end ? { end } : {}),
+			...(files ? { files } : {}),
+		};
 	}
 
 	private tool(message: SessionMessageAssistant, id: string): SessionMessageAssistantTool | undefined {

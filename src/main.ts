@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ChatView, CHAT_VIEW_TYPE } from './ui/chat-view';
 import { openChat } from './ui/open-chat';
+import { reviewConversationChanges } from './ui/review-changes';
 import { ConnectionCoordinator } from './opencode/connection';
 import { ManagedRuntime } from './opencode/managed-runtime';
 import { loadSettings, OpenCodeSettingTab } from './settings';
@@ -63,6 +64,11 @@ export default class OpenCodePlugin extends Plugin {
 			id: 'open-chat',
 			name: 'Open chat',
 			callback: () => openChat(this.app),
+		});
+		this.addCommand({
+			id: 'review-conversation-changes',
+			name: 'Review changes in this conversation',
+			callback: () => { void reviewConversationChanges(this.app); },
 		});
 	}
 

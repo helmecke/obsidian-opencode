@@ -1,8 +1,11 @@
 import { Component, ItemView, MarkdownView, Notice, Scope } from 'obsidian';
 import type { Events, Menu, WorkspaceLeaf } from 'obsidian';
+import type { FileDiffInfo } from '@opencode/client';
 import type { ConnectionCoordinator } from '../opencode/connection';
 import { ConnectionError } from '../opencode/errors';
 import { OpenCodeApiCompatibilityError, OpenCodeCompatibilityError } from '../opencode/compatibility';
+import { DiffAccessor } from '../opencode/diffs';
+import { conversationBounds, isOutsideVaultPath } from '../opencode/diff-bounds';
 import { SessionError } from '../opencode/sessions';
 import type { SessionCoordinator } from '../opencode/sessions';
 import type { SynchronizationCoordinator, SynchronizationState } from '../state/synchronization';
@@ -10,6 +13,7 @@ import { ChatRenderer } from './chat-renderer';
 import type { ChatViewHandlers } from './chat-renderer';
 import { attachmentSources, collectAttachments, noteAttachment } from './composer-attachments';
 import type { AttachmentSources, MessageAttachment } from './composer-attachments';
+import { SessionDiffReviewModal } from './diff-review-modal';
 import { LinkStack } from './link-stack';
 import { ConfirmDiscardModal, RenameSessionModal, SessionSwitcherModal } from './session-switcher';
 
@@ -29,6 +33,7 @@ export class ChatView extends ItemView {
 	private opening?: Component;
 	private renderer?: ChatRenderer;
 	private linkStack?: LinkStack;
+	private diffs?: DiffAccessor;
 	private viewError?: string;
 	private loadingOptions = false;
 	private titleEditing = false;
@@ -93,7 +98,12 @@ export class ChatView extends ItemView {
 		opening.register(() => {
 			if (this.linkStack === linkStack) this.linkStack = undefined;
 		});
-		const renderer = new ChatRenderer(this.app, this.handlers(), this.showReasoning, linkStack);
+		const diffs = new DiffAccessor(this.connection);
+		this.diffs = diffs;
+		opening.register(() => {
+			if (this.diffs === diffs) this.diffs = undefined;
+		});
+		const renderer = new ChatRenderer(this.app, this.handlers(), this.showReasoning, linkStack, diffs);
 		this.renderer = renderer;
 		renderer.mount(this.contentEl, opening, this.scope!);
 		opening.register(this.synchronization.subscribe(() => this.refresh()));
@@ -126,6 +136,11 @@ export class ChatView extends ItemView {
 			.setIcon('pencil')
 			.setDisabled(!this.synchronization.canCompose || this.readOnly)
 			.onClick(() => this.beginTitleRename()));
+		menu.addItem((item) => item
+			.setTitle('Review changes in this conversation…')
+			.setIcon('file-diff')
+			.setDisabled(!ready || !this.synchronization.state.snapshot?.selected)
+			.onClick(() => this.reviewChanges()));
 	}
 
 	private closeOpening(): void {
@@ -176,6 +191,8 @@ export class ChatView extends ItemView {
 			loadSkills: () => this.synchronization.loadSkills(),
 			loadCommands: () => this.synchronization.loadCommands(),
 			openSubagent: (childID) => { void this.openSubagent(childID); },
+			openDiffFile: (file) => this.openDiffFile(file),
+			copyDiff: (patch) => this.copyDiff(patch),
 			attachSelection: () => this.attachSelection(),
 			attachActiveNote: () => this.attachActiveNote(),
 			attachmentSources: () => this.attachmentSources(),
@@ -302,9 +319,48 @@ export class ChatView extends ItemView {
 			(id) => this.selectConversation(id)).open();
 	}
 
+	/** Open the read-only review for the selected conversation; the modal refreshes on every open. */
+	reviewChanges(): void {
+		const state = this.synchronization.state;
+		const session = state.snapshot?.selected;
+		if (state.phase !== 'ready' || !session || !this.diffs) {
+			new Notice('Open a conversation to review its changes.');
+			return;
+		}
+		const messages = state.conversation?.messages ?? state.snapshot?.messages ?? [];
+		const bounds = conversationBounds(messages);
+		const diffs = this.diffs;
+		new SessionDiffReviewModal(this.app, {
+			load: () => diffs.load(session.id, bounds, true),
+			open: (file) => this.openDiffFile(file),
+			copy: (patch) => this.copyDiff(patch),
+		}).open();
+	}
+
+	/** A deleted or outside-vault file has no vault target to open. */
+	private openDiffFile(file: FileDiffInfo): void {
+		if (file.status === 'deleted' || isOutsideVaultPath(file.file)) return;
+		const target = this.app.metadataCache.getFirstLinkpathDest(file.file, '');
+		if (!target) {
+			new Notice('Unable to open this file. It may be outside the vault.');
+			return;
+		}
+		if (this.linkStack) this.linkStack.open(file.file, '');
+		else void this.app.workspace.openLinkText(file.file, '', 'tab');
+	}
+
+	private async copyDiff(patch: string): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(patch);
+		} catch {
+			new Notice('Unable to copy the patch.');
+		}
+	}
+
 	private async selectConversation(id: string): Promise<void> {
 		if (!id || this.synchronization.state.phase !== 'ready') return;
 		if (!(await this.discardDraftIfConfirmed())) return;
+		this.diffs?.clear();
 		this.parentTrail = undefined;
 		this.viewError = undefined;
 		try {
@@ -321,6 +377,7 @@ export class ChatView extends ItemView {
 	private async openSubagent(childID: string): Promise<void> {
 		if (!childID || this.synchronization.state.phase !== 'ready') return;
 		if (!(await this.discardDraftIfConfirmed())) return;
+		this.diffs?.clear();
 		const parent = this.synchronization.state.snapshot?.selected ?? this.sessions.state.selected;
 		const parentTitle = this.displayTitle();
 		this.viewError = undefined;
@@ -338,6 +395,7 @@ export class ChatView extends ItemView {
 	private async newConversation(): Promise<void> {
 		if (this.synchronization.state.phase !== 'ready') return;
 		if (!(await this.discardDraftIfConfirmed())) return;
+		this.diffs?.clear();
 		this.parentTrail = undefined;
 		this.viewError = undefined;
 		try {

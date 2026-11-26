@@ -138,6 +138,7 @@ test('enabling registers native chat entrypoints without service or demo side ef
 	assert.deepEqual([...registrations.views.keys()], ['opencode-chat']);
 	assert.deepEqual(registrations.commands.map(({ id, name }) => ({ id, name })), [
 		{ id: 'open-chat', name: 'Open chat' },
+		{ id: 'review-conversation-changes', name: 'Review changes in this conversation' },
 	]);
 	assert.equal(registrations.ribbons.length, 1);
 	assert.equal(registrations.ribbons[0].icon, 'message-square');
@@ -146,6 +147,16 @@ test('enabling registers native chat entrypoints without service or demo side ef
 	assert.deepEqual(revealed, []);
 	assert.deepEqual(notices, []);
 	assert.ok(Object.keys(bundle.metafile.inputs).includes('src/opencode/discovery.ts'));
+});
+
+test('the review command opens the review for an existing chat view', async () => {
+	const { registrations, leaves } = await createShell();
+	const view = registrations.views.get('opencode-chat')({});
+	leaves.push({ type: 'opencode-chat', view });
+	let reviewed = 0;
+	view.reviewChanges = () => { reviewed++; };
+	await registrations.commands.find(({ id }) => id === 'review-conversation-changes').callback();
+	assert.equal(reviewed, 1, 'The command delegates to the open chat view');
 });
 
 test('command opens a native tab and ribbon reveals the same leaf, including in a sidebar', async () => {
@@ -685,7 +696,7 @@ function interactionClient() {
 	return { client, calls, records, texts, get created() { return created; } };
 }
 
-test('the document menu offers switch, new, and rename for both pane and tab sources', async () => {
+test('the document menu offers switch, new, rename, and review for both pane and tab sources', async () => {
 	const { plugin, registrations, Menu } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
@@ -695,19 +706,22 @@ test('the document menu offers switch, new, and rename for both pane and tab sou
 	let switched = 0;
 	let created = 0;
 	let renamed = 0;
+	let reviewed = 0;
 	view.openSwitcher = async () => { switched++; };
 	view.newConversation = async () => { created++; };
 	view.beginTitleRename = () => { renamed++; };
+	view.reviewChanges = () => { reviewed++; };
 	for (const source of ['more-options', 'tab-header']) {
 		const menu = new Menu();
 		view.onPaneMenu(menu, source);
 		assert.deepEqual(menu.items.map((item) => item.title),
-			['Switch conversation…', 'New conversation', 'Rename conversation…']);
+			['Switch conversation…', 'New conversation', 'Rename conversation…', 'Review changes in this conversation…']);
 		for (const item of menu.items) item.click();
 	}
 	assert.equal(switched, 2, 'Both sources open the switcher');
 	assert.equal(created, 2, 'Both sources create a conversation');
 	assert.equal(renamed, 2, 'Both sources start a rename');
+	assert.equal(reviewed, 2, 'Both sources open the conversation review');
 	plugin.unload();
 });
 

@@ -1,6 +1,6 @@
 import type { V2Event } from '@opencode/client';
 import {
-	asFiniteNumber, asNonEmptyString, asRecord, asString, invalid, optionalBoolean, optionalNumber,
+	asArray, asFiniteNumber, asNonEmptyString, asRecord, asString, invalid, optionalBoolean, optionalNumber,
 	optionalRecord, optionalString, validateLocation, validateModelRef, validateStructuredError,
 } from './api-primitives';
 import { validateFormInfo, validatePermissionRequest } from './interaction-shapes';
@@ -71,6 +71,10 @@ export function validateEvent(value: unknown): V2Event {
 	const ordinal = (): void => {
 		if (!Number.isSafeInteger(data.ordinal) || (data.ordinal as number) < 0) return invalid();
 	};
+	const stepSnapshot = (): void => {
+		optionalString(data.snapshot);
+		if (data.files !== undefined) for (const file of asArray(data.files)) asString(file);
+	};
 	switch (type) {
 		case 'session.step.first-token': assistant(); break;
 		case 'session.status':
@@ -93,6 +97,7 @@ export function validateEvent(value: unknown): V2Event {
 			asString(data.agent);
 			validateModelRef(data.model);
 			asFiniteNumber(data.started);
+			optionalString(data.snapshot);
 			break;
 		case 'session.step.streamed': assistant(); break;
 		case 'session.step.ended':
@@ -102,6 +107,7 @@ export function validateEvent(value: unknown): V2Event {
 			asFiniteNumber(data.cost);
 			asRecord(data.tokens);
 			optionalRecord(data.native);
+			stepSnapshot();
 			break;
 		case 'session.step.failed':
 			assistant();
@@ -111,6 +117,7 @@ export function validateEvent(value: unknown): V2Event {
 			optionalNumber(data.cost);
 			optionalRecord(data.tokens);
 			optionalRecord(data.native);
+			stepSnapshot();
 			break;
 		case 'session.text.started':
 		case 'session.reasoning.started': assistant(); ordinal(); break;

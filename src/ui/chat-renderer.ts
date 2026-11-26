@@ -1,7 +1,8 @@
 import { Component, Menu, Notice, setIcon, setTooltip } from 'obsidian';
 import type { App, OpenViewState, PaneType, Scope, TFile } from 'obsidian';
-import type { ModelRef } from '@opencode/client';
+import type { ModelRef, FileDiffInfo } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
+import type { DiffAccessor } from '../opencode/diffs';
 import { ConversationRenderer } from './conversation';
 import type { ConversationOptions, MarkdownLike } from './conversation';
 import { attachLinkRouter, MarkdownBlock, splitInternalLink } from './markdown';
@@ -32,6 +33,8 @@ export interface ChatViewHandlers {
 	loadSkills(): Promise<void>;
 	loadCommands(): Promise<void>;
 	openSubagent(childID: string): void;
+	openDiffFile(file: FileDiffInfo): void;
+	copyDiff(patch: string): Promise<void>;
 	attachSelection(): void;
 	attachActiveNote(): void;
 	attachmentSources(): AttachmentSources;
@@ -59,7 +62,8 @@ export class ChatRenderer {
 	private signatures = { errors: '' };
 
 	constructor(private readonly app: App, private readonly handlers: ChatViewHandlers,
-		private readonly showReasoning?: () => boolean, private readonly linkStack?: LinkStack) {}
+		private readonly showReasoning?: () => boolean, private readonly linkStack?: LinkStack,
+		private readonly diffAccessor?: DiffAccessor) {}
 
 	get statusElement(): HTMLElement | undefined { return this.statusEl; }
 	get retryElement(): HTMLButtonElement | undefined { return this.retryButton; }
@@ -213,6 +217,16 @@ export class ChatRenderer {
 			agentLabel: (agent) => this.agentLabel(agent),
 			showReasoning: this.showReasoning,
 			openSubagent: (childID) => this.handlers.openSubagent(childID),
+			changedFiles: this.diffAccessor ? {
+				load: (message, bounds) => {
+					const id = this.state?.snapshot?.selected?.id;
+					if (!id || !this.diffAccessor) return Promise.resolve([]);
+					return this.diffAccessor.load(id, bounds);
+				},
+				open: (file) => this.handlers.openDiffFile(file),
+				copy: (patch) => this.handlers.copyDiff(patch),
+				notify: (message) => { new Notice(message); },
+			} : undefined,
 		};
 		this.conversationOptions = options;
 		this.conversation = new ConversationRenderer(this.messagesEl, options);

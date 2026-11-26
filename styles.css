@@ -909,3 +909,180 @@ details[open] > .opencode-disclosure-summary .opencode-disclosure-chevron svg {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* Changed-files review. Additions and removals borrow the theme's diff colours;
+   the fixed marker column gives wrapped lines a hanging indent. */
+.opencode-turn-changes {
+	margin-block: var(--size-4-2);
+}
+
+.opencode-changed-files summary {
+	font-size: var(--font-ui-small);
+}
+
+.opencode-changed-files-name {
+	flex: 0 0 auto;
+	font-weight: var(--font-medium);
+}
+
+.opencode-changed-files-preview {
+	flex: 1 1 auto;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	overflow-wrap: anywhere;
+}
+
+.opencode-changed-files-body {
+	margin-top: var(--size-4-1);
+}
+
+.opencode-file {
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.opencode-file:last-child {
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.opencode-file summary {
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-file-name {
+	flex: 0 1 auto;
+	min-width: 0;
+	font-weight: var(--font-medium);
+	overflow-wrap: anywhere;
+}
+
+.opencode-file-meta {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+}
+
+.opencode-file-body {
+	padding-block: var(--size-4-1);
+	padding-left: var(--size-4-4);
+}
+
+.opencode-file-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-1);
+}
+
+.opencode-file-patch:empty {
+	display: none;
+}
+
+.opencode-diff-header {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	align-items: baseline;
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-diff-name {
+	font-weight: var(--font-medium);
+	overflow-wrap: anywhere;
+}
+
+.opencode-diff-status {
+	color: var(--text-muted);
+}
+
+.opencode-diff-counts {
+	display: inline-flex;
+	gap: var(--size-4-1);
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+}
+
+.opencode-diff-additions {
+	color: var(--color-green);
+}
+
+.opencode-diff-deletions {
+	color: var(--color-red);
+}
+
+.opencode-diff-partial,
+.opencode-diff-note,
+.opencode-diff-truncated {
+	padding: var(--size-4-1) var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-diff-lines {
+	margin-top: var(--size-4-1);
+	border-radius: var(--radius-s);
+	overflow: hidden;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+}
+
+.opencode-diff-line {
+	display: flex;
+	min-width: 0;
+}
+
+.opencode-diff-marker {
+	flex: 0 0 auto;
+	width: 2ch;
+	text-align: center;
+	color: var(--text-faint);
+	user-select: none;
+}
+
+.opencode-diff-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding-right: var(--size-4-2);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	tab-size: 4;
+}
+
+.opencode-diff-line.is-add {
+	background-color: color-mix(in srgb, var(--color-green) 10%, transparent);
+}
+
+.opencode-diff-line.is-add .opencode-diff-marker {
+	color: var(--color-green);
+}
+
+.opencode-diff-line.is-remove {
+	background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+
+.opencode-diff-line.is-remove .opencode-diff-marker {
+	color: var(--color-red);
+}
+
+.opencode-diff-line.is-context .opencode-diff-text {
+	color: var(--text-muted);
+}
+
+.opencode-diff-line.is-hunk .opencode-diff-text {
+	color: var(--text-accent);
+}
+
+.opencode-diff-line.is-meta .opencode-diff-text {
+	color: var(--text-faint);
+}
+
+.opencode-diff-error {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	align-items: center;
+	color: var(--text-error);
+	font-size: var(--font-ui-smaller);
+}

@@ -288,6 +288,10 @@ test('event envelopes admit unknown future types and reject malformed used field
 	assert.equal(validateEvent(future), future);
 	assert.equal(validateEvent(event('session.step.first-token', { assistantMessageID: 'm' })).type,
 		'session.step.first-token');
+	const stepEnded = event('session.step.ended', { assistantMessageID: 'm', finish: 'stop', cost: 0,
+		tokens: {}, snapshot: 'end-1', files: ['Notes/A.md'] }, { durable: { aggregateID: 'one', seq: 1, version: 1 } });
+	assert.deepEqual(validateEvent(stepEnded).data.files, ['Notes/A.md'],
+		'Step bounds and changed files are admitted for the turn review');
 	assert.equal(validateEvent(event('session.text.delta', { assistantMessageID: 'm', ordinal: 0, delta: 'x' })).type,
 		'session.text.delta');
 	assert.equal(validateEvent(event('permission.asked', { id: 'p', action: 'Read', resources: ['file'] })).type,
@@ -311,6 +315,12 @@ test('event envelopes admit unknown future types and reject malformed used field
 		{ id: 'e', created: 1, type: 'session.execution.started', durable: { aggregateID: 'a', seq: 1, version: 2 }, data: { sessionID: 'one' } },
 		{ id: 'e', created: 1, type: 'session.execution.started', durable: { aggregateID: 'a', seq: 1, version: '1' }, data: { sessionID: 'one' } },
 		{ id: 'e', created: 1, type: 'session.step.first-token', data: { sessionID: 'one' } },
+		{ id: 'e', created: 1, type: 'session.step.ended', data: { sessionID: 'one', assistantMessageID: 'm',
+			finish: 'stop', cost: 0, tokens: {}, snapshot: 1 },
+			durable: { aggregateID: 'one', seq: 2, version: 1 } },
+		{ id: 'e', created: 1, type: 'session.step.failed', data: { sessionID: 'one', assistantMessageID: 'm',
+			error: { type: 'unknown', message: 'failed' }, files: [1] },
+			durable: { aggregateID: 'one', seq: 3, version: 1 } },
 		{ id: 'e', created: 1, type: 'permission.asked', data: { id: 'p', sessionID: 'one', action: 'Read', resources: 'file' } },
 	]) assert.throws(() => validateEvent(broken), isApiError);
 	const futureForm = { id: 'e', created: 1, type: 'form.created', data: { form: form('one', 'f', [field('future', 'rating')]) } };
@@ -338,6 +348,13 @@ test('reviewed tool success/failure use schema version 2, not a global version-1
 		assert.equal(validateEvent({ ...success, type }).type, type);
 		assert.throws(() => validateEvent({ ...success, type, durable: { ...success.durable, version: 1 } }), isApiError);
 	}
+});
+
+test('session.diff stays outside the required contract wrapper', () => {
+	const raw = OpenCode.make({ baseUrl: 'http://127.0.0.1:1' });
+	const wrapped = withApiValidation(raw);
+	assert.equal(wrapped.session.diff, raw.session.diff,
+		'The optional read-only review endpoint is not part of the compatibility contract');
 });
 
 test('the pinned generated event subscription forwards a 2.3.2 first-token event', async (t) => {

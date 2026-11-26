@@ -119,3 +119,20 @@ test('the composer reserves the transcript scrollbar gutter', () => {
 	assert.match(composer, /overflow-y: auto/,
 		'The reserved gutter needs a scroll container');
 });
+
+test('the diff review tints additions and removals, mutes context, and wraps long lines', () => {
+	assert.match(ruleBody('.opencode-diff-line.is-add'), /var\(--color-green\)/);
+	assert.match(ruleBody('.opencode-diff-line.is-remove'), /var\(--color-red\)/);
+	assert.match(ruleBody('.opencode-diff-line.is-context .opencode-diff-text'), /var\(--text-muted\)/);
+	assert.match(ruleBody('.opencode-diff-text'), /white-space: pre-wrap/,
+		'Long diff lines wrap instead of scrolling horizontally');
+	assert.match(ruleBody('.opencode-diff-text'), /overflow-wrap: anywhere/);
+	assert.match(ruleBody('.opencode-diff-lines'), /font-family: var\(--font-monospace\)/);
+	assert.match(ruleBody('.opencode-diff-marker'), /flex: 0 0 auto/,
+		'The marker column keeps wrapped lines aligned');
+	const start = css.indexOf('.opencode-turn-changes');
+	const end = css.indexOf('.opencode-diff-error');
+	const block = css.slice(start, end);
+	assert.ok(!/#[0-9a-f]{3,8}\b|\brgb\(|\bhsl\(/i.test(block),
+		'Diff styles use theme colours only, with no hard-coded values');
+});

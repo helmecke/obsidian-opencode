@@ -23,7 +23,7 @@ export default defineConfig(
 				projectService: {
 					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'tests/*.mjs', 'scripts/*.mjs'],
 					// Keep the Node fixture/probe suite type-aware as new suites are added.
-					maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 32,
+					maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 48,
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],

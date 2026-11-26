@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Review the files an assistant changed without leaving chat. A turn that
+  reports changes ends with a collapsed **Changed files** row naming them;
+  expanding it loads the turn's changed files lazily, and each file expands to
+  its patch. **Review changes in this conversation…** in the document menu and
+  the matching command open a conversation-bounded review listing every changed
+  file with its status and counts, expandable per file.
+- Patches render as tinted, wrapped unified diffs with **Open** and **Copy
+  patch** actions. Large patches stop at a display cap behind **Show full
+  patch**, a patch the service marks partial says so, binary and empty patches
+  show a note, and deleted or outside-vault files cannot be opened. Patches stay
+  in memory only, and a failed load shows a local **Retry** without affecting
+  chat, execution, permissions, or the connection.
 - Hovering a message or the message field no longer shows a tooltip repeating
   the speaker name or **Message OpenCode**. The names stay available to screen
   readers, and links and controls inside a message keep their own tooltips.

@@ -1,6 +1,10 @@
-import type { ModelRef, SessionMessageAssistant, SessionMessageInfo } from '@opencode/client';
+import type { FileDiffInfo, ModelRef, SessionMessageAssistant, SessionMessageInfo } from '@opencode/client';
 import { setIcon, setTooltip } from 'obsidian';
 import type { PendingPrompt } from '../state/prompt-coordinator';
+import { turnBounds } from '../opencode/diff-bounds';
+import type { DiffBounds } from '../opencode/diff-bounds';
+import { ChangedFilesDisclosure } from './changed-files';
+import type { ChangedFilesActions } from './changed-files';
 import { createDisclosureIcon } from './disclosure-icon';
 import { durationBetween } from './duration';
 import { ToolEntryView } from './tool-entry';
@@ -23,6 +27,10 @@ export interface ConversationOptions {
 	promptLabel?: string;
 	/** Open a subagent child session from its report embed. */
 	openSubagent?(childID: string): void;
+	/** Render a turn's changed-files disclosure; absent turns no such surface. */
+	changedFiles?: ChangedFilesActions & {
+		load(message: SessionMessageAssistant, bounds: DiffBounds): Promise<readonly FileDiffInfo[]>;
+	};
 }
 
 interface FootnoteInfo {
@@ -50,6 +58,7 @@ interface Entry {
 	signature: string;
 	footnote?: HTMLElement;
 	footnoteSignature: string;
+	changedFiles?: ChangedFilesDisclosure;
 }
 
 const suppressedTypes = new Set(['agent-switched', 'model-switched', 'location-switched']);
@@ -201,7 +210,7 @@ export class ConversationRenderer {
 		for (const item of desired) {
 			const entry = item.prompt ? this.promptEntry(item.id, item.prompt)
 				: this.entries.get(item.id) ?? this.createEntry(item.id, item.message!);
-			if (item.message) this.updateEntry(entry, item.message, item.footnote);
+			if (item.message) this.updateEntry(entry, item.message, item.footnote, visible);
 			this.container.appendChild(entry.root);
 		}
 	}
@@ -245,7 +254,8 @@ export class ConversationRenderer {
 		return entry;
 	}
 
-	private updateEntry(entry: Entry, message: SessionMessageInfo, footnote?: FootnoteInfo): void {
+	private updateEntry(entry: Entry, message: SessionMessageInfo, footnote: FootnoteInfo | undefined,
+		messages: readonly SessionMessageInfo[]): void {
 		if (entry.kind === 'notice') {
 			this.updateNotice(entry, message);
 			return;
@@ -298,6 +308,7 @@ export class ConversationRenderer {
 			part.root.remove();
 			entry.parts.delete(key);
 		}
+		this.syncChangedFiles(entry, assistant, messages);
 		this.syncFootnote(entry, footnote);
 	}
 
@@ -380,6 +391,27 @@ export class ConversationRenderer {
 		body.createEl('pre', { cls: 'opencode-disclosure-text', text: content.body });
 	}
 
+	/** A turn that reports files gains a trailing collapsed disclosure; one that reports none loses it. */
+	private syncChangedFiles(entry: Entry, assistant: SessionMessageAssistant,
+		messages: readonly SessionMessageInfo[]): void {
+		const options = this.options.changedFiles;
+		const files = (assistant.snapshot?.files ?? []).filter((file): file is string =>
+			typeof file === 'string' && file.length > 0);
+		if (!options || files.length === 0) {
+			entry.changedFiles?.dispose();
+			entry.changedFiles = undefined;
+			return;
+		}
+		entry.changedFiles ??= new ChangedFilesDisclosure(entry.body, {
+			load: () => options.load(assistant, turnBounds(assistant, messages)),
+			open: (file) => options.open?.(file),
+			copy: (patch) => options.copy?.(patch),
+			notify: (message) => options.notify?.(message),
+		});
+		entry.changedFiles.update(files, () => options.load(assistant, turnBounds(assistant, messages)));
+		entry.body.appendChild(entry.changedFiles.element);
+	}
+
 	private syncFootnote(entry: Entry, footnote?: FootnoteInfo): void {
 		const text = [footnote?.model, footnote?.agent, footnote?.duration].filter(Boolean).join(' · ');
 		if (!text) {
@@ -451,6 +483,7 @@ export class ConversationRenderer {
 	private disposeEntry(entry: Entry): void {
 		for (const markdown of entry.markdowns) markdown.dispose();
 		for (const tool of entry.tools) tool.dispose();
+		entry.changedFiles?.dispose();
 		entry.markdowns.clear();
 		entry.tools.clear();
 		entry.root.remove();

@@ -1040,3 +1040,40 @@ and `npm run lint` reported 0 errors and the same two pre-existing warnings
 | 2026-11-22 | `reuse-obsidian-ui-styles` | 14/14 | 163 passing | pass | `openspec/changes/archive/2026-11-22-reuse-obsidian-ui-styles` |
 | 2026-11-22 | `add-composer-note-linking` | 9/9 | 161 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-note-linking` |
 | 2026-11-22 | `add-composer-skill-mentions` | 16/16 | 183 passing | pass | `openspec/changes/archive/2026-11-22-add-composer-skill-mentions` |
+
+## Conversation diff review (2026-11-26, live acceptance pending)
+
+Automated verification for `conversation-diff-review`: `npm test` passed 333
+tests, `npm run build` succeeded, and `npm run lint` reported 0 errors and the
+same two pre-existing warnings (declarative settings API; sentence case for
+**OpenCode 2 executable path**). The unit and DOM suites cover bounds selection,
+the in-memory cache and its eviction, patch parsing and capping, degraded
+patches, the turn disclosure and retry path, the review modal, enabled/disabled
+file actions, clipboard copy, failure isolation, menu wiring, command
+registration, and the style contract. The live reducer retains each step's
+start/end snapshot and changed files, so a just-completed turn exposes the
+review without reopening the conversation. A live probe against 2.3.2 confirmed
+that `session.diff`'s `from`/`to` are **user-message IDs** (snapshot hashes are
+rejected), so the turn and session bounds now use the conversation's user
+prompts rather than snapshot IDs.
+
+A live check on 2026-11-26 in the development vault against OpenCode **2.3.2**
+confirmed that the turn disclosure and the session review both load and render
+the changed files after the bounds correction. This was **not** a disposable
+vault and did not cover 2.2.2 or the remaining matrix below, so it is partial
+evidence, not the full acceptance record.
+
+The full live matrix has not been recorded yet. It requires a disposable
+Obsidian vault with this build installed and a registered OpenCode service at
+**2.2.2** and the newest **2.3.x**. Only 2.3.2 is installed in this environment,
+so these checks remain open:
+
+- create, edit, delete, and rename a vault file in one turn;
+- a shell write and an outside-vault file;
+- a binary patch, a large patch over the display cap, and a `more: true`
+  partial patch;
+- a denied permission, a reconnect, and a reopened conversation;
+- each case observed in both the turn disclosure and the session review.
+
+Do not treat this section as live evidence. Record the observed results here
+before archiving.

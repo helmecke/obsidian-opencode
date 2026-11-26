@@ -53,7 +53,7 @@ const report = (id, childID) => ({
 	metadata: { source: 'subagent', agent: 'explore', description: 'Find the note', state: 'completed', childID },
 });
 
-function fixture(autoAttachActiveNote = () => false) {
+function fixture(autoAttachActiveNote = () => false, options = {}) {
 	notices.length = 0;
 	obsidian.modals.length = 0;
 	obsidian.menus.length = 0;
@@ -61,6 +61,7 @@ function fixture(autoAttachActiveNote = () => false) {
 	app.workspace.focused = true;
 	app.metadataCache.getFirstLinkpathDest = () => null;
 	const controller = new AbortController();
+	const diffCalls = [];
 	const records = new Map([
 		['parent', session('parent', 'Parent conversation')],
 		['child', session('child', 'Delegated task', 'parent')],
@@ -71,6 +72,11 @@ function fixture(autoAttachActiveNote = () => false) {
 	]);
 	const client = {
 		session: {
+			diff: async (input) => {
+				diffCalls.push(input);
+				if (options.diffFailure) throw options.diffFailure;
+				return options.diffs ?? [];
+			},
 			list: async () => ({ data: [...records.values()], cursor: {} }),
 			get: async ({ sessionID }) => {
 				if (!records.has(sessionID)) throw { _tag: 'SessionNotFoundError', sessionID };
@@ -106,7 +112,7 @@ function fixture(autoAttachActiveNote = () => false) {
 		dismissPrompt() { return undefined; },
 		rejectIncompatible() { return false; },
 	};
-	const connection = { signal: new AbortController().signal };
+	const connection = { signal: new AbortController().signal, connect: async () => client };
 	const view = new ChatView({ parent: {}, getViewState: () => ({}) }, connection, sessions,
 		synchronization, () => false, autoAttachActiveNote);
 	const titleParent = document.createElement('div');
@@ -115,7 +121,7 @@ function fixture(autoAttachActiveNote = () => false) {
 	title.className = 'view-header-title';
 	view.containerEl.appendChild(titleParent);
 	view.containerEl.appendChild(title);
-	return { view, sessions, synchronization, records, messages, titleParent, title };
+	return { view, sessions, synchronization, records, messages, titleParent, title, client, diffCalls };
 }
 
 async function openOnParent(autoAttachActiveNote) {
@@ -380,4 +386,116 @@ test('a confirmed command clears the text but keeps chips until a prompt admissi
 	await wait();
 	assert.equal(f.view.composer.value, '', 'A confirmed command still clears its text');
 	assert.equal(f.view.attachmentElements.length, 1, 'Only a prompt admission clears the chips');
+});
+
+const changedAssistant = (id, start, end, files) => ({
+	...assistant(id), snapshot: { start, end, files },
+});
+const changedDiff = (name = 'Notes/A.md') => ({
+	file: name, patch: `--- a/${name}\n+++ b/${name}\n@@ -1 +1 @@\n-old\n+new`,
+	additions: 1, deletions: 1, status: 'modified',
+});
+
+test('the conversation review opens from the view, is bounded to the conversation, and refreshes', async () => {
+	const f = fixture(false, { diffs: [changedDiff()] });
+	f.messages.set('parent', [user('p1', 'Fix the note.'), changedAssistant('a1', 's1', 's2', ['Notes/A.md'])]);
+	await f.view.onOpen();
+	await f.sessions.select('parent');
+	f.synchronization.notify();
+	await wait();
+
+	const menu = new obsidian.Menu();
+	f.view.onPaneMenu(menu, 'more-options');
+	const review = menu.items.find((item) => item.title === 'Review changes in this conversation…');
+	assert.ok(review, 'The document menu offers the review');
+	assert.equal(review.disabled, false, 'A selected conversation enables it');
+
+	review.click();
+	await wait();
+	const modal = obsidian.modals.at(-1);
+	assert.equal(modal.titleEl.textContent, 'Changes in this conversation');
+	assert.equal(modal.isOpen, true);
+	assert.deepEqual(f.diffCalls.at(-1), { sessionID: 'parent', from: 'p1', to: 'p1' },
+		'The review spans the conversation prompts (user message IDs)');
+	const rows = modal.contentEl.querySelectorAll('details.opencode-file');
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].querySelector('.opencode-file-name').textContent, 'Notes/A.md');
+	assert.equal(rows[0].querySelector('.opencode-file-meta').textContent, 'Modified · +1 −1');
+	rows[0].open = true;
+	rows[0].dispatchEvent(new Event('toggle'));
+	assert.ok(rows[0].querySelector('.opencode-diff-line.is-add'));
+
+	modal.close();
+	f.view.reviewChanges();
+	await wait();
+	assert.equal(f.diffCalls.length, 2, 'The review always re-requests on open');
+});
+
+test('a failed turn diff leaves transcript, composer, permissions, and connection state untouched', async () => {
+	const f = fixture(false, { diffFailure: new Error('private upstream detail') });
+	f.messages.set('parent', [user('p1', 'Fix the note.'), changedAssistant('a1', 's1', 's2', ['Notes/A.md'])]);
+	await f.view.onOpen();
+	await f.sessions.select('parent');
+	f.synchronization.notify();
+	await wait();
+	f.view.composer.value = 'unsent words';
+	f.view.composer.dispatchEvent(new Event('input', { bubbles: true }));
+
+	const beforeMessages = f.sessions.state.messages;
+	const beforeSelected = f.sessions.state.selected;
+	const beforePhase = f.synchronization.state.phase;
+	const beforeComposer = f.view.composer.value;
+	const beforeStatus = f.view.statusEl.textContent;
+	const details = f.view.messagesEl.querySelector('details.opencode-turn-changes');
+	assert.ok(details);
+	details.open = true;
+	details.dispatchEvent(new Event('toggle'));
+	await wait();
+
+	const error = details.querySelector('.opencode-diff-error');
+	assert.match(error.textContent, /Unable to load changes\./);
+	assert.equal(details.textContent.includes('private upstream detail'), false);
+	assert.equal(details.querySelector('button').textContent, 'Retry');
+	assert.equal(f.sessions.state.messages, beforeMessages, 'The transcript array is untouched');
+	assert.equal(f.sessions.state.selected, beforeSelected, 'The selection is untouched');
+	assert.equal(f.synchronization.state.phase, beforePhase, 'The connection phase is untouched');
+	assert.deepEqual(f.synchronization.state.permissions, [], 'Permissions are untouched');
+	assert.deepEqual(f.synchronization.state.forms, [], 'Forms are untouched');
+	assert.equal(f.view.composer.value, beforeComposer, 'The composer text is untouched');
+	assert.equal(f.view.statusEl.textContent, beforeStatus, 'The composer status is untouched');
+	assert.match(f.view.messagesEl.textContent, /Found the note\./, 'The assistant answer is still shown');
+});
+
+test('opening and copying a reviewed file use the existing link and clipboard behavior', async () => {
+	const f = fixture(false, { diffs: [changedDiff()] });
+	f.messages.set('parent', [user('p1', 'Fix the note.'), changedAssistant('a1', 's1', 's2', ['Notes/A.md'])]);
+	await f.view.onOpen();
+	await f.sessions.select('parent');
+	f.synchronization.notify();
+	await wait();
+
+	const openCalls = [];
+	f.view.linkStack.open = (href, sourcePath) => openCalls.push({ href, sourcePath });
+	app.metadataCache.getFirstLinkpathDest = (linkpath) =>
+		linkpath === 'Notes/A.md' ? { path: 'Notes/A.md' } : null;
+	const copied = [];
+	Object.defineProperty(globalThis.navigator, 'clipboard', {
+		configurable: true,
+		value: { writeText: async (text) => { copied.push(text); } },
+	});
+	try {
+		f.view.reviewChanges();
+		await wait();
+		const modal = obsidian.modals.at(-1);
+		const row = modal.contentEl.querySelector('details.opencode-file');
+		click(row.querySelector('button[aria-label="Open Notes/A.md"]'));
+		assert.deepEqual(openCalls, [{ href: 'Notes/A.md', sourcePath: '' }],
+			'Open reuses the vault link stack');
+		click(row.querySelector('button[aria-label="Copy patch for Notes/A.md"]'));
+		await wait();
+		assert.match(copied[0], /@@ -1 \+1 @@/, 'The full patch text is copied');
+		modal.close();
+	} finally {
+		delete globalThis.navigator.clipboard;
+	}
 });

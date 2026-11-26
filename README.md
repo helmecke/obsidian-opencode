@@ -262,6 +262,34 @@ details.
   Failed or interrupted execution remains visible as a compact line with its
   error detail.
 
+### Reviewing changes
+
+- After an assistant turn that changed files, the transcript shows a collapsed
+  **Changed files** row naming them. Expanding it loads that turn's changed
+  files; expanding a file shows its patch. Nothing is fetched for a turn until
+  you expand it.
+- **Review changes in this conversation…** in the document **⋯** menu and
+  **OpenCode: Review changes in this conversation** in the command palette open
+  a session-wide review. It is bounded to this conversation, from its first
+  turn's start to its last turn's end, and refreshes each time it opens.
+- Each file row shows its path, status (added, modified, or deleted), and
+  added/removed counts. Expanding a file parses its patch into a unified diff:
+  additions and removals are tinted, context lines stay muted, and long lines
+  wrap instead of scrolling horizontally.
+- A large patch stops at a display cap; **Show full patch** reveals the rest. A
+  patch the service marks as partial says **Only part of this change is shown.**
+  A binary or empty patch shows the file's status and a note instead of a diff.
+- Every file offers **Open** and **Copy patch**. A deleted or outside-vault file
+  keeps its path but **Open** is disabled. Opening uses the same vault link
+  handling as other links and never modifies the file; copying places the patch
+  text on the clipboard.
+- The review is read-only and lazy. Patches stay in memory for the open chat
+  view and are discarded when you switch conversations or close the view; they
+  are never written to plugin data, the transcript, or logs. A failed load shows
+  a compact error with **Retry** and leaves chat, execution, permissions, and the
+  connection unchanged. The diff endpoint is not part of the required
+  compatibility contract, so an older service simply has no review surface.
+
 ### Running, stopping, and status
 
 - While execution is running, a square **Stop** button replaces the **Send**
@@ -303,7 +331,7 @@ executable-path setting, the automatic-startup preference, the reasoning-display
 preference, the active-note automatic-attachment preference, the last selected
 model and variant, and a transient record of a managed process PID for orphan
 cleanup; it does not persist the selected conversation, duplicate transcripts,
-or store service credentials.
+changed-file patches, or store service credentials.
 
 ## Markdown and vault links
 

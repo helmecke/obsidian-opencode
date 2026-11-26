@@ -12,6 +12,7 @@ export {
 	validateAgentList,
 	validateCommandList,
 	validateEvent,
+	validateFileDiffs,
 	validateFormInfo,
 	validateFormList,
 	validateMessagePage,
