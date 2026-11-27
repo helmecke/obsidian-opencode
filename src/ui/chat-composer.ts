@@ -114,9 +114,10 @@ export class ChatComposer {
 		});
 		this.composer.addEventListener('keydown', (event) => {
 			if (this.readOnly) return;
+			// A composing Enter confirms an IME candidate, not a message.
+			if (event.isComposing || event.key === 'Process') return;
 			if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-				// A composing Enter confirms an IME candidate, not a message.
-				if (event.isComposing || event.keyCode === 229 || event.repeat || event.defaultPrevented) return;
+				if (event.repeat || event.defaultPrevented) return;
 				// An open completion popover accepts the row first; the next Enter sends.
 				if (this.handlers.completionOpen()) return;
 				// Inert rather than a newline whenever sending is unavailable.

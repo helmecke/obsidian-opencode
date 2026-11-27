@@ -558,7 +558,7 @@ async function selectSession(view, id) {
 }
 
 test('the chat view installs no view-local send shortcut', async () => {
-	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\Vault' } });
+	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
 	view.connection.discover = async () => fixture.client;

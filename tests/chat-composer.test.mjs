@@ -61,7 +61,7 @@ function press(element, init) {
 test('Enter sends from an available composer and is inert everywhere else', () => {
 	const sending = fixture();
 	sending.composer.update(state());
-	sending.composer.setText('hello');
+	sending.composer.setText('Hello');
 	assert.equal(press(sending.composer.element, { key: 'Enter' }).defaultPrevented, true);
 	assert.equal(sending.sent.length, 1, 'Enter sends the message');
 
@@ -83,17 +83,17 @@ test('Enter sends from an available composer and is inert everywhere else', () =
 
 	const draft = fixture();
 	draft.composer.update(readyState({ snapshot: { sessions: [], empty: 'none' } }));
-	draft.composer.setText('first turn');
+	draft.composer.setText('First turn');
 	press(draft.composer.element, { key: 'Enter' });
 	assert.equal(draft.sent.length, 1, 'A client-side draft can send');
 });
 
 test('modified, composing, and repeated Enter never send', () => {
 	for (const init of [{ shiftKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true },
-		{ isComposing: true }, { keyCode: 229 }, { repeat: true }]) {
+		{ isComposing: true }, { key: 'Process' }, { repeat: true }]) {
 		const f = fixture();
 		f.composer.update(state());
-		f.composer.setText('hello');
+		f.composer.setText('Hello');
 		const event = press(f.composer.element, { key: 'Enter', ...init });
 		assert.equal(f.sent.length, 0, JSON.stringify(init));
 		assert.equal(event.defaultPrevented, false, `${JSON.stringify(init)} keeps the field's own behavior`);
@@ -104,7 +104,7 @@ test('Enter defers to an open completion popover and sends once it closes', () =
 	let open = true;
 	const f = fixture({ completionOpen: () => open });
 	f.composer.update(state());
-	f.composer.setText('hello');
+	f.composer.setText('Hello');
 	const first = press(f.composer.element, { key: 'Enter' });
 	assert.equal(f.sent.length, 0, 'The popover keeps the key for its highlighted row');
 	assert.equal(first.defaultPrevented, false, 'The popover can still confirm the row');
