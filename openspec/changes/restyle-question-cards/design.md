@@ -17,7 +17,7 @@
 **Non-Goals:**
 
 - Moving forms into the transcript, adding a setting, or copying questions as Markdown/JSON.
-- Changing the docked panel's height, scrolling, focus restoration or announcement logic.
+- Changing the docked panel's height, scrolling or announcement logic.
 - Disabling inputs while an answer is in flight (buttons keep their current busy behaviour).
 
 ## Decisions
@@ -59,9 +59,13 @@ The sentinel and custom text live on the card, not in `FormValues`, so `validate
 
 The footer stays `.opencode-form-actions` after the callout content rows: `Submit` with `mod-cta`, then plain `Cancel`, start-aligned, both disabled while `busy`. Per-field `.setting-item-error` lines stay inside their field; `.opencode-form-error` stays above the actions for unsupported fields and the form-level retry message. `aria-live="polite"` and `aria-describedby` wiring stay as they are.
 
+### A settled form returns focus to the composer
+
+`ChatInteractionsPanel` restores focus only when the active element was inside the permissions group, so a form decision dropped focus on the document body. The forms group joins that check, and the existing `focusComposer` path runs when no pending control remains. This is the keyboard path a decision should leave behind, and it matches the permission card.
+
 ### Styles
 
-Add a scoped `.opencode-form` block in `styles.css`: callout-content spacing, column field layout, option row layout and hover, description indentation, recommended tag (`--text-accent`, `--font-ui-smaller`), custom row reveal, and footer alignment. No hardcoded colors, no `!important`, no `:has`. Native callout and setting-item surfaces are documented in the existing file comment.
+Add a scoped `.opencode-form` block in `styles.css`: callout-content spacing, column field layout, option row layout and hover, description indentation, recommended tag (`--text-accent`, `--font-ui-smaller`), custom row reveal, and footer alignment. Fields inside the callout drop the native row background and radius so the card is one surface, not a box inside a box. No hardcoded colors, no `!important`, no `:has`. Native callout and setting-item surfaces are documented in the existing file comment.
 
 ## Risks / Trade-offs
 

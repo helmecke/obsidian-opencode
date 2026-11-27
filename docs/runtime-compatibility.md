@@ -1107,3 +1107,37 @@ The OpenCode service version was not captured with this run; only the Obsidian
 version and the observed behavior above are recorded. The earlier popover
 evidence in this file (Ctrl/Cmd+Enter sending while a list was open) describes
 the binding before this change and stays as the historical record.
+
+## Question cards (2026-11-27, live acceptance)
+
+Automated verification for `restyle-question-cards`: `npm test` passed 347
+tests, `npm run build` succeeded, and `npm run lint` reported no problems. The
+interaction suite covers the native `question` callout, stacked option rows,
+option descriptions, the stripped `(Recommended)` marker and its tag, the
+revealed **Other…** row for single and multiple choice, conditional visibility,
+required errors, unsupported fields, and focus returning to the composer after a
+settled form.
+
+Live acceptance on 2026-11-27 in Obsidian **1.15.1** with this build installed in
+a disposable vault and a managed OpenCode service. A real agent formed questions
+from a read-only prompt. Observed:
+
+- the form rendered as an Obsidian `question` callout with a help-circle icon
+  and the service title;
+- each choice field stacked its title over native radio or checkbox rows, with
+  the service's option descriptions under the labels and the recommended option
+  showing a **Recommended** tag while its label dropped the marker text;
+- selecting **Other…** revealed and focused its text field, and choosing a
+  listed option hid it again;
+- multiselect accepted listed and comma-separated custom values in one answer;
+- **Cancel** removed the form and returned focus to the composer;
+- **Submit** left no plugin action error and removed the pending form.
+
+Remaining limitation: the service's `question` tool reported the reply as
+`aborted` ("The user dismissed this question") instead of completing. Calling
+`session.form.reply` directly with the same answer shape produced the same
+result, so the outcome is independent of the card markup and does not reproduce
+the earlier 2026-11-22 completion record. New acceptance sessions then stalled,
+so a single-choice-only reply was not isolated. The answer payload, form
+identity, and plugin reply path are the same as before this change; the cause
+belongs to the running service and is recorded here rather than worked around.
