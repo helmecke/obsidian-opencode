@@ -24,6 +24,12 @@
 - [x] 4.1 Run `npm test`, `npm run build` and `npm run lint`; all pass with no new warnings.
 - [x] 4.2 In a disposable vault, open a form with options, option descriptions, a recommended label and a custom answer; answer by row, by Other… and by multiselect, then cancel a second form and confirm the dock focus returns to the composer.
 
+## 5. Documentation
+
+- [ ] 5.1 Update the README's **Tool activity, permissions, and forms** section to describe the question card: callout header, option rows with descriptions, the recommended tag, and the revealed **Other…** answer; note that pending decisions share the reading column and the transcript stays visible while one waits. Verify each statement against the implemented card and the live acceptance record.
+
+Runtime evidence is already recorded in `docs/runtime-compatibility.md`; no architecture, client-contract, development, or settings documentation change is called for.
+
 ## Workflow follow-up
 
 - The plan PR is opened by the planning run and awaits approval.

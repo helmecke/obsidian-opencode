@@ -13,9 +13,9 @@ Agent questions are the one human-decision surface still wearing generic setting
 - Move Submit and Cancel into a start-aligned footer: Submit keeps `mod-cta`, Cancel stays a plain native button, and both stay disabled while an answer is in flight. No icons and no success/error tints.
 - Keep required markers, inline per-field errors, the form-level error, unsupported-field blocking, conditional visibility, and external-link behaviour unchanged.
 - Add scoped styles for the stacked field layout, option rows, recommended tag, revealed custom field, and footer. Pending decisions share the chat's readable line width, and the dock no longer draws a full-width divider above them. No new setting, no transcript card, no copy actions.
-- Keep the docked interactions panel as the only place forms render, and keep answer payloads, reconciliation, and service ownership unchanged.
+- Keep the docked interactions panel as the only place forms render, keep answer payloads and service ownership unchanged, and fix interaction patches so a pending decision no longer discards the live transcript.
 - Keep the live conversation visible while a question or permission is pending. Only a confirmed session deletion clears the selection and transcript.
-- Update the interactions tests to drive the new option rows instead of a `select`.
+- Update the interaction, synchronization, and style-contract tests to cover option rows, transcript continuity, the reading measure, and focus return.
 
 ## Capabilities
 
@@ -25,11 +25,14 @@ None.
 
 ### Modified Capabilities
 
-- `agent-interactions`: the **Structured agent forms** requirement gains the question-callout presentation, selectable option rows with per-option descriptions, a recommended marker, and a revealed custom-answer row, while preserving submission, cancellation, visibility, and external-link behaviour.
+- `agent-interactions`: the **Structured agent forms** requirement gains the question-callout presentation, selectable option rows with per-option descriptions, a recommended marker, and a revealed custom-answer row, while preserving submission, cancellation, visibility, and external-link behaviour. The capability also gains requirements that pending decisions follow the reading measure and keep the live transcript.
 
 ## Impact
 
 - `src/ui/form-card.ts`: card shell, field layout, choice and multiselect controls, custom answer.
-- `styles.css`: scoped form styles; relies on Obsidian's `callout*` and `setting-item*` surfaces plus theme variables.
-- `tests/interactions.test.mjs`: form-card assertions and interactions.
-- No changes to the client contract, settings schema, persisted data, state reconciliation, or dependencies.
+- `src/ui/chat-interactions-panel.ts`: focus restoration for the forms group.
+- `src/state/synchronization.ts`: interaction patches keep ingestion and the prompt unless the selection was deleted.
+- `styles.css`: scoped form and dock styles; relies on Obsidian's `callout*` and `setting-item*` surfaces plus theme variables.
+- `tests/interactions.test.mjs`, `tests/synchronization.test.mjs`, `tests/style-contract.test.mjs`: card, transcript-continuity, reading-measure, and focus coverage.
+- `docs/runtime-compatibility.md`: live evidence and the interaction-patch diagnosis.
+- No changes to the client contract, settings schema, persisted data, or dependencies.

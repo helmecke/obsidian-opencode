@@ -12,12 +12,12 @@
 
 - Make an agent question read as a decision card: question header, stacked choice rows, recommended option, revealed custom answer, calm footer.
 - Stay native: callout anatomy, native radio/checkbox, `setting-item` typography, theme variables only.
-- Keep the answer payload, validation, visibility, reconciliation and focus behaviour byte-for-byte compatible.
+- Keep the answer payload and validation compatible, preserve the live transcript while a decision waits, and return focus to the composer once it is settled.
 
 **Non-Goals:**
 
 - Moving forms into the transcript, adding a setting, or copying questions as Markdown/JSON.
-- Changing the docked panel's height, scrolling or announcement logic.
+- Changing the docked panel's height or announcement logic, or moving forms into the transcript.
 - Disabling inputs while an answer is in flight (buttons keep their current busy behaviour).
 
 ## Decisions
@@ -80,6 +80,7 @@ The interaction dock follows the chat's reading measure: with **Readable line le
 - [Taller forms reduce visible transcript in the 45% dock] → compact option spacing and reserved error slots keep a question with five options near the previous height; the panel already scrolls.
 - [Stripping `(Recommended)` could remove intentional label text] → mirror OpenChamber's marker exactly and only strip that parenthesised phrase.
 - [Existing interactions tests query `select`] → rewrite those assertions against option rows and dispatch `change` on the native inputs; keep the payload assertions unchanged.
+- [An interaction patch can look like a cleared selection] → require an explicit snapshot in the deletion guard and cover a pending form or permission keeping the transcript in `tests/synchronization.test.mjs`.
 
 ## Migration Plan
 
