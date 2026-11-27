@@ -2,16 +2,16 @@
 
 ## 1. Question card shell
 
-- [ ] 1.1 Rebuild the `opencode-form` container as a native question callout: `callout` classes, `data-callout="question"`, help-circle icon, `form.title` (fallback "Agent question"), fields inside `callout-content`, error line and actions after them. Verify DOM assertions in `tests/interactions.test.mjs` find the callout, its title and default title.
-- [ ] 1.2 Keep card identity across updates: preserved values, busy disable, unsupported-field block and external links continue to work. Verify the existing form-card tests in `tests/interactions.test.mjs` pass with updated selectors.
+- [x] 1.1 Rebuild the `opencode-form` container as a native question callout: `callout` classes, `data-callout="question"`, help-circle icon, `form.title` (fallback "Agent question"), fields inside `callout-content`, error line and actions after them. Verify DOM assertions in `tests/interactions.test.mjs` find the callout, its title and default title.
+- [x] 1.2 Keep card identity across updates: preserved values, busy disable, unsupported-field block and external links continue to work. Verify the existing form-card tests in `tests/interactions.test.mjs` pass with updated selectors.
 
 ## 2. Choice fields
 
-- [ ] 2.1 Render a `string` field with options as a labelled radio group of native option rows, each showing its label and `FormOption.description`. Verify by selecting an option row in a headless test and asserting the submitted value.
-- [ ] 2.2 Render a `multiselect` field as native checkbox option rows, preserving selected-array submission. Verify by toggling two rows and asserting the submitted array.
-- [ ] 2.3 Strip a `(Recommended)` marker from visible option labels and show a `Recommended` tag on that row. Verify with a labelled option in `tests/interactions.test.mjs` and a style-contract check for the tag class.
-- [ ] 2.4 Replace the dropdown custom entry with a revealed **Other…** row: selecting it shows and focuses the text field and submits its text; selecting a normal option hides it. Apply the same row to `multiselect` with comma-separated values included only while the row is checked. Verify both paths in `tests/interactions.test.mjs`.
-- [ ] 2.5 Keep required markers, per-field errors, conditional visibility, form-level errors and `aria-live` wiring intact. Verify the corresponding assertions in `tests/interactions.test.mjs`.
+- [x] 2.1 Render a `string` field with options as a labelled radio group of native option rows, each showing its label and `FormOption.description`. Verify by selecting an option row in a headless test and asserting the submitted value.
+- [x] 2.2 Render a `multiselect` field as native checkbox option rows, preserving selected-array submission. Verify by toggling two rows and asserting the submitted array.
+- [x] 2.3 Strip a `(Recommended)` marker from visible option labels and show a `Recommended` tag on that row. Verify with a labelled option in `tests/interactions.test.mjs` and a style-contract check for the tag class.
+- [x] 2.4 Replace the dropdown custom entry with a revealed **Other…** row: selecting it shows and focuses the text field and submits its text; selecting a normal option hides it. Apply the same row to `multiselect` with comma-separated values included only while the row is checked. Verify both paths in `tests/interactions.test.mjs`.
+- [x] 2.5 Keep required markers, per-field errors, conditional visibility, form-level errors and `aria-live` wiring intact. Verify the corresponding assertions in `tests/interactions.test.mjs`.
 
 ## 3. Styling
 

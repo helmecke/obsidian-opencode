@@ -133,6 +133,12 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 		openExternal: (url) => opened.push(url),
 	});
 	card.update(form, false);
+	const callout = root.querySelector('.callout');
+	assert.ok(callout, 'The form uses native callout markup');
+	assert.equal(callout.getAttribute('data-callout'), 'question');
+	assert.ok(callout.querySelector('.callout-title .callout-icon .lucide-help-circle'));
+	assert.equal(callout.querySelector('.callout-title-inner').textContent, 'Configure');
+	assert.ok(callout.querySelector('.callout-content .opencode-form-fields'), 'Fields live in the callout content');
 	const rows = [...root.querySelectorAll('.setting-item')];
 	assert.deepEqual(rows.map((row) => row.querySelector('.setting-item-name').textContent),
 		['choice *', 'text *', 'more *', 'enabled', 'many', 'Docs'], 'Fields keep their order in native rows');
@@ -144,11 +150,14 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	assert.equal(rows[2].hidden, true, 'Conditional rows start hidden');
 	assert.equal(rows[2].classList.contains('is-invalid'), false);
 	const firstLabel = rows[0].querySelector('.setting-item-name');
-	const firstSelect = rows[0].querySelector('select');
-	assert.equal(firstLabel.tagName, 'LABEL', 'The field title is a native label');
-	assert.equal(firstLabel.getAttribute('for'), firstSelect.id, 'The label targets its control');
-	assert.ok(firstSelect.id, 'Each control has an id');
-	assert.match(firstSelect.getAttribute('aria-describedby'), new RegExp(rows[0].querySelector('.setting-item-error').id));
+	const choiceGroup = rows[0].querySelector('[role="radiogroup"]');
+	assert.ok(choiceGroup, 'Choice fields render a radio group');
+	assert.equal(firstLabel.tagName, 'DIV', 'A choice title labels its group');
+	assert.equal(choiceGroup.getAttribute('aria-labelledby'), firstLabel.id);
+	assert.ok(choiceGroup.id, 'Each choice group has an id');
+	assert.match(choiceGroup.getAttribute('aria-describedby'), new RegExp(rows[0].querySelector('.setting-item-error').id));
+	const radios = [...choiceGroup.querySelectorAll('input[type="radio"]')];
+	assert.deepEqual(radios.map((radio) => radio.value), ['a', 'b']);
 	const textLabel = rows[1].querySelector('.setting-item-name');
 	const textInput = rows[1].querySelector('input[type="text"]');
 	assert.equal(textLabel.getAttribute('for'), textInput.id, 'Text fields are labelled too');
@@ -156,8 +165,8 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	assert.equal(rows[0].classList.contains('is-invalid'), true, 'Required rows report field errors natively');
 	assert.equal(rows[0].querySelector('.setting-item-error').textContent, 'This field is required.');
 	assert.equal(rows[1].querySelector('.setting-item-error').textContent, 'This field is required.');
-	const select = root.querySelector('select');
-	input(select, 'b', 'change');
+	radios[1].checked = true;
+	radios[1].dispatchEvent(new window.Event('change', { bubbles: true }));
 	assert.equal(rows[2].hidden, false, 'Conditional rows appear when their condition matches');
 	assert.equal(rows[0].classList.contains('is-invalid'), false, 'Correcting a field clears its invalid state');
 	const inputs = root.querySelectorAll('input[type="text"]');
@@ -165,10 +174,10 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	assert.equal(inputs[1].closest('.setting-item'), rows[2]);
 	input(inputs[0], 'value');
 	input(inputs[1], 'conditional');
-	const checkbox = root.querySelector('input[type="checkbox"]');
+	const checkbox = rows[3].querySelector('input[type="checkbox"]');
 	checkbox.checked = true;
 	checkbox.dispatchEvent(new window.Event('change', { bubbles: true }));
-	const option = [...root.querySelectorAll('input[type="checkbox"]')][1];
+	const option = rows[4].querySelector('input[type="checkbox"]');
 	option.checked = true;
 	option.dispatchEvent(new window.Event('change', { bubbles: true }));
 	click(root.querySelector('.opencode-form-actions button'));
@@ -184,6 +193,53 @@ test('form card renders choices, text, toggles, multiselect, and external link w
 	card.update(form, false);
 	assert.equal(root.querySelector('.opencode-form-actions button').disabled, false);
 	assert.equal([...root.querySelectorAll('.opencode-form-actions button')][1].disabled, false);
+});
+
+test('choice rows show descriptions, a recommended tag, and a revealed custom answer', () => {
+	const root = container();
+	document.body.appendChild(root);
+	const answers = [];
+	const form = { id: 'd', sessionID: 's', title: 'Nächster Schritt', fields: [
+		field('choice', 'string', { required: true, custom: true, options: [
+			{ value: 'a', label: 'A', description: 'First path' },
+			{ value: 'b', label: 'B (Recommended)' },
+		] }),
+		field('tags', 'multiselect', { custom: true, options: [{ value: 'x', label: 'X' }] }),
+	] };
+	new FormCard(root, form, { submit: (answer) => answers.push(answer), cancel: () => {}, openExternal: () => {} });
+	const rows = [...root.querySelectorAll('.setting-item')];
+	const choice = rows[0].querySelector('[role="radiogroup"]');
+	assert.equal(choice.querySelector('.opencode-form-option-description').textContent, 'First path');
+	assert.equal(choice.querySelector('.opencode-form-option-recommended').textContent, 'Recommended');
+	assert.deepEqual([...choice.querySelectorAll('.opencode-form-option-label')].map((label) => label.textContent),
+		['A', 'B', 'Other…'], 'The recommended marker leaves the visible label');
+
+	const customRow = [...choice.querySelectorAll('label.opencode-form-option')].at(-1);
+	const customRadio = customRow.querySelector('input[type="radio"]');
+	customRadio.checked = true;
+	customRadio.dispatchEvent(new window.Event('change', { bubbles: true }));
+	const customField = choice.querySelector('.opencode-form-custom');
+	assert.equal(customField.hidden, false, 'Selecting Other reveals its field');
+	assert.equal(document.activeElement, customField.querySelector('input'), 'The revealed field takes focus');
+	input(customField.querySelector('input'), 'own answer');
+	const normalRadio = choice.querySelector('input[type="radio"][value="a"]');
+	normalRadio.checked = true;
+	normalRadio.dispatchEvent(new window.Event('change', { bubbles: true }));
+	assert.equal(customField.hidden, true, 'Choosing a listed option hides the custom field');
+	customRadio.checked = true;
+	customRadio.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+	const many = rows[1].querySelector('[role="group"]');
+	const boxes = [...many.querySelectorAll('input[type="checkbox"]')];
+	boxes[0].checked = true;
+	boxes[0].dispatchEvent(new window.Event('change', { bubbles: true }));
+	boxes[1].checked = true;
+	boxes[1].dispatchEvent(new window.Event('change', { bubbles: true }));
+	input(many.querySelector('.opencode-form-custom input'), 'y, z');
+
+	click(root.querySelector('.opencode-form-actions button'));
+	assert.deepEqual(answers, [{ choice: 'own answer', tags: ['x', 'y', 'z'] }]);
+	root.remove();
 });
 
 test('interaction cards are grouped, announce new requests, and return focus to the composer', () => {
@@ -233,6 +289,12 @@ test('form card keeps hidden required fields from blocking and reports unsupport
 	new FormCard(unsupportedRoot, unsupported, { submit: () => assert.fail('Unsupported form must not submit'), cancel: () => {}, openExternal: () => {} });
 	assert.match(unsupportedRoot.textContent, /unsupported fields \(rating\)/);
 	assert.equal(unsupportedRoot.querySelector('.opencode-form-actions button').disabled, true);
+
+	const untitledRoot = container();
+	new FormCard(untitledRoot, { id: 't', sessionID: 's', fields: [field('ok', 'string')] },
+		{ submit: () => {}, cancel: () => {}, openExternal: () => {} });
+	assert.equal(untitledRoot.querySelector('.callout-title-inner').textContent, 'Agent question',
+		'A form without a title keeps a readable header');
 });
 
 test('tool summaries show an icon, status or duration, and a one-line preview', () => {
