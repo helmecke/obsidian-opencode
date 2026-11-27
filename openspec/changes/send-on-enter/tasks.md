@@ -19,12 +19,12 @@
 
 - [x] 3.1 Update the composer section of `README.md` to describe `Enter` sending and `Shift+Enter` adding a line, and remove every claim that `Ctrl/Cmd+Enter` sends (including the popover paragraphs); verify by searching the README for `Ctrl`/`Cmd` send statements.
 - [x] 3.2 Add an Unreleased `CHANGELOG.md` bullet naming the swap, including that `Ctrl/Cmd+Enter` no longer sends; verify it states the user-visible outcome without claiming a setting or service change.
-- [ ] 3.3 Append new verification evidence to `docs/runtime-compatibility.md` for this binding without rewriting older records; verify the entry names the Obsidian version, both layouts, and any limitation observed.
+- [x] 3.3 Append new verification evidence to `docs/runtime-compatibility.md` for this binding without rewriting older records; verify the entry names the Obsidian version, both layouts, and any limitation observed.
 
 ## 4. Integration verification
 
 - [x] 4.1 Run `npm test`, `npm run build`, and `npm run lint`; verify all three pass.
-- [ ] 4.2 Accept in a disposable vault: `Enter` sends, `Shift+Enter` adds a line, `Ctrl/Cmd+Enter` no longer sends, `Enter` is inert while running and while a prompt awaits confirmation, an open `[[`/`$`//` popover takes the first `Enter` and the second sends, and IME confirmation does not send; verify in both a main tab and a right sidebar.
+- [x] 4.2 Accept in a disposable vault: `Enter` sends, `Shift+Enter` adds a line, `Ctrl/Cmd+Enter` no longer sends, `Enter` is inert while running and while a prompt awaits confirmation, an open `[[`/`$`//` popover takes the first `Enter` and the second sends, and IME confirmation does not send; verify in both a main tab and a right sidebar.
 
 ## Workflow follow-up
 
