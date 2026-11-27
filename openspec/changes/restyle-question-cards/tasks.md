@@ -15,7 +15,7 @@
 
 ## 3. Styling
 
-- [ ] 3.1 Add scoped `.opencode-form` rules in `styles.css`: column field layout inside the callout, option row spacing and hover, description indentation, recommended tag, revealed custom field, start-aligned footer. Verify `tests/style-contract.test.mjs` asserts the new classes and that no color literals or `!important` are introduced.
+- [x] 3.1 Add scoped `.opencode-form` rules in `styles.css`: column field layout inside the callout, option row spacing and hover, description indentation, recommended tag, revealed custom field, start-aligned footer. Verify `tests/style-contract.test.mjs` asserts the new classes and that no color literals or `!important` are introduced.
 
 ## 4. Verification
 

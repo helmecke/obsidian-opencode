@@ -425,11 +425,81 @@
 	display: block;
 }
 
-/* Composite form controls: grouped checkboxes and a custom value input. */
+/* The dock is narrow, so a field stacks its title over a full-width control. */
+.opencode-form .opencode-form-field {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--size-4-1);
+}
+
+.opencode-form .opencode-form-field .setting-item-control {
+	justify-content: flex-start;
+	width: 100%;
+	min-width: 0;
+}
+
+.opencode-form .opencode-form-input {
+	width: 100%;
+}
+
+/* Composite form controls: option rows, grouped checkboxes, custom input. */
 .opencode-form-options {
 	display: flex;
 	flex-direction: column;
 	gap: var(--size-4-1);
+}
+
+.opencode-form-option {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.opencode-form-option:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.opencode-form-option-main {
+	min-width: 0;
+}
+
+.opencode-form-option-title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--size-4-1);
+}
+
+.opencode-form-option-label {
+	overflow-wrap: anywhere;
+}
+
+.opencode-form-option-description {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	overflow-wrap: anywhere;
+}
+
+.opencode-form-option-recommended {
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.opencode-form-option-icon {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.opencode-form-custom {
+	margin-inline-start: var(--size-4-6);
+}
+
+.opencode-form-custom[hidden] {
+	display: none;
 }
 
 .opencode-form-checkbox {
@@ -446,6 +516,10 @@
 .opencode-form-error {
 	color: var(--text-error);
 	font-size: var(--font-ui-smaller);
+}
+
+.opencode-form-actions {
+	justify-content: flex-start;
 }
 
 .opencode-disclosure-summary {
