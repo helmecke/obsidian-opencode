@@ -126,6 +126,8 @@ test('question cards stack fields and mark option rows with theme tokens', () =>
 	const field = ruleBody('.opencode-form .opencode-form-field');
 	assert.match(field, /flex-direction: column/);
 	assert.match(field, /align-items: stretch/);
+	assert.match(field, /background-color: transparent/,
+		'Fields stay flat inside the callout instead of boxing a box');
 	assert.match(ruleBody('.opencode-form .opencode-form-field .setting-item-control'),
 		/justify-content: flex-start/, 'Option rows start at the field edge');
 	assert.match(ruleBody('.opencode-form-option:hover'), /var\(--background-modifier-hover\)/);
