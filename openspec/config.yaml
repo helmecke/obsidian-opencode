@@ -2,6 +2,10 @@ schema: spec-driven
 skillsScope: project
 
 context: |
+  In OpenChamber, each change runs in its own worktree named after the change id,
+  on `openspec/<change-id>`; the steps below run inside it. Elsewhere they run in
+  the main checkout.
+
   Every OpenSpec change ships through a plan PR: a draft pull request holding the
   artifacts, opened before implementation.
 

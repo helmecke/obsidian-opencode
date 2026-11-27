@@ -51,6 +51,12 @@ Manual acceptance uses a disposable test vault that you choose and keep outside
 your real vault. Never commit generated `main.js`, probe bundles, or
 `node_modules`.
 
+## Change workflow
+
+In OpenChamber, run every OpenSpec change in its own worktree: load the
+`openchamber-change-worktree` skill before creating, applying, verifying, or
+archiving a change. Other clients skip the worktree and keep their normal flow.
+
 ## Hard invariants
 
 - **Shared service ownership**: reuse a healthy shared service read-only. Never
