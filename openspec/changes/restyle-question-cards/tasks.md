@@ -19,7 +19,7 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Run `npm test`, `npm run build` and `npm run lint`; all pass with no new warnings.
+- [x] 4.1 Run `npm test`, `npm run build` and `npm run lint`; all pass with no new warnings.
 - [ ] 4.2 In a disposable vault, open a form with options, option descriptions, a recommended label and a custom answer; answer by row, by Other… and by multiselect, then cancel a second form and confirm the dock focus returns to the composer.
 
 ## Workflow follow-up
