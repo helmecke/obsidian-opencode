@@ -1071,10 +1071,11 @@ test('composer grows with its text up to 40vh and scrolls internally beyond the 
 	plugin.unload();
 });
 
-test('composer pairs brackets through programmatic edits, opens note completion, and still sends while open', async () => {
+test('composer pairs brackets through programmatic edits, opens note completion, and lets the popover take Enter', async () => {
 	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
+	fixture.running.clear();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
@@ -1105,10 +1106,15 @@ test('composer pairs brackets through programmatic edits, opens note completion,
 	press('[');
 	press('[');
 	assert.equal(composer.__suggest.isOpen, true);
-	press('Enter', { ctrlKey: true });
+	press('Enter');
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'prompt').length, 0,
+		'Enter confirms the popover row instead of sending');
+	composer.__suggest.close();
+	press('Enter');
 	await wait();
 	const prompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
-	assert.equal(prompt.text, '[[]]', 'Ctrl+Enter sends while the popover is open');
+	assert.equal(prompt.text, '[[]]', 'The next Enter sends once the popover has closed');
 
 	assert.equal(fixture.calls.filter((call) => call[0] === 'skills').length, 0,
 		'Note completion does not request the skill catalog');
@@ -1122,7 +1128,7 @@ test('composer pairs brackets through programmatic edits, opens note completion,
 	composer.__suggest.selectSuggestion(composer.__suggest.suggestions[0], {});
 	assert.equal(composer.value, '$apply ', 'Selecting a skill inserts the trailing-space mention');
 	assert.equal(composer.selectionStart, 7);
-	press('Enter', { ctrlKey: true });
+	press('Enter');
 	await wait();
 	const skillPrompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
 	assert.equal(skillPrompt.text, '$apply ');

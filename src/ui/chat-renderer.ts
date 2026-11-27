@@ -58,6 +58,7 @@ export class ChatRenderer {
 	private attachButton?: HTMLButtonElement;
 	private conversation?: ConversationRenderer;
 	private conversationOptions?: ConversationOptions;
+	private suggestions?: ComposerSuggest;
 	private parentTitle?: string;
 	private signatures = { errors: '' };
 
@@ -120,6 +121,7 @@ export class ChatRenderer {
 		this.composer = undefined;
 		this.retryButton = undefined;
 		this.attachButton = undefined;
+		this.suggestions = undefined;
 		this.conversationOptions = undefined;
 		this.parentTitle = undefined;
 	}
@@ -181,6 +183,7 @@ export class ChatRenderer {
 			setAgent: (agent) => this.handlers.setAgent(agent),
 			setModel: (model) => this.handlers.setModel(model),
 			stop: () => this.handlers.stop(),
+			completionOpen: () => this.suggestions?.isCompletionOpen() ?? false,
 		});
 
 		const meta = this.composer.metaElement;
@@ -246,6 +249,7 @@ export class ChatRenderer {
 				loadCommands: () => this.handlers.loadCommands(),
 				getCommands: () => this.state?.commands,
 			});
+		this.suggestions = suggestions;
 		opening.register(() => suggestions.dispose());
 		// Obsidian's keymap handles trusted shortcuts before DOM bubbling.
 		// A view-local scope takes priority without registering a global hotkey.

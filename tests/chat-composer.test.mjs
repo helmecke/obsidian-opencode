@@ -36,11 +36,12 @@ function state(pendingPrompt) {
 	};
 }
 
-function fixture() {
+function fixture(handlers = {}) {
 	const container = document.createElement('div');
 	const sent = [];
 	const composer = new ChatComposer(container, {
 		send() { sent.push(1); }, retryPrompt() {}, dismissPrompt() {}, setAgent() {}, setModel() {}, stop() {},
+		completionOpen: () => false, ...handlers,
 	});
 	return { composer, sent };
 }
@@ -97,6 +98,20 @@ test('modified, composing, and repeated Enter never send', () => {
 		assert.equal(f.sent.length, 0, JSON.stringify(init));
 		assert.equal(event.defaultPrevented, false, `${JSON.stringify(init)} keeps the field's own behavior`);
 	}
+});
+
+test('Enter defers to an open completion popover and sends once it closes', () => {
+	let open = true;
+	const f = fixture({ completionOpen: () => open });
+	f.composer.update(state());
+	f.composer.setText('hello');
+	const first = press(f.composer.element, { key: 'Enter' });
+	assert.equal(f.sent.length, 0, 'The popover keeps the key for its highlighted row');
+	assert.equal(first.defaultPrevented, false, 'The popover can still confirm the row');
+
+	open = false;
+	press(f.composer.element, { key: 'Enter' });
+	assert.equal(f.sent.length, 1, 'The next Enter sends once');
 });
 
 test('bracket pairing still applies its own edits and never sends', () => {
