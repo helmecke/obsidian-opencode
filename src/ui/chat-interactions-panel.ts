@@ -45,7 +45,7 @@ export class ChatInteractionsPanel {
 		if (signature === this.signature) return;
 		this.signature = signature;
 		const active = this.container.ownerDocument.activeElement;
-		const restoreFocus = Boolean(active && this.permissionsEl.contains(active));
+		const restoreFocus = Boolean(active && (this.permissionsEl.contains(active) || this.formsEl.contains(active)));
 		this.permissionsEl.empty();
 		for (const request of state.permissions) {
 			renderPermissionCard(this.permissionsEl, request,

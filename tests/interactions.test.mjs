@@ -269,6 +269,27 @@ test('interaction cards are grouped, announce new requests, and return focus to 
 	root.remove();
 });
 
+test('a settled question card hands focus back to the composer', () => {
+	const root = container();
+	document.body.appendChild(root);
+	let focused = 0;
+	const panel = new ChatInteractionsPanel(root, {
+		replyPermission: () => {}, replyForm: () => {}, cancelForm: () => {},
+		focusComposer: () => { focused++; },
+	});
+	const form = { id: 'f', sessionID: 's', title: 'Question', fields: [field('ok', 'string')] };
+	const state = (forms) => ({ phase: 'ready', attempt: 0, permissions: [], forms,
+		agents: [], models: [], interactionBusy: undefined });
+	panel.update(state([form]));
+	const cancel = [...root.querySelectorAll('.opencode-form-actions button')][1];
+	cancel.focus();
+	assert.equal(document.activeElement, cancel);
+	panel.update(state([]));
+	assert.equal(focused, 1, 'A form decision returns focus to the composer');
+	panel.dispose();
+	root.remove();
+});
+
 test('form card keeps hidden required fields from blocking and reports unsupported fields', () => {
 	const root = container();
 	const form = { id: 'f', sessionID: 's', title: 'Question', fields: [
