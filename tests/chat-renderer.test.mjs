@@ -58,7 +58,7 @@ function fixture() {
 		attachmentSources: () => sources,
 	};
 	const renderer = new ChatRenderer(app, handlers, () => false);
-	renderer.mount(content, opening, new obsidian.Scope());
+	renderer.mount(content, opening);
 	return {
 		content, opening, renderer, calls,
 		setSources(value) { sources = value; },

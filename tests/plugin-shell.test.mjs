@@ -557,28 +557,17 @@ async function selectSession(view, id) {
 	await wait();
 }
 
-test('view-local Mod+Enter scope sends only from its composer and unregisters on close', async () => {
-	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
+test('the chat view installs no view-local send shortcut', async () => {
+	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\Vault' } });
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
-	document.body.appendChild(view.contentEl);
-	const [handler] = view.scope.handlers;
-	assert.deepEqual(handler.modifiers, ['Mod']);
-	assert.equal(handler.key, 'Enter');
-	assert.equal(handler.callback({ repeat: false }), true, 'An unfocused composer does not consume another control shortcut');
-	view.composer.focus();
-	view.composer.value = 'scope test';
-	assert.equal(handler.callback({ repeat: false }), false);
 	await wait();
-	assert.equal(fixture.calls.filter(call => call[0] === 'prompt').length, 1);
-	assert.equal(handler.callback({ repeat: true }), false, 'Held key is consumed without resending');
+	assert.ok(!view.scope, 'No view-local keymap scope is created');
 	await view.onClose();
-	assert.equal(view.scope.handlers.size, 0);
 	await view.onOpen();
-	assert.equal(view.scope.handlers.size, 1, 'Reopen installs one handler, not duplicates');
-	view.contentEl.remove();
+	assert.ok(!view.scope, 'Reopen installs nothing either');
 	plugin.unload();
 });
 
