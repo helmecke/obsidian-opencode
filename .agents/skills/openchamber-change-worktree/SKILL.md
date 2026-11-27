@@ -25,7 +25,7 @@ This skill drives `session.moveToWorktree` and `session.create`, and uses the di
 
    The call moves this session into the new worktree and returns its path. Confirm that `git worktree list` shows `openspec/<id>` at that path.
 4. Run `openspec new change <id>` in the worktree and write the artifacts there.
-5. Run `npm ci` once before the first `npm test`, `npm run build`, or `npm run lint`: a fresh worktree has no `node_modules`.
+5. The project's worktree setup (`.openchamber/project.json`) runs `npm ci`. When `node_modules` is missing, run `npm ci` yourself before the first `npm test`, `npm run build`, or `npm run lint`.
 6. Commit, push, and open the draft plan PR from the worktree branch, as `openspec/config.yaml` says.
 
 The start is done when the worktree holds the change directory, the branch is checked out, and the plan PR is open.
