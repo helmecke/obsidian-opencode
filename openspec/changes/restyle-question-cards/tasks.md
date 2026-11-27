@@ -26,7 +26,7 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Update the README's **Tool activity, permissions, and forms** section to describe the question card: callout header, option rows with descriptions, the recommended tag, and the revealed **Other…** answer; note that pending decisions share the reading column and the transcript stays visible while one waits. Verify each statement against the implemented card and the live acceptance record.
+- [x] 5.1 Update the README's **Tool activity, permissions, and forms** section to describe the question card: callout header, option rows with descriptions, the recommended tag, and the revealed **Other…** answer; note that pending decisions share the reading column and the transcript stays visible while one waits. Verify each statement against the implemented card and the live acceptance record.
 
 Runtime evidence is already recorded in `docs/runtime-compatibility.md`; no architecture, client-contract, development, or settings documentation change is called for.
 
