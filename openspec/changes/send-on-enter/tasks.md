@@ -23,7 +23,7 @@
 
 ## 4. Integration verification
 
-- [ ] 4.1 Run `npm test`, `npm run build`, and `npm run lint`; verify all three pass.
+- [x] 4.1 Run `npm test`, `npm run build`, and `npm run lint`; verify all three pass.
 - [ ] 4.2 Accept in a disposable vault: `Enter` sends, `Shift+Enter` adds a line, `Ctrl/Cmd+Enter` no longer sends, `Enter` is inert while running and while a prompt awaits confirmation, an open `[[`/`$`//` popover takes the first `Enter` and the second sends, and IME confirmation does not send; verify in both a main tab and a right sidebar.
 
 ## Workflow follow-up
