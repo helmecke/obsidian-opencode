@@ -98,7 +98,7 @@ Selecting a command SHALL replace the text from the leading `/` through the care
 - **THEN** the popover closes and the message is not sent
 
 ### Requirement: Keyboard and dismissal
-The popover SHALL support arrow-key navigation and selection with Enter or Tab. `Escape` or focus leaving the composer SHALL close it without changing the message. Ctrl/Cmd+Enter SHALL still send the message while the popover is open.
+The popover SHALL support arrow-key navigation and selection with Enter or Tab. `Escape` or focus leaving the composer SHALL close it without changing the message. While the popover is open, `Enter` SHALL confirm the highlighted command and SHALL NOT send; the next `Enter`, once the popover has closed, SHALL send.
 
 #### Scenario: Navigate and select
 - **WHEN** the popover is open and the user moves with the arrow keys and presses Enter or Tab
@@ -108,9 +108,13 @@ The popover SHALL support arrow-key navigation and selection with Enter or Tab. 
 - **WHEN** the user presses Escape or focus leaves the composer
 - **THEN** the popover closes and the composer text is unchanged
 
+#### Scenario: Send after selecting
+- **WHEN** the user confirms a command and the popover closes
+- **THEN** the next Enter sends the message once with the inserted command
+
 #### Scenario: Send while open
-- **WHEN** the popover is open and the user presses Ctrl/Cmd+Enter
-- **THEN** the message sends once and the popover does not intercept the shortcut
+- **WHEN** the popover is open and the user presses Enter
+- **THEN** the highlighted command is inserted instead and the message is not sent
 
 ### Requirement: Command execution on send
 When the message starts with `/` and its first whitespace-delimited token exactly matches a loaded command, sending SHALL run that command with the remaining text as its arguments instead of sending the message as a prompt. A confirmed run SHALL clear the composer.
