@@ -17,8 +17,8 @@
 
 ## 3. Documentation
 
-- [ ] 3.1 Update the composer section of `README.md` to describe `Enter` sending and `Shift+Enter` adding a line, and remove every claim that `Ctrl/Cmd+Enter` sends (including the popover paragraphs); verify by searching the README for `Ctrl`/`Cmd` send statements.
-- [ ] 3.2 Add an Unreleased `CHANGELOG.md` bullet naming the swap, including that `Ctrl/Cmd+Enter` no longer sends; verify it states the user-visible outcome without claiming a setting or service change.
+- [x] 3.1 Update the composer section of `README.md` to describe `Enter` sending and `Shift+Enter` adding a line, and remove every claim that `Ctrl/Cmd+Enter` sends (including the popover paragraphs); verify by searching the README for `Ctrl`/`Cmd` send statements.
+- [x] 3.2 Add an Unreleased `CHANGELOG.md` bullet naming the swap, including that `Ctrl/Cmd+Enter` no longer sends; verify it states the user-visible outcome without claiming a setting or service change.
 - [ ] 3.3 Append new verification evidence to `docs/runtime-compatibility.md` for this binding without rewriting older records; verify the entry names the Obsidian version, both layouts, and any limitation observed.
 
 ## 4. Integration verification

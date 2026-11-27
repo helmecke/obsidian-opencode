@@ -180,9 +180,11 @@ details.
   The view has no separate header. Icon buttons show their name in a tooltip. The
   toolbar wraps in a narrow sidebar so every control and the status stay
   reachable without horizontal scrolling.
-- Type in the message field; **Ctrl/Cmd+Enter** sends and **Shift+Enter** inserts
-  a newline. The **Send** button is an alternative. The field grows with the
-  message up to 40% of the window height and then scrolls.
+- Type in the message field; **Enter** sends and **Shift+Enter** inserts a
+  newline. The **Send** button is an alternative. Enter sends only while sending
+  is available: while the agent runs, the **Stop** button replaces **Send** and
+  Enter does nothing, and it never inserts a line in that state. The field grows
+  with the message up to 40% of the window height and then scrolls.
 - Type `[[` to search this vault's Markdown notes. The inline list shows each
   note's name and folder; arrow keys move, Enter or Tab inserts, and Escape or
   blur closes it. The composer inserts `[[Note]]` when the name is unique, or
@@ -191,8 +193,8 @@ details.
   note as a file reference so the agent reads the note itself. Aliases, headings,
   and block fragments resolve to the note; unresolved references stay text.
   Brackets pair automatically, a typed `]` skips an existing closer, and
-  Backspace removes an empty pair. Ctrl/Cmd+Enter still sends while the list is
-  open.
+  Backspace removes an empty pair. While the list is open, Enter inserts the
+  highlighted note instead of sending; the next Enter sends.
 - **Attach active note** adds a chip for the Markdown note in the editor, and
   **Attach selection** snapshots the selected text with its source note. Both
   are in the paperclip menu beside **Retry discovery** and appear only while
@@ -211,8 +213,8 @@ details.
   Sending a message attaches every mentioned skill by ID while the `$name` text
   stays in the message; duplicate mentions attach a skill once, and unknown
   names stay plain text. The catalog loads on the first `$` and does not block
-  composing or sending if it is unavailable. Ctrl/Cmd+Enter still sends while
-  the list is open.
+  composing or sending if it is unavailable. While the list is open, Enter
+  inserts the highlighted skill instead of sending; the next Enter sends.
 - Type `/` at the start of the message to search the OpenCode commands
   available to this vault. The inline list shows each command as invoked
   (`/name`) and its description when one is available; nested names such as
@@ -223,8 +225,9 @@ details.
   arguments instead of sending it as a prompt; unknown `/name` text is sent as
   an ordinary prompt. Skill mentions in the arguments attach the same way as for
   prompts. The catalog loads on the first `/` without blocking composing or
-  sending, and a failed command keeps its text in the composer. Ctrl/Cmd+Enter
-  still sends while the list is open.
+  sending, and a failed command keeps its text in the composer. While the list
+  is open, Enter inserts the highlighted command instead of sending; the next
+  Enter sends.
 
 ### Reading the transcript
 

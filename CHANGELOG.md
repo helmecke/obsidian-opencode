@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Enter** now sends a message and **Shift+Enter** adds a line. `Ctrl/Cmd+Enter`
+  no longer sends: it inserts a newline like any other modified Enter. Enter stays
+  inert while sending is unavailable — during a run, with a prompt unconfirmed,
+  or while not connected — and while a `[[`, `$`, or `/` completion list is open,
+  where the first Enter inserts the highlighted row and the next one sends.
+
 ## 1.1.1 (2026-11-26)
 
 - The plugin is now named **OpenCode Chat** to avoid colliding with an existing
