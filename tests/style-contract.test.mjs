@@ -122,6 +122,41 @@ test('the composer reserves the transcript scrollbar gutter', () => {
 		'The reserved gutter needs a scroll container');
 });
 
+test('pending questions share the readable measure and drop the dock divider', () => {
+	const dock = ruleBody('.opencode-chat-interactions');
+	assert.ok(!dock.includes('border-top'),
+		'The dock relies on the card surface, not a full-width divider');
+	assert.match(dock, /scrollbar-gutter: stable/,
+		'The dock reserves the same gutter as the composer');
+	const measure = ruleBody('.opencode-chat.is-readable-line-width .opencode-chat-interactions');
+	assert.match(measure, /padding-inline: var\(--opencode-line-inset\)/,
+		'The dock follows the transcript measure');
+	assert.match(measure, /font-family: var\(--font-text\)/,
+		'A ch-based measure resolves in the reading font');
+	assert.match(ruleBody('.opencode-chat.is-readable-line-width .opencode-chat-interactions > *'),
+		/font-family: var\(--font-interface\)/, 'Cards keep the interface font');
+});
+
+test('question cards stack fields and mark option rows with theme tokens', () => {
+	const field = ruleBody('.opencode-form .opencode-form-field');
+	assert.match(field, /flex-direction: column/);
+	assert.match(field, /align-items: stretch/);
+	assert.match(field, /background-color: transparent/,
+		'Fields stay flat inside the callout instead of boxing a box');
+	assert.match(ruleBody('.opencode-form .opencode-form-field .setting-item-control'),
+		/justify-content: flex-start/, 'Option rows start at the field edge');
+	assert.match(ruleBody('.opencode-form-option:hover'), /var\(--background-modifier-hover\)/);
+	assert.match(ruleBody('.opencode-form-option-description'), /color: var\(--text-muted\)/);
+	assert.match(ruleBody('.opencode-form-option-recommended'), /color: var\(--text-accent\)/);
+	assert.match(ruleBody('.opencode-form-custom'), /margin-inline-start/,
+		'The revealed custom field indents under its option');
+	const start = css.indexOf('.opencode-form-field .setting-item-name');
+	const end = css.indexOf('.opencode-disclosure-summary');
+	const block = css.slice(start, end);
+	assert.ok(!/#[0-9a-f]{3,8}\b|\brgb\(|\bhsl\(|!important/i.test(block),
+		'Form styles use theme colours only, with no hard-coded values');
+});
+
 test('the diff review tints additions and removals, mutes context, and wraps long lines', () => {
 	assert.match(ruleBody('.opencode-diff-line.is-add'), /var\(--color-green\)/);
 	assert.match(ruleBody('.opencode-diff-line.is-remove'), /var\(--color-red\)/);

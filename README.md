@@ -399,14 +399,22 @@ being submitted. If the reply fails or the request was already settled elsewhere
 the current server state is refreshed, stale controls are removed, and an error
 is shown instead of a false success.
 
-Agent forms render the pinned schema's text, choice, multiselect, numeric,
-integer, boolean, and external-link fields. Required fields, visibility
-conditions, and validation are enforced before submission. You can cancel a
-form at any time. External links open only on explicit click and only for
-`http`/`https` URLs. A field type unknown to this plugin produces a visible
-compatibility error and blocks submission rather than sending a partial answer.
-Form answers and permission controls are reconciled after reconnect or another
-client's reply.
+Agent questions appear as a native question callout headed by the agent's
+subject. Choice fields become selectable rows — radio buttons for one answer and
+checkboxes for several — with any per-option description under its label and a
+**Recommended** tag on a recommended option. When the agent allows another
+answer, an **Other…** row reveals a text field for it.
+
+Forms render the pinned schema's text, choice, multiselect, numeric, integer,
+boolean, and external-link fields. Required fields, visibility conditions, and
+validation are enforced before submission. You can cancel a form at any time.
+External links open only on explicit click and only for `http`/`https` URLs. A
+field type unknown to this plugin produces a visible compatibility error and
+blocks submission rather than sending a partial answer. Form answers and
+permission controls are reconciled after reconnect or another client's reply.
+Pending questions and permission cards follow the chat's reading column while
+**Readable line length** is enabled, and the conversation stays visible while a
+question waits.
 
 ## Data and privacy
 
