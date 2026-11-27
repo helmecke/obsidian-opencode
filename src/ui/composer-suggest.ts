@@ -1,5 +1,5 @@
 import { AbstractInputSuggest, prepareFuzzySearch, sortSearchResults } from 'obsidian';
-import type { App, KeymapEventHandler, SearchResult, TFile } from 'obsidian';
+import type { App, SearchResult, TFile } from 'obsidian';
 import type { CommandInfo, SkillInfo } from '@opencode/client';
 import {
 	applyComposerEdit, commandInsertEdit, commandQueryAt, linkInsertText, linkQueryAt,
@@ -52,26 +52,14 @@ type Trigger =
  */
 export class ComposerSuggest extends AbstractInputSuggest<ComposerSuggestion> {
 	private readonly inputEl: HTMLInputElement;
-	private readonly sendKey: KeymapEventHandler;
 	private opened = false;
 
-	constructor(app: App, inputEl: HTMLInputElement, private readonly catalog: ComposerCatalog,
-		private readonly onSend: () => void) {
+	constructor(app: App, inputEl: HTMLInputElement, private readonly catalog: ComposerCatalog) {
 		super(app, inputEl);
 		this.inputEl = inputEl;
-		// The popover owns the active scope while open, so Mod+Enter must be
-		// handled here or the editor shortcut never reaches the view.
-		this.sendKey = this.scope.register(['Mod'], 'Enter', (event) => {
-			if (this.inputEl.ownerDocument.activeElement !== this.inputEl) return true;
-			if (event.repeat) return true;
-			this.close();
-			this.onSend();
-			return false;
-		});
 	}
 
 	dispose(): void {
-		this.scope.unregister(this.sendKey);
 		this.close();
 	}
 

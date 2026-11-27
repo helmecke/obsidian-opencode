@@ -245,8 +245,7 @@ export class ChatRenderer {
 				getSkills: () => this.state?.skills,
 				loadCommands: () => this.handlers.loadCommands(),
 				getCommands: () => this.state?.commands,
-			},
-			() => this.handlers.send());
+			});
 		opening.register(() => suggestions.dispose());
 		// Obsidian's keymap handles trusted shortcuts before DOM bubbling.
 		// A view-local scope takes priority without registering a global hotkey.

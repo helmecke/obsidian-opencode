@@ -84,9 +84,8 @@ function makeSuggest(value, caret, options = {}) {
 		async loadCommands() { calls.push('commands'); },
 		getCommands: () => options.commands ?? commands,
 	};
-	const sent = [];
-	const suggest = new ComposerSuggest(app, input.element, catalog, () => sent.push(input.element.value));
-	return { suggest, input, calls, sent };
+	const suggest = new ComposerSuggest(app, input.element, catalog);
+	return { suggest, input, calls };
 }
 
 function label(entry) {
@@ -209,13 +208,12 @@ test('command rows show the invoked name and an optional description', async () 
 
 test('selecting a command inserts /name with a trailing space and never sends', () => {
 	for (const key of ['Enter', 'Tab', 'ArrowRight']) {
-		const { suggest, input, sent } = makeSuggest('/rev', 4);
+		const { suggest, input } = makeSuggest('/rev', 4);
 		suggest.selectSuggestion({ kind: 'command', command: commands[0] }, { key });
 		assert.equal(input.element.value, '/review ', key);
 		assert.equal(input.element.selectionStart, 8, key);
 		assert.equal(input.count(), 1, key);
 		assert.equal(suggest.closed, true, key);
-		assert.deepEqual(sent, [], 'Selection does not send the message');
 	}
 	const nested = makeSuggest('/team/r', 7);
 	nested.suggest.selectSuggestion({ kind: 'command', command: commands[1] }, {});
@@ -233,14 +231,14 @@ test('command insertion preserves text after the caret and Escape or blur leaves
 	dismissed.suggest.close();
 	assert.equal(dismissed.suggest.closed, true);
 	assert.equal(dismissed.input.element.value, '/rev');
-	assert.deepEqual(dismissed.sent, []);
 	assert.deepEqual(names(await dismissed.suggest.getSuggestions('rev')),
 		['command:review', 'command:team/review']);
 });
 
-test('the suggest reports its own openness and dispose closes it', () => {
+test('the suggest reports its own openness and registers no send shortcut', () => {
 	const { suggest } = makeSuggest('[[]]', 2);
 	assert.equal(suggest.isCompletionOpen(), false, 'A fresh popover owns no keys');
+	assert.equal(suggest.scope.handlers.length, 0, 'The popover claims no sent shortcut');
 	suggest.open();
 	assert.equal(suggest.isCompletionOpen(), true);
 	suggest.close();
@@ -248,17 +246,6 @@ test('the suggest reports its own openness and dispose closes it', () => {
 	suggest.open();
 	suggest.dispose();
 	assert.equal(suggest.isCompletionOpen(), false, 'Dispose closes the popover');
-});
-
-test('Mod+Enter sends from an open command scope and dispose unregisters it', () => {
-	const { suggest, input, sent } = makeSuggest('/rev', 4);
-	const handler = suggest.scope.handlers.find((entry) => entry.key === 'Enter');
-	assert.deepEqual(handler.modifiers, ['Mod']);
-	input.element.focus();
-	assert.equal(handler.callback({ repeat: false }), false, 'The shortcut is consumed after sending');
-	assert.deepEqual(sent, ['/rev']);
-	assert.equal(suggest.closed, true);
-	suggest.dispose();
 	assert.equal(suggest.scope.handlers.length, 0);
 });
 
@@ -297,13 +284,12 @@ test('skill rows render the name and an optional description', async () => {
 
 test('selecting a skill inserts $name with a trailing space and never sends', () => {
 	for (const key of ['Enter', 'Tab', 'ArrowRight']) {
-		const { suggest, input, sent } = makeSuggest('say $ap', 7);
+		const { suggest, input } = makeSuggest('say $ap', 7);
 		suggest.selectSuggestion({ kind: 'skill', skill: skills[1] }, { key });
 		assert.equal(input.element.value, 'say $apply ', key);
 		assert.equal(input.element.selectionStart, 11, key);
 		assert.equal(input.count(), 1, key);
 		assert.equal(suggest.closed, true, key);
-		assert.deepEqual(sent, [], 'Selection does not send the message');
 	}
 });
 
@@ -315,21 +301,8 @@ test('skill insertion preserves text after the caret', () => {
 });
 
 test('dismissal closes the popover and leaves the composer text unchanged', () => {
-	const { suggest, input, sent } = makeSuggest('$ap', 3);
+	const { suggest, input } = makeSuggest('$ap', 3);
 	suggest.close();
 	assert.equal(suggest.closed, true);
 	assert.equal(input.element.value, '$ap');
-	assert.deepEqual(sent, []);
-});
-
-test('Mod+Enter sends from the active suggest scope and dispose unregisters it', () => {
-	const { suggest, input, sent } = makeSuggest('[[]]', 2);
-	const handler = suggest.scope.handlers.find((entry) => entry.key === 'Enter');
-	assert.deepEqual(handler.modifiers, ['Mod']);
-	input.element.focus();
-	assert.equal(handler.callback({ repeat: false }), false, 'The shortcut is consumed after sending');
-	assert.deepEqual(sent, ['[[]]']);
-	assert.equal(suggest.closed, true);
-	suggest.dispose();
-	assert.equal(suggest.scope.handlers.length, 0, 'Unload unregisters the shortcut');
 });

@@ -11,7 +11,7 @@
 ## 2. Popover precedence and chord removal
 
 - [x] 2.1 Track openness in `ComposerSuggest` by overriding the public `open()` and `close()` methods and expose a getter, without reading `isOpen`; verify with a test that the getter follows open and close, including the dispose path.
-- [ ] 2.2 Drop the popover's `Mod+Enter` scope registration and its `onSend` constructor parameter, and update the call site in `src/ui/chat-renderer.ts`; verify `tests/composer-suggest.test.mjs` no longer expects a scope handler and that `npm run build` type-checks the new signature.
+- [x] 2.2 Drop the popover's `Mod+Enter` scope registration and its `onSend` constructor parameter, and update the call site in `src/ui/chat-renderer.ts`; verify `tests/composer-suggest.test.mjs` no longer expects a scope handler and that `npm run build` type-checks the new signature.
 - [ ] 2.3 Pass the openness getter into `ChatComposer` as the completion guard and skip `Enter`-send while it returns true; verify with a test that `Enter` with an open popover sends nothing and that the next `Enter` after closing sends once.
 - [ ] 2.4 Remove the view-local `Mod+Enter` scope registration from `src/ui/chat-renderer.ts` and its cleanup; verify no `Mod`–`Enter` registration remains under `src/` and that the renderer test passes.
 
