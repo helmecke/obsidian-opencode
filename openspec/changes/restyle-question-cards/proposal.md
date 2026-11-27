@@ -12,7 +12,7 @@ Agent questions are the one human-decision surface still wearing generic setting
 - Replace the dropdown's "Other…" entry and its adjacent always-visible input with a final **Other…** row (pencil icon). Selecting the row reveals a text field beneath it; multiselect keeps comma-separated custom values, included only while the row is chosen.
 - Move Submit and Cancel into a start-aligned footer: Submit keeps `mod-cta`, Cancel stays a plain native button, and both stay disabled while an answer is in flight. No icons and no success/error tints.
 - Keep required markers, inline per-field errors, the form-level error, unsupported-field blocking, conditional visibility, and external-link behaviour unchanged.
-- Add scoped styles for the stacked field layout, option rows, recommended tag, revealed custom field, and footer. No new setting, no transcript card, no copy actions.
+- Add scoped styles for the stacked field layout, option rows, recommended tag, revealed custom field, and footer. Pending decisions share the chat's readable line width, and the dock no longer draws a full-width divider above them. No new setting, no transcript card, no copy actions.
 - Keep the docked interactions panel as the only place forms render, and keep answer payloads, reconciliation, and service ownership unchanged.
 - Update the interactions tests to drive the new option rows instead of a `select`.
 

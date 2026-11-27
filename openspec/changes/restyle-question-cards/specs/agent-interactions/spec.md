@@ -30,3 +30,14 @@ The view SHALL render each pending OpenCode form as an Obsidian question callout
 
 - **WHEN** a choice field allows a custom answer
 - **THEN** the card offers an Other row that reveals a text field when selected, and the entered value is submitted as that field's answer
+
+## ADDED Requirements
+
+### Requirement: Pending decisions follow the reading measure
+
+While Obsidian's **Readable line length** setting is enabled, pending permission and question cards SHALL share the chat's centered reading column. With the setting off, they SHALL use the pane width. The interaction dock SHALL NOT draw a full-width divider above its cards.
+
+#### Scenario: Readable line length with a pending question
+
+- **WHEN** a question is pending while **Readable line length** is enabled
+- **THEN** the question card aligns with the composer and transcript column, and no horizontal rule spans the interaction dock

@@ -65,7 +65,9 @@ The footer stays `.opencode-form-actions` after the callout content rows: `Submi
 
 ### Styles
 
-Add a scoped `.opencode-form` block in `styles.css`: callout-content spacing, column field layout, option row layout and hover, description indentation, recommended tag (`--text-accent`, `--font-ui-smaller`), custom row reveal, and footer alignment. Fields inside the callout drop the native row background and radius so the card is one surface, not a box inside a box. No hardcoded colors, no `!important`, no `:has`. Native callout and setting-item surfaces are documented in the existing file comment.
+Add a scoped `.opencode-form` block in `styles.css`: callout-content spacing, column field layout, option row layout and hover, description indentation, recommended tag (`--text-accent`, `--font-ui-smaller`), custom row reveal, and footer alignment. Fields inside the callout drop the native row background and radius so the card is one surface, not a box inside a box.
+
+The interaction dock follows the chat's reading measure: with **Readable line length** enabled it borrows the existing `--opencode-line-inset` (and the composer's reading-font trick for a `ch`-based measure), reserves the same scrollbar gutter, and restores the interface font inside. Its full-width `border-top` goes away; the card's own surface marks the pending decision. No hardcoded colors, no `!important`, no `:has`. Native callout and setting-item surfaces are documented in the existing file comment.
 
 ## Risks / Trade-offs
 

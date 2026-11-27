@@ -122,6 +122,21 @@ test('the composer reserves the transcript scrollbar gutter', () => {
 		'The reserved gutter needs a scroll container');
 });
 
+test('pending questions share the readable measure and drop the dock divider', () => {
+	const dock = ruleBody('.opencode-chat-interactions');
+	assert.ok(!dock.includes('border-top'),
+		'The dock relies on the card surface, not a full-width divider');
+	assert.match(dock, /scrollbar-gutter: stable/,
+		'The dock reserves the same gutter as the composer');
+	const measure = ruleBody('.opencode-chat.is-readable-line-width .opencode-chat-interactions');
+	assert.match(measure, /padding-inline: var\(--opencode-line-inset\)/,
+		'The dock follows the transcript measure');
+	assert.match(measure, /font-family: var\(--font-text\)/,
+		'A ch-based measure resolves in the reading font');
+	assert.match(ruleBody('.opencode-chat.is-readable-line-width .opencode-chat-interactions > *'),
+		/font-family: var\(--font-interface\)/, 'Cards keep the interface font');
+});
+
 test('question cards stack fields and mark option rows with theme tokens', () => {
 	const field = ruleBody('.opencode-form .opencode-form-field');
 	assert.match(field, /flex-direction: column/);

@@ -1110,18 +1110,22 @@ the binding before this change and stays as the historical record.
 
 ## Question cards (2026-11-27, live acceptance)
 
-Automated verification for `restyle-question-cards`: `npm test` passed 347
+Automated verification for `restyle-question-cards`: `npm test` passed 348
 tests, `npm run build` succeeded, and `npm run lint` reported no problems. The
 interaction suite covers the native `question` callout, stacked option rows,
 option descriptions, the stripped `(Recommended)` marker and its tag, the
 revealed **Other…** row for single and multiple choice, conditional visibility,
 required errors, unsupported fields, and focus returning to the composer after a
-settled form.
+settled form. The style contract covers the readable measure, the shared
+scrollbar gutter, and the removed dock divider.
 
 Live acceptance on 2026-11-27 in Obsidian **1.15.1** with this build installed in
 a disposable vault and a managed OpenCode service. A real agent formed questions
 from a read-only prompt. Observed:
 
+- with **Readable line length** enabled, the card measured the same 851 px
+  column as the composer (both spanning 507–1358 px in the 1189 px pane), and
+  the interaction dock drew no full-width rule above it;
 - the form rendered as an Obsidian `question` callout with a help-circle icon
   and the service title;
 - each choice field stacked its title over native radio or checkbox rows, with

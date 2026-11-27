@@ -381,7 +381,24 @@
 	padding: var(--size-4-2) var(--size-4-4);
 	max-height: 45%;
 	overflow-y: auto;
-	border-top: var(--border-width, 1px) solid var(--background-modifier-border);
+	scrollbar-gutter: stable;
+}
+
+/*
+ * Pending decisions share the reading measure with the transcript and composer,
+ * so the question card does not run wider than the note column. The container
+ * borrows the reading font for a ch-based measure, as the composer does, and
+ * the cards restore the interface font.
+ */
+.opencode-chat.is-readable-line-width .opencode-chat-interactions {
+	padding-inline: var(--opencode-line-inset);
+	font-family: var(--font-text);
+	font-size: var(--font-preferred-size);
+}
+
+.opencode-chat.is-readable-line-width .opencode-chat-interactions > * {
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-medium);
 }
 
 .opencode-chat-permissions,
