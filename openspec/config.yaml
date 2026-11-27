@@ -1,33 +1,23 @@
 schema: spec-driven
 skillsScope: project
 
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+context: |
+  Every OpenSpec change ships through a plan PR: a draft pull request holding the
+  artifacts, opened before implementation.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  1. Cut `openspec/<change-id>` from `master`.
+  2. Commit `openspec/changes/<change-id>/` and push the branch.
+  3. Open the draft PR against `master`. Title: the change title. Body: the
+     proposal's Why and What Changes, the task list, and a line that this is a
+     plan awaiting approval.
+  4. End the run with the plan PR open. Implementation starts in a separate apply
+     run after approval.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+  Bug fixes and version bumps need no OpenSpec change.
+
+operations:
+  apply:
+    guidance:
+      - Apply begins only when `openspec/<change-id>` and its plan PR exist; otherwise stop and report what is missing.
+      - Commit after each completed task.
+      - Archive on the change branch as its own commit, push once, and run `gh pr ready`. The maintainer merges.
