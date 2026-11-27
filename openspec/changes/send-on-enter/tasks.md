@@ -2,7 +2,7 @@
 
 ## 1. Composer sending key
 
-- [ ] 1.1 Extract the send button's disabled expression in `src/ui/chat-composer.ts` into one `canSend(state)` predicate and keep `update()` rendering the button from it; verify the existing composer tests still pass.
+- [x] 1.1 Extract the send button's disabled expression in `src/ui/chat-composer.ts` into one `canSend(state)` predicate and keep `update()` rendering the button from it; verify the existing composer tests still pass.
 - [ ] 1.2 Send on plain `Enter` in the existing textarea key handler: skip `isComposing`, `keyCode === 229`, `event.repeat`, `event.defaultPrevented`, and any `Shift`/`Ctrl`/`Cmd`/`Alt` combination, then `preventDefault()` and send only when `canSend` holds; verify with tests that a sendable composer sends, and that an empty, running, busy, unconfirmed-prompt, or not-ready composer neither sends nor inserts a newline.
 - [ ] 1.3 Let modified `Enter` fall through to the textarea and confirm in tests that `Shift+Enter` and `Ctrl/Cmd+Enter` insert a line without sending; verify the pairing-key behavior is unchanged for `[`, `]`, and Backspace.
 - [ ] 1.4 Change the placeholder to `Plan, build, or ask.` and verify no key hint remains in the composer markup.

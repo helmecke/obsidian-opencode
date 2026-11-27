@@ -195,22 +195,29 @@ export class ChatComposer {
 
 	update(state: SynchronizationState): void {
 		this.lastState = state;
-		const pending = state.pendingPrompt;
 		const running = state.conversation?.execution === 'running';
-		const selected = state.snapshot?.selected;
-		const draft = state.snapshot !== undefined && selected === undefined && state.snapshot.empty !== 'unavailable';
-		const canCompose = state.phase === 'ready' && (selected !== undefined || draft);
 		this.composer.disabled = this.readOnly || state.phase === 'disposed';
 		this.stopButtonEl.hidden = this.readOnly || !running;
 		this.sendButtonEl.hidden = this.readOnly || running;
 		setNativeDisabled(this.stopButtonEl, this.readOnly || state.phase !== 'ready' || !running);
-		setNativeDisabled(this.sendButtonEl, this.readOnly || !canCompose
-			|| state.interactionBusy !== undefined
-			|| (pending !== undefined && pending.phase !== 'admitted') || this.composer.value.trim().length === 0);
+		setNativeDisabled(this.sendButtonEl, !this.canSend(state));
 		this.updateAgentOptions(state);
 		this.updateModelOptions(state);
 		this.attachmentsEl.hidden = this.readOnly || this.attachments.length === 0;
 		this.renderPromptActions(state);
+	}
+
+	/** Whether sending is available now; the send button and Enter share this rule. */
+	private canSend(state: SynchronizationState): boolean {
+		if (this.readOnly || state.phase !== 'ready') return false;
+		if (state.conversation?.execution === 'running' || state.interactionBusy !== undefined) return false;
+		const pending = state.pendingPrompt;
+		if (pending !== undefined && pending.phase !== 'admitted') return false;
+		const selected = state.snapshot?.selected;
+		const draft = state.snapshot !== undefined && selected === undefined
+			&& state.snapshot.empty !== 'unavailable';
+		if (selected === undefined && !draft) return false;
+		return this.composer.value.trim().length > 0;
 	}
 
 	private renderAttachments(): void {

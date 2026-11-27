@@ -595,6 +595,7 @@ function interactionClient() {
 		['new', [{ id: 'new-message', type: 'user', text: 'new transcript', time: { created: 2 } }]]]);
 	const calls = [];
 	let created = 0;
+	const running = new Set(records.keys());
 	const client = {
 		event: liveEvents,
 		agent: { list: async () => ({ data: [
@@ -642,7 +643,7 @@ function interactionClient() {
 				texts.set(session.id, []);
 				return session;
 			},
-			active: async () => Object.fromEntries([...records.keys()].map((id) => [id, { type: 'running' }])),
+			active: async () => Object.fromEntries([...running].map((id) => [id, { type: 'running' }])),
 			form: { list: async () => [] },
 			prompt: async (input) => {
 				calls.push(['prompt', input]);
@@ -662,7 +663,7 @@ function interactionClient() {
 			switchModel: async (input) => { calls.push(['switchModel', input]); },
 		},
 	};
-	return { client, calls, records, texts, get created() { return created; } };
+	return { client, calls, records, texts, running, get created() { return created; } };
 }
 
 test('the document menu offers switch, new, rename, and review for both pane and tab sources', async () => {
@@ -959,6 +960,8 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	const { plugin, registrations, Menu } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
+	// Sending requires an idle conversation; the stop assertions below turn it back on.
+	fixture.running.clear();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
@@ -1029,6 +1032,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	assert.equal(view.sessions.state.selected, undefined);
 	assert.equal(view.getDisplayText(), 'New conversation');
 
+	fixture.running.add('old');
 	await selectSession(view, 'old');
 	assert.equal(view.stopButton.hidden, false, 'Stop is present while execution is running');
 	assert.equal(view.sendButton.hidden, true, 'Stop replaces Send while execution is running');
