@@ -57,7 +57,7 @@ export class ChatComposer {
 			cls: 'opencode-chat-input',
 			attr: {
 				rows: '2',
-				placeholder: 'Plan, build, or ask. Ctrl/Cmd+Enter sends; Shift+Enter adds a line.',
+				placeholder: 'Plan, build, or ask.',
 				'aria-label': 'Message OpenCode',
 			},
 		});
@@ -112,9 +112,12 @@ export class ChatComposer {
 		});
 		this.composer.addEventListener('keydown', (event) => {
 			if (this.readOnly) return;
-			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+			if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+				// A composing Enter confirms an IME candidate, not a message.
+				if (event.isComposing || event.keyCode === 229 || event.repeat || event.defaultPrevented) return;
+				// Inert rather than a newline whenever sending is unavailable.
 				event.preventDefault();
-				this.handlers.send();
+				if (this.lastState && this.canSend(this.lastState)) this.handlers.send();
 				return;
 			}
 			this.applyPairingKey(event);

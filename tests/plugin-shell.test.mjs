@@ -863,7 +863,7 @@ test('a new conversation is a client-side draft named locally and created on the
 	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(view.sendButton.disabled, false, 'A draft can send');
 	view.composer.dispatchEvent(new window.KeyboardEvent('keydown',
-		{ key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+		{ key: 'Enter', bubbles: true, cancelable: true }));
 	await wait();
 	assert.equal(fixture.created, 1, 'The first send creates the session');
 	const create = fixture.calls.find((call) => call[0] === 'create');
@@ -1010,7 +1010,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(view.sendButton.disabled, false);
 	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'false');
-	view.composer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+	view.composer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	await wait();
 	const prompt = fixture.calls.find((call) => call[0] === 'prompt')[1];
 	assert.match(prompt.id, /^msg_[0-9a-f-]{36}$/);
@@ -1174,7 +1174,7 @@ test('a confirmed command clears the composer while a failed command keeps its t
 		composer.setSelectionRange(value.length, value.length);
 		composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 		composer.dispatchEvent(new window.KeyboardEvent('keydown',
-			{ key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+			{ key: 'Enter', bubbles: true, cancelable: true }));
 		await wait();
 	};
 
