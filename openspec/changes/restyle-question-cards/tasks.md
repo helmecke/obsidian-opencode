@@ -12,6 +12,7 @@
 - [x] 2.3 Strip a `(Recommended)` marker from visible option labels and show a `Recommended` tag on that row. Verify with a labelled option in `tests/interactions.test.mjs` and a style-contract check for the tag class.
 - [x] 2.4 Replace the dropdown custom entry with a revealed **Other…** row: selecting it shows and focuses the text field and submits its text; selecting a normal option hides it. Apply the same row to `multiselect` with comma-separated values included only while the row is checked. Verify both paths in `tests/interactions.test.mjs`.
 - [x] 2.5 Keep required markers, per-field errors, conditional visibility, form-level errors and `aria-live` wiring intact. Verify the corresponding assertions in `tests/interactions.test.mjs`.
+- [x] 2.6 Keep the live transcript while a question or permission waits; only a confirmed session deletion clears it. Verify `tests/synchronization.test.mjs` and a live pending question over an existing conversation.
 
 ## 3. Styling
 

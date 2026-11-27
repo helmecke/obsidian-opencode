@@ -41,3 +41,12 @@ While Obsidian's **Readable line length** setting is enabled, pending permission
 
 - **WHEN** a question is pending while **Readable line length** is enabled
 - **THEN** the question card aligns with the composer and transcript column, and no horizontal rule spans the interaction dock
+
+### Requirement: Pending decisions keep the live transcript
+
+While a question or permission is pending, the conversation SHALL keep its current transcript and continue receiving updates. Only a confirmed session deletion SHALL clear the selection and transcript.
+
+#### Scenario: A question arrives mid-conversation
+
+- **WHEN** a new form arrives for the selected conversation
+- **THEN** the existing messages stay visible and live updates continue while the form waits for an answer

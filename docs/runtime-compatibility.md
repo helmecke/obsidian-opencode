@@ -1110,14 +1110,15 @@ the binding before this change and stays as the historical record.
 
 ## Question cards (2026-11-27, live acceptance)
 
-Automated verification for `restyle-question-cards`: `npm test` passed 348
+Automated verification for `restyle-question-cards`: `npm test` passed 349
 tests, `npm run build` succeeded, and `npm run lint` reported no problems. The
 interaction suite covers the native `question` callout, stacked option rows,
 option descriptions, the stripped `(Recommended)` marker and its tag, the
 revealed **Other…** row for single and multiple choice, conditional visibility,
 required errors, unsupported fields, and focus returning to the composer after a
-settled form. The style contract covers the readable measure, the shared
-scrollbar gutter, and the removed dock divider.
+settled form. The synchronization suite covers a pending form or permission
+keeping the live transcript. The style contract covers the readable measure, the
+shared scrollbar gutter, and the removed dock divider.
 
 Live acceptance on 2026-11-27 in Obsidian **1.15.1** with this build installed in
 a disposable vault and a managed OpenCode service. A real agent formed questions
@@ -1134,14 +1135,17 @@ from a read-only prompt. Observed:
 - selecting **Other…** revealed and focused its text field, and choosing a
   listed option hid it again;
 - multiselect accepted listed and comma-separated custom values in one answer;
+- the conversation stayed visible behind a pending question (15 messages,
+  12 rendered blocks) instead of blanking when the form arrived;
 - **Cancel** removed the form and returned focus to the composer;
-- **Submit** left no plugin action error and removed the pending form.
+- **Submit** completed the service's `question` tool with no error and removed
+  the pending form.
 
-Remaining limitation: the service's `question` tool reported the reply as
-`aborted` ("The user dismissed this question") instead of completing. Calling
-`session.form.reply` directly with the same answer shape produced the same
-result, so the outcome is independent of the card markup and does not reproduce
-the earlier 2026-11-22 completion record. New acceptance sessions then stalled,
-so a single-choice-only reply was not isolated. The answer payload, form
-identity, and plugin reply path are the same as before this change; the cause
-belongs to the running service and is recorded here rather than worked around.
+An earlier acceptance pass blanked the conversation as soon as a form arrived
+and the service then reported the reply as dismissed. Tracing the live state
+localized it: `applyInteraction` read `patch.snapshot?.selected === undefined`
+as a deletion, which is also true for every interaction patch without a
+snapshot. The guard now requires a snapshot whose selection was cleared, and a
+pending form or permission keeps ingestion and the transcript. After the fix,
+the same live form kept its 15-message transcript and the question tool
+completed. The earlier 2026-11-22 completion record remains consistent.

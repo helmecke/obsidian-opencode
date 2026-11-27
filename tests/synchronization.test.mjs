@@ -392,6 +392,22 @@ test('unsupported form fields in another session are ignored; the selected sessi
 	f.lifetime.abort();
 });
 
+test('a pending decision keeps the live transcript while it waits', async () => {
+	const f = fixture();
+	await f.coordinator.open();
+	const messages = f.coordinator.state.conversation.messages.length;
+	f.streams[0].push(event('form.created', { form: { id: 'own-form', sessionID: 'one', title: 'Question', fields: [] } }));
+	await tick();
+	assert.equal(f.coordinator.state.forms.length, 1);
+	assert.ok(f.coordinator.state.conversation, 'A new form does not discard the transcript');
+	assert.equal(f.coordinator.state.conversation.messages.length, messages);
+	f.streams[0].push(event('permission.asked', { id: 'own-permission', action: 'tool.use', resources: ['*'] }));
+	await tick();
+	assert.equal(f.coordinator.state.permissions.length, 1);
+	assert.ok(f.coordinator.state.conversation, 'A new permission request does not discard the transcript');
+	f.lifetime.abort();
+});
+
 test('events overlapping snapshot trigger a clean reload, never duplicate text already saved', async () => {
 	const f = fixture();
 	f.duringSnapshot = async (pass) => {

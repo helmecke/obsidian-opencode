@@ -59,6 +59,10 @@ The sentinel and custom text live on the card, not in `FormValues`, so `validate
 
 The footer stays `.opencode-form-actions` after the callout content rows: `Submit` with `mod-cta`, then plain `Cancel`, start-aligned, both disabled while `busy`. Per-field `.setting-item-error` lines stay inside their field; `.opencode-form-error` stays above the actions for unsupported fields and the form-level retry message. `aria-live="polite"` and `aria-describedby` wiring stay as they are.
 
+### An interaction patch keeps the transcript
+
+`applyInteraction` treated `update.patch.snapshot?.selected === undefined` as a deleted selection. That is also true when the patch has no snapshot at all, which is exactly what `form.created`, `permission.asked`, and the reply/cancel patches produce. The guard now requires the snapshot itself: only a patch that carries a snapshot with `selected` cleared disposes ingestion and the prompt. Interaction patches leave both alone, so a pending decision no longer blanks the conversation or interrupts live updates.
+
 ### A settled form returns focus to the composer
 
 `ChatInteractionsPanel` restores focus only when the active element was inside the permissions group, so a form decision dropped focus on the document body. The forms group joins that check, and the existing `focusComposer` path runs when no pending control remains. This is the keyboard path a decision should leave behind, and it matches the permission card.

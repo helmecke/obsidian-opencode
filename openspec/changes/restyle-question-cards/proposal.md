@@ -14,6 +14,7 @@ Agent questions are the one human-decision surface still wearing generic setting
 - Keep required markers, inline per-field errors, the form-level error, unsupported-field blocking, conditional visibility, and external-link behaviour unchanged.
 - Add scoped styles for the stacked field layout, option rows, recommended tag, revealed custom field, and footer. Pending decisions share the chat's readable line width, and the dock no longer draws a full-width divider above them. No new setting, no transcript card, no copy actions.
 - Keep the docked interactions panel as the only place forms render, and keep answer payloads, reconciliation, and service ownership unchanged.
+- Keep the live conversation visible while a question or permission is pending. Only a confirmed session deletion clears the selection and transcript.
 - Update the interactions tests to drive the new option rows instead of a `select`.
 
 ## Capabilities

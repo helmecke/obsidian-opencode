@@ -406,7 +406,7 @@ export class SynchronizationCoordinator {
 		if (!update.handled) return false;
 		if (update.resync) this.resync();
 		else if (update.patch) {
-			if (update.patch.snapshot?.selected === undefined) {
+			if (update.patch.snapshot && update.patch.snapshot.selected === undefined) {
 				// A deleted selection has no authoritative transcript to project.
 				this.ingestion?.dispose();
 				this.ingestion = undefined;
