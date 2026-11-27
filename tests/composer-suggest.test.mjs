@@ -26,6 +26,7 @@ class AbstractInputSuggest {
 		};
 	}
 	close() { this.closed = true; }
+	open() { this.closed = false; }
 }
 const obsidian = {
 	AbstractInputSuggest,
@@ -235,6 +236,18 @@ test('command insertion preserves text after the caret and Escape or blur leaves
 	assert.deepEqual(dismissed.sent, []);
 	assert.deepEqual(names(await dismissed.suggest.getSuggestions('rev')),
 		['command:review', 'command:team/review']);
+});
+
+test('the suggest reports its own openness and dispose closes it', () => {
+	const { suggest } = makeSuggest('[[]]', 2);
+	assert.equal(suggest.isCompletionOpen(), false, 'A fresh popover owns no keys');
+	suggest.open();
+	assert.equal(suggest.isCompletionOpen(), true);
+	suggest.close();
+	assert.equal(suggest.isCompletionOpen(), false);
+	suggest.open();
+	suggest.dispose();
+	assert.equal(suggest.isCompletionOpen(), false, 'Dispose closes the popover');
 });
 
 test('Mod+Enter sends from an open command scope and dispose unregisters it', () => {

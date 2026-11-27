@@ -53,6 +53,7 @@ type Trigger =
 export class ComposerSuggest extends AbstractInputSuggest<ComposerSuggestion> {
 	private readonly inputEl: HTMLInputElement;
 	private readonly sendKey: KeymapEventHandler;
+	private opened = false;
 
 	constructor(app: App, inputEl: HTMLInputElement, private readonly catalog: ComposerCatalog,
 		private readonly onSend: () => void) {
@@ -72,6 +73,21 @@ export class ComposerSuggest extends AbstractInputSuggest<ComposerSuggestion> {
 	dispose(): void {
 		this.scope.unregister(this.sendKey);
 		this.close();
+	}
+
+	/** Whether the popover currently owns the keyboard; the composer defers Enter while it does. */
+	isCompletionOpen(): boolean {
+		return this.opened;
+	}
+
+	override open(): void {
+		this.opened = true;
+		super.open();
+	}
+
+	override close(): void {
+		this.opened = false;
+		super.close();
 	}
 
 	protected getSuggestions(_query: string): ComposerSuggestion[] | Promise<ComposerSuggestion[]> {
