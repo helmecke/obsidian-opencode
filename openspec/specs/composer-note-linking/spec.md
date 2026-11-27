@@ -56,7 +56,7 @@ Selecting a suggestion SHALL insert link text that unambiguously resolves to the
 - **THEN** only Markdown notes are offered; attachments and other file types are excluded
 
 ### Requirement: Keyboard navigation and dismissal
-The popover SHALL be navigable by keyboard without sending the message, and SHALL close on selection, blur, or `Escape`. Ctrl/Cmd+Enter SHALL still send the message while the popover is open.
+The popover SHALL be navigable by keyboard without sending the message, and SHALL close on selection, blur, or `Escape`. While the popover is open, `Enter` SHALL confirm the highlighted suggestion and SHALL NOT send the message; the next `Enter`, once the popover has closed, SHALL send.
 
 #### Scenario: Navigate and select
 - **WHEN** the popover is open and the user moves with the arrow keys and confirms with Enter or Tab
@@ -66,9 +66,13 @@ The popover SHALL be navigable by keyboard without sending the message, and SHAL
 - **WHEN** the user presses Escape or focus leaves the composer
 - **THEN** the popover closes and the composer text is left unchanged
 
+#### Scenario: Send after selecting
+- **WHEN** the user confirms a suggestion and the popover closes
+- **THEN** the next Enter sends the message with the inserted reference
+
 #### Scenario: Send while open
-- **WHEN** the popover is open and the user presses Ctrl/Cmd+Enter
-- **THEN** the message sends and the popover does not swallow the command
+- **WHEN** the popover is open and the user presses Enter
+- **THEN** the highlighted suggestion is inserted instead and the message is not sent
 
 ### Requirement: Reference remains prompt text
 An inserted note reference SHALL remain visible prompt text, and sending a message that contains it SHALL transmit that text unchanged while also attaching the referenced note as a structured file. The attachment SHALL resolve to the note the reference resolves to, SHALL be sent at most once per note, and SHALL reuse its identity on retry.

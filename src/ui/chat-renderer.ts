@@ -1,5 +1,5 @@
 import { Component, Menu, Notice, setIcon, setTooltip } from 'obsidian';
-import type { App, OpenViewState, PaneType, Scope, TFile } from 'obsidian';
+import type { App, OpenViewState, PaneType, TFile } from 'obsidian';
 import type { ModelRef, FileDiffInfo } from '@opencode/client';
 import type { SynchronizationState } from '../state/synchronization';
 import type { DiffAccessor } from '../opencode/diffs';
@@ -44,7 +44,6 @@ export interface ChatViewHandlers {
 export class ChatRenderer {
 	private contentEl?: HTMLElement;
 	private opening?: Component;
-	private scope?: Scope;
 	private state?: SynchronizationState;
 	private viewError?: string;
 	private statusEl?: HTMLElement;
@@ -58,6 +57,7 @@ export class ChatRenderer {
 	private attachButton?: HTMLButtonElement;
 	private conversation?: ConversationRenderer;
 	private conversationOptions?: ConversationOptions;
+	private suggestions?: ComposerSuggest;
 	private parentTitle?: string;
 	private signatures = { errors: '' };
 
@@ -78,10 +78,9 @@ export class ChatRenderer {
 	get attachButtonElement(): HTMLButtonElement | undefined { return this.attachButton; }
 	get attachmentElements(): HTMLButtonElement[] { return this.composer?.attachmentElements ?? []; }
 
-	mount(contentEl: HTMLElement, opening: Component, scope: Scope): void {
+	mount(contentEl: HTMLElement, opening: Component): void {
 		this.contentEl = contentEl;
 		this.opening = opening;
-		this.scope = scope;
 		this.build();
 		this.attachRendering(opening);
 	}
@@ -110,7 +109,6 @@ export class ChatRenderer {
 		this.signatures = { errors: '' };
 		this.contentEl = undefined;
 		this.opening = undefined;
-		this.scope = undefined;
 		this.state = undefined;
 		this.statusEl = undefined;
 		this.statusIconEl = undefined;
@@ -120,6 +118,7 @@ export class ChatRenderer {
 		this.composer = undefined;
 		this.retryButton = undefined;
 		this.attachButton = undefined;
+		this.suggestions = undefined;
 		this.conversationOptions = undefined;
 		this.parentTitle = undefined;
 	}
@@ -181,6 +180,7 @@ export class ChatRenderer {
 			setAgent: (agent) => this.handlers.setAgent(agent),
 			setModel: (model) => this.handlers.setModel(model),
 			stop: () => this.handlers.stop(),
+			completionOpen: () => this.suggestions?.isCompletionOpen() ?? false,
 		});
 
 		const meta = this.composer.metaElement;
@@ -245,21 +245,9 @@ export class ChatRenderer {
 				getSkills: () => this.state?.skills,
 				loadCommands: () => this.handlers.loadCommands(),
 				getCommands: () => this.state?.commands,
-			},
-			() => this.handlers.send());
-		opening.register(() => suggestions.dispose());
-		// Obsidian's keymap handles trusted shortcuts before DOM bubbling.
-		// A view-local scope takes priority without registering a global hotkey.
-		const scope = this.scope;
-		if (scope) {
-			const sendKey = scope.register(['Mod'], 'Enter', (event) => {
-				const composer = this.composer?.element;
-				if (!composer || this.isReadOnly(this.state) || composer.ownerDocument.activeElement !== composer) return true;
-				if (!event.repeat) this.handlers.send();
-				return false;
 			});
-			opening.register(() => scope.unregister(sendKey));
-		}
+		this.suggestions = suggestions;
+		opening.register(() => suggestions.dispose());
 		opening.registerDomEvent(this.retryButton, 'click', () => this.handlers.retryConnection());
 		if (this.attachButton) {
 			opening.registerDomEvent(this.attachButton, 'click', () => this.openAttachMenu());

@@ -1,4 +1,4 @@
-import { Component, ItemView, MarkdownView, Notice, Scope } from 'obsidian';
+import { Component, ItemView, MarkdownView, Notice } from 'obsidian';
 import type { Events, Menu, WorkspaceLeaf } from 'obsidian';
 import type { FileDiffInfo } from '@opencode/client';
 import type { ConnectionCoordinator } from '../opencode/connection';
@@ -51,7 +51,6 @@ export class ChatView extends ItemView {
 		private readonly showReasoning: () => boolean,
 		private readonly autoAttachActiveNote: () => boolean = () => false) {
 		super(leaf);
-		this.scope = new Scope(this.app.scope);
 	}
 
 	getViewType(): string { return CHAT_VIEW_TYPE; }
@@ -105,7 +104,7 @@ export class ChatView extends ItemView {
 		});
 		const renderer = new ChatRenderer(this.app, this.handlers(), this.showReasoning, linkStack, diffs);
 		this.renderer = renderer;
-		renderer.mount(this.contentEl, opening, this.scope!);
+		renderer.mount(this.contentEl, opening);
 		opening.register(this.synchronization.subscribe(() => this.refresh()));
 		this.attachTitleHook(opening);
 		this.watchEditor(opening);

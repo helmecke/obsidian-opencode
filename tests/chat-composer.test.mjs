@@ -36,13 +36,97 @@ function state(pendingPrompt) {
 	};
 }
 
-function fixture() {
+function fixture(handlers = {}) {
 	const container = document.createElement('div');
+	const sent = [];
 	const composer = new ChatComposer(container, {
-		send() {}, retryPrompt() {}, dismissPrompt() {}, setAgent() {}, setModel() {}, stop() {},
+		send() { sent.push(1); }, retryPrompt() {}, dismissPrompt() {}, setAgent() {}, setModel() {}, stop() {},
+		completionOpen: () => false, ...handlers,
 	});
-	return { composer };
+	return { composer, sent };
 }
+
+/** A ready conversation with one selected session, overridable per case. */
+function readyState(patch = {}) {
+	return { ...state(), ...patch };
+}
+
+function press(element, init) {
+	const event = new globalThis.window.KeyboardEvent('keydown',
+		{ bubbles: true, cancelable: true, ...init });
+	element.dispatchEvent(event);
+	return event;
+}
+
+test('Enter sends from an available composer and is inert everywhere else', () => {
+	const sending = fixture();
+	sending.composer.update(state());
+	sending.composer.setText('Hello');
+	assert.equal(press(sending.composer.element, { key: 'Enter' }).defaultPrevented, true);
+	assert.equal(sending.sent.length, 1, 'Enter sends the message');
+
+	for (const [name, patch, text] of [
+		['empty text', {}, ''],
+		['whitespace', {}, '   '],
+		['running execution', { conversation: { execution: 'running', messages: [] } }, 'hello'],
+		['a busy interaction', { interactionBusy: 'form' }, 'hello'],
+		['an unconfirmed prompt', { pendingPrompt: { id: 'p', text: 'x', phase: 'uncertain' } }, 'hello'],
+		['a not-ready view', { phase: 'synchronizing' }, 'hello'],
+	]) {
+		const blocked = fixture();
+		blocked.composer.update(readyState(patch));
+		blocked.composer.setText(text);
+		assert.equal(press(blocked.composer.element, { key: 'Enter' }).defaultPrevented, true,
+			`${name} still inserts no newline`);
+		assert.equal(blocked.sent.length, 0, `${name} cannot send`);
+	}
+
+	const draft = fixture();
+	draft.composer.update(readyState({ snapshot: { sessions: [], empty: 'none' } }));
+	draft.composer.setText('First turn');
+	press(draft.composer.element, { key: 'Enter' });
+	assert.equal(draft.sent.length, 1, 'A client-side draft can send');
+});
+
+test('modified, composing, and repeated Enter never send', () => {
+	for (const init of [{ shiftKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true },
+		{ isComposing: true }, { key: 'Process' }, { repeat: true }]) {
+		const f = fixture();
+		f.composer.update(state());
+		f.composer.setText('Hello');
+		const event = press(f.composer.element, { key: 'Enter', ...init });
+		assert.equal(f.sent.length, 0, JSON.stringify(init));
+		assert.equal(event.defaultPrevented, false, `${JSON.stringify(init)} keeps the field's own behavior`);
+	}
+});
+
+test('Enter defers to an open completion popover and sends once it closes', () => {
+	let open = true;
+	const f = fixture({ completionOpen: () => open });
+	f.composer.update(state());
+	f.composer.setText('Hello');
+	const first = press(f.composer.element, { key: 'Enter' });
+	assert.equal(f.sent.length, 0, 'The popover keeps the key for its highlighted row');
+	assert.equal(first.defaultPrevented, false, 'The popover can still confirm the row');
+
+	open = false;
+	press(f.composer.element, { key: 'Enter' });
+	assert.equal(f.sent.length, 1, 'The next Enter sends once');
+});
+
+test('bracket pairing still applies its own edits and never sends', () => {
+	const f = fixture();
+	f.composer.update(state());
+	f.composer.focus();
+	f.composer.setText('');
+	press(f.composer.element, { key: '[' });
+	assert.equal(f.composer.text, '[]', 'An opening bracket still pairs');
+	press(f.composer.element, { key: '[' });
+	assert.equal(f.composer.text, '[[]]');
+	press(f.composer.element, { key: 'Backspace' });
+	assert.equal(f.composer.text, '[]', 'Backspacing the empty pair removes both');
+	assert.equal(f.sent.length, 0);
+});
 
 test('one chip appears per attachment, hidden when empty, and removal keeps the typed text', () => {
 	const f = fixture();

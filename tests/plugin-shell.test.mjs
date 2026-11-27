@@ -557,28 +557,17 @@ async function selectSession(view, id) {
 	await wait();
 }
 
-test('view-local Mod+Enter scope sends only from its composer and unregisters on close', async () => {
+test('the chat view installs no view-local send shortcut', async () => {
 	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
-	document.body.appendChild(view.contentEl);
-	const [handler] = view.scope.handlers;
-	assert.deepEqual(handler.modifiers, ['Mod']);
-	assert.equal(handler.key, 'Enter');
-	assert.equal(handler.callback({ repeat: false }), true, 'An unfocused composer does not consume another control shortcut');
-	view.composer.focus();
-	view.composer.value = 'scope test';
-	assert.equal(handler.callback({ repeat: false }), false);
 	await wait();
-	assert.equal(fixture.calls.filter(call => call[0] === 'prompt').length, 1);
-	assert.equal(handler.callback({ repeat: true }), false, 'Held key is consumed without resending');
+	assert.ok(!view.scope, 'No view-local keymap scope is created');
 	await view.onClose();
-	assert.equal(view.scope.handlers.size, 0);
 	await view.onOpen();
-	assert.equal(view.scope.handlers.size, 1, 'Reopen installs one handler, not duplicates');
-	view.contentEl.remove();
+	assert.ok(!view.scope, 'Reopen installs nothing either');
 	plugin.unload();
 });
 
@@ -595,6 +584,7 @@ function interactionClient() {
 		['new', [{ id: 'new-message', type: 'user', text: 'new transcript', time: { created: 2 } }]]]);
 	const calls = [];
 	let created = 0;
+	const running = new Set(records.keys());
 	const client = {
 		event: liveEvents,
 		agent: { list: async () => ({ data: [
@@ -642,7 +632,7 @@ function interactionClient() {
 				texts.set(session.id, []);
 				return session;
 			},
-			active: async () => Object.fromEntries([...records.keys()].map((id) => [id, { type: 'running' }])),
+			active: async () => Object.fromEntries([...running].map((id) => [id, { type: 'running' }])),
 			form: { list: async () => [] },
 			prompt: async (input) => {
 				calls.push(['prompt', input]);
@@ -662,7 +652,7 @@ function interactionClient() {
 			switchModel: async (input) => { calls.push(['switchModel', input]); },
 		},
 	};
-	return { client, calls, records, texts, get created() { return created; } };
+	return { client, calls, records, texts, running, get created() { return created; } };
 }
 
 test('the document menu offers switch, new, rename, and review for both pane and tab sources', async () => {
@@ -862,7 +852,7 @@ test('a new conversation is a client-side draft named locally and created on the
 	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(view.sendButton.disabled, false, 'A draft can send');
 	view.composer.dispatchEvent(new window.KeyboardEvent('keydown',
-		{ key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+		{ key: 'Enter', bubbles: true, cancelable: true }));
 	await wait();
 	assert.equal(fixture.created, 1, 'The first send creates the session');
 	const create = fixture.calls.find((call) => call[0] === 'create');
@@ -959,6 +949,8 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	const { plugin, registrations, Menu } = await createShell();
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
+	// Sending requires an idle conversation; the stop assertions below turn it back on.
+	fixture.running.clear();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
@@ -1007,7 +999,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	view.composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(view.sendButton.disabled, false);
 	assert.equal(view.sendButton.getAttribute('aria-disabled'), 'false');
-	view.composer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+	view.composer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	await wait();
 	const prompt = fixture.calls.find((call) => call[0] === 'prompt')[1];
 	assert.match(prompt.id, /^msg_[0-9a-f-]{36}$/);
@@ -1029,6 +1021,7 @@ test('conversation, agent, model, send, and stop controls use vault-scoped serve
 	assert.equal(view.sessions.state.selected, undefined);
 	assert.equal(view.getDisplayText(), 'New conversation');
 
+	fixture.running.add('old');
 	await selectSession(view, 'old');
 	assert.equal(view.stopButton.hidden, false, 'Stop is present while execution is running');
 	assert.equal(view.sendButton.hidden, true, 'Stop replaces Send while execution is running');
@@ -1067,10 +1060,11 @@ test('composer grows with its text up to 40vh and scrolls internally beyond the 
 	plugin.unload();
 });
 
-test('composer pairs brackets through programmatic edits, opens note completion, and still sends while open', async () => {
+test('composer pairs brackets through programmatic edits, opens note completion, and lets the popover take Enter', async () => {
 	const { plugin, registrations } = await createShell({ selectedSession: { id: 'old', directory: 'C:\\Vault' } });
 	const view = registrations.views.get('opencode-chat')({});
 	const fixture = interactionClient();
+	fixture.running.clear();
 	view.connection.discover = async () => fixture.client;
 	await view.onOpen();
 	await wait();
@@ -1101,10 +1095,15 @@ test('composer pairs brackets through programmatic edits, opens note completion,
 	press('[');
 	press('[');
 	assert.equal(composer.__suggest.isOpen, true);
-	press('Enter', { ctrlKey: true });
+	press('Enter');
+	await wait();
+	assert.equal(fixture.calls.filter((call) => call[0] === 'prompt').length, 0,
+		'Enter confirms the popover row instead of sending');
+	composer.__suggest.close();
+	press('Enter');
 	await wait();
 	const prompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
-	assert.equal(prompt.text, '[[]]', 'Ctrl+Enter sends while the popover is open');
+	assert.equal(prompt.text, '[[]]', 'The next Enter sends once the popover has closed');
 
 	assert.equal(fixture.calls.filter((call) => call[0] === 'skills').length, 0,
 		'Note completion does not request the skill catalog');
@@ -1118,7 +1117,7 @@ test('composer pairs brackets through programmatic edits, opens note completion,
 	composer.__suggest.selectSuggestion(composer.__suggest.suggestions[0], {});
 	assert.equal(composer.value, '$apply ', 'Selecting a skill inserts the trailing-space mention');
 	assert.equal(composer.selectionStart, 7);
-	press('Enter', { ctrlKey: true });
+	press('Enter');
 	await wait();
 	const skillPrompt = fixture.calls.filter((call) => call[0] === 'prompt').at(-1)[1];
 	assert.equal(skillPrompt.text, '$apply ');
@@ -1170,7 +1169,7 @@ test('a confirmed command clears the composer while a failed command keeps its t
 		composer.setSelectionRange(value.length, value.length);
 		composer.dispatchEvent(new window.Event('input', { bubbles: true }));
 		composer.dispatchEvent(new window.KeyboardEvent('keydown',
-			{ key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+			{ key: 'Enter', bubbles: true, cancelable: true }));
 		await wait();
 	};
 

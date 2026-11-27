@@ -71,7 +71,7 @@ Selecting a skill SHALL replace the text from the triggering `$` through the car
 - **THEN** the popover closes and the message is not sent
 
 ### Requirement: Keyboard and dismissal
-The popover SHALL support arrow-key navigation and selection with Enter or Tab. `Escape` or focus leaving the composer SHALL close it without changing the message. Ctrl/Cmd+Enter SHALL still send the message while the popover is open.
+The popover SHALL support arrow-key navigation and selection with Enter or Tab. `Escape` or focus leaving the composer SHALL close it without changing the message. While the popover is open, `Enter` SHALL confirm the highlighted skill and SHALL NOT send; the next `Enter`, once the popover has closed, SHALL send.
 
 #### Scenario: Navigate and select
 - **WHEN** the popover is open and the user moves with the arrow keys and presses Enter or Tab
@@ -81,9 +81,13 @@ The popover SHALL support arrow-key navigation and selection with Enter or Tab. 
 - **WHEN** the user presses Escape or focus leaves the composer
 - **THEN** the popover closes and the composer text is unchanged
 
+#### Scenario: Send after selecting
+- **WHEN** the user confirms a skill and the popover closes
+- **THEN** the next Enter sends the message once with the inserted mention
+
 #### Scenario: Send while open
-- **WHEN** the popover is open and the user presses Ctrl/Cmd+Enter
-- **THEN** the message sends once and the popover does not intercept the shortcut
+- **WHEN** the popover is open and the user presses Enter
+- **THEN** the highlighted skill is inserted instead and the message is not sent
 
 ### Requirement: Structured skill attachment
 When a message containing `$name` mentions is sent, the plugin SHALL attach the server-provided identifier of each skill whose name exactly matches a mention, once per skill, and SHALL send the message text unchanged. Mentions that match no loaded skill SHALL remain plain text and SHALL add no attachment.

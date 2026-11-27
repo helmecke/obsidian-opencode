@@ -1077,3 +1077,33 @@ so these checks remain open:
 
 Do not treat this section as live evidence. Record the observed results here
 before archiving.
+
+## Send on Enter (2026-11-27, live acceptance)
+
+Automated verification for `send-on-enter`: `npm test` passed 344 tests,
+`npm run build` succeeded, and `npm run lint` reported no problems. The suites
+cover plain `Enter` sending from an available composer; inert `Enter` for empty
+or whitespace-only text, a running execution, a busy interaction, an unconfirmed
+prompt, and a not-ready view; modified, composing, and repeated `Enter` never
+sending; bracket pairing unchanged; the completion popover reporting its own
+openness and registering no send shortcut; `Enter` deferring to an open popover
+and sending once it has closed; and the view no longer creating a view-local
+keymap scope.
+
+Live acceptance on 2026-11-27 in Obsidian **1.15.1**, with this build installed
+in a disposable vault and a registered OpenCode service. The following were
+observed in a main tab and in a right sidebar, and all passed:
+
+- `Enter` sends and `Shift+Enter` adds a line;
+- `Ctrl/Cmd+Enter` inserts a line and does not send;
+- `Enter` does nothing while an answer runs, while a prompt awaits confirmation,
+  and before discovery is ready;
+- an open `[[`, `$`, or `/` popover takes the first `Enter` and the second one
+  sends;
+- confirming an IME (Japanese) candidate with `Enter` does not send;
+- the placeholder reads "Plan, build, or ask." with no key hint.
+
+The OpenCode service version was not captured with this run; only the Obsidian
+version and the observed behavior above are recorded. The earlier popover
+evidence in this file (Ctrl/Cmd+Enter sending while a list was open) describes
+the binding before this change and stays as the historical record.
